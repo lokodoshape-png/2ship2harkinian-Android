@@ -1300,6 +1300,11 @@ void AddEnhancements() {
                 "Accounts for Index-Warp being active, by presenting all valid warps for the registered map points. "
                 "Great Bay Coast warp is always given for index 0 warp as a convenience.",
                 WIDGET_CVAR_CHECKBOX },
+              { "Song of Double Time Hour Select", "gEnhancements.Songs.DoubleTimeHourSelect",
+                "Like in Majora's Mask 3D, choose which hour the Song of Double Time takes you to. "
+                "Use Left/Right on the stick or Dpad while the confirmation is shown. "
+                "Hours up to the next dawn or dusk can be picked.",
+                WIDGET_CVAR_CHECKBOX },
               { "Zora Eggs For Bossa Nova",
                 "gEnhancements.Songs.ZoraEggCount",
                 "The number of eggs required to unlock new wave bossa nova.",

@@ -7,6 +7,7 @@
 #include "overlays/kaleido_scope/ovl_kaleido_scope/z_kaleido_scope.h"
 #include "BenPort.h"
 #include "2s2h/GameInteractor/GameInteractor.h"
+#include "2s2h/Enhancements/Songs/Songs.h"
 #include "assets/archives/schedule_dma_static/schedule_dma_static_yar.h"
 #include "assets/archives/icon_item_static/icon_item_static_yar.h"
 #include "assets/archives/icon_item_24_static/icon_item_24_static_yar.h"
@@ -5821,6 +5822,8 @@ void Message_Update(PlayState* play) {
                     }
                 } else if ((msgCtx->textboxEndType == TEXTBOX_ENDTYPE_10) &&
                            (play->msgCtx.ocarinaMode == OCARINA_MODE_PROCESS_DOUBLE_TIME)) {
+                    // 2S2H [Enhancement] Pick the target hour, like in MM3D
+                    DoubleTimeHourSelect_Update(input);
                     if (Message_ShouldAdvance(play)) {
                         if (msgCtx->choiceIndex == 0) {
                             Audio_PlaySfx_MessageDecide();
@@ -5829,10 +5832,12 @@ void Message_Update(PlayState* play) {
                             } else {
                                 gSaveContext.save.time = CLOCK_TIME(18, 0);
                             }
+                            DoubleTimeHourSelect_Apply();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_APPLY_DOUBLE_SOT;
                             gSaveContext.timerStates[TIMER_ID_MOON_CRASH] = TIMER_STATE_OFF;
                         } else {
                             Audio_PlaySfx_MessageCancel();
+                            DoubleTimeHourSelect_Cancel();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_END;
                         }
                         Message_CloseTextbox(play);
@@ -6033,6 +6038,7 @@ void Message_Update(PlayState* play) {
                             } else {
                                 Message_StartTextbox(play, D_801D045C[CURRENT_DAY - 1], NULL);
                             }
+                            DoubleTimeHourSelect_Init();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_PROCESS_DOUBLE_TIME;
                         } else {
                             Message_StartTextbox(play, 0x1B94, NULL);

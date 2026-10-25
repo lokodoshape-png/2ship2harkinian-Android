@@ -64,6 +64,7 @@ void InitEnhancements() {
     RegisterPauseOwlWarp();
     RegisterZoraEggCount();
     RegisterSkipScarecrowSong();
+    RegisterDoubleTimeHourSelect();
 
     // Restorations
     RegisterPowerCrouchStab();
