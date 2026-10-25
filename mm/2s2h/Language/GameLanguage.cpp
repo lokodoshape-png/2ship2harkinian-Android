@@ -6,6 +6,11 @@
 #include <libultraship/libultraship.h>
 #include <utils/StringHelper.h>
 
+#ifdef __ANDROID__
+#include <SDL2/SDL.h>
+#include <jni.h>
+#endif
+
 namespace GameLanguage {
 
 static const char* sLanguageFile = "idioma.txt";
@@ -66,5 +71,22 @@ std::vector<std::string> GetPackArchives(const std::string& appShortName) {
     std::sort(archives.begin(), archives.end());
     return archives;
 }
+
+#ifdef __ANDROID__
+void OpenPackPicker() {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (env == nullptr || activity == nullptr) {
+        return;
+    }
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(activityClass, "openTranslationPicker", "()V");
+    if (method != nullptr) {
+        env->CallVoidMethod(activity, method);
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+}
+#endif
 
 } // namespace GameLanguage

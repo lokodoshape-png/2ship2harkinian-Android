@@ -6,7 +6,9 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
+import android.provider.OpenableColumns;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
@@ -140,6 +142,10 @@ public class MainActivity extends SDLActivity{
 
     private static final int STORAGE_PERMISSION_REQUEST_CODE = 2296;
     private static final int FILE_PICKER_REQUEST_CODE = 0;
+    private static final int TRANSLATION_PICKER_REQUEST_CODE = 3;
+    // Must match mm/2s2h/Language/GameLanguage.cpp.
+    private static final String TRANSLATION_FOLDER = "traducoes/pt-BR";
+    private static final String LANGUAGE_FILE = "idioma.txt";
 
     private void requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -286,7 +292,11 @@ public class MainActivity extends SDLActivity{
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == FILE_PICKER_REQUEST_CODE && (resultCode != RESULT_OK || data == null)) {
+        if (requestCode == TRANSLATION_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                installTranslationPack(data.getData());
+            }
+        } else if (requestCode == FILE_PICKER_REQUEST_CODE && (resultCode != RESULT_OK || data == null)) {
             // Picker closed without a file: unblock the extractor, which reports that no ROM was chosen.
             nativeHandleSelectedFile("");
         } else if (requestCode == FILE_PICKER_REQUEST_CODE) {
@@ -333,6 +343,80 @@ public class MainActivity extends SDLActivity{
         }
     }
 
+
+    // Called from the menu (Configurações > Idioma): pick a translation pack and install it as the only pack
+    // for Portuguese, then select Portuguese for the next launch.
+    public void openTranslationPicker() {
+        runOnUiThread(() -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            startActivityForResult(intent, TRANSLATION_PICKER_REQUEST_CODE);
+        });
+    }
+
+    private void installTranslationPack(Uri uri) {
+        File root = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
+        File folder = new File(root, TRANSLATION_FOLDER);
+
+        String name = null;
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (column >= 0) {
+                    name = cursor.getString(column);
+                }
+            }
+        } catch (Exception e) {
+            Log.w("translation", "Could not read the file name", e);
+        }
+        if (name == null || name.isEmpty()) {
+            name = "traducao.o2r";
+        }
+        name = name.replaceAll("[/\\\\]", "_");
+        String lower = name.toLowerCase();
+        if (!lower.endsWith(".o2r") && !lower.endsWith(".zip") && !lower.endsWith(".otr")) {
+            Toast.makeText(this, "Escolha um arquivo .o2r, .zip ou .otr", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (!folder.isDirectory() && !folder.mkdirs()) {
+            Toast.makeText(this, "Não foi possível criar a pasta " + folder.getPath(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        File[] oldPacks = folder.listFiles();
+        if (oldPacks != null) {
+            for (File old : oldPacks) {
+                if (old.isFile()) {
+                    old.delete();
+                }
+            }
+        }
+
+        File target = new File(folder, name);
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             OutputStream out = new FileOutputStream(target)) {
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        } catch (Exception e) {
+            Log.e("translation", "Failed to copy the translation pack", e);
+            target.delete();
+            Toast.makeText(this, "Erro ao copiar a tradução: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        try (OutputStream out = new FileOutputStream(new File(root, LANGUAGE_FILE))) {
+            out.write("pt-BR\n".getBytes());
+        } catch (IOException e) {
+            Log.e("translation", "Failed to save the language", e);
+        }
+
+        Toast.makeText(this, "Tradução instalada: " + name + ". Feche e abra o app para usar.", Toast.LENGTH_LONG)
+                .show();
+    }
 
     public void openFilePicker() {
         // Create an Intent to open the file picker dialog

@@ -27,6 +27,12 @@ std::vector<std::string> GetPackArchives(const std::string& appShortName);
 // Folder the player puts the packs for a language in, e.g. ".../2S2H-MM3D/traducoes/pt-BR".
 std::string GetPackFolder(Language language, const std::string& appShortName);
 
+#ifdef __ANDROID__
+// Opens the system file picker; the app copies the chosen pack into the Portuguese folder (replacing any other
+// pack there) and selects Portuguese for the next launch.
+void OpenPackPicker();
+#endif
+
 } // namespace GameLanguage
 
 #endif // GAME_LANGUAGE_H

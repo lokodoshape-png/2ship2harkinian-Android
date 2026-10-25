@@ -372,6 +372,12 @@ void DrawSettingsMenu() {
                                "(.o2r, .zip ou .otr) na pasta:");
             ImGui::TextWrapped("%s", sPackFolder.c_str());
             ImGui::TextWrapped("Sem pacote nessa pasta, o texto do jogo continua em inglês.");
+#ifdef __ANDROID__
+            if (UIWidgets::Button("Escolher arquivo de tradução...")) {
+                // The app saves Portuguese as the language once a pack is copied; it applies on the next launch.
+                GameLanguage::OpenPackPicker();
+            }
+#endif
             ImGui::PopTextWrapPos();
 
             ImGui::EndMenu();
