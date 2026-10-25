@@ -1399,7 +1399,27 @@ void AddEnhancements() {
                 "gWindows.BombersNotebookGuide",
                 "Abre o guia do Bombers' Notebook em uma janela",
                 WIDGET_WINDOW_BUTTON,
-                { .size = UIWidgets::Sizes::Inline, .windowName = "Bombers Notebook Guide" } } } } });
+                { .size = UIWidgets::Sizes::Inline, .windowName = "Bombers Notebook Guide" } },
+              { "Iluminação Estilo 3D", "gEnhancements.MM3D.Lighting.Enabled",
+                "Deixa as cenas mais claras e com bem menos neblina, perto do visual do Majora's Mask 3D. As mudanças "
+                "de "
+                "luz do dia e da noite continuam funcionando.",
+                WIDGET_CVAR_CHECKBOX },
+              { "Redução da Neblina: %d%%",
+                "gEnhancements.MM3D.Lighting.FogReduction",
+                "Quanto a neblina começa mais longe. 0 = igual ao N64, 100 = quase sem neblina.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 0, 100, 50 } },
+              { "Luz Ambiente Extra: %d",
+                "gEnhancements.MM3D.Lighting.AmbientBoost",
+                "Clareia as áreas de sombra. 0 = igual ao N64.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 0, 100, 20 } },
+              { "Intensidade da Luz Direta: %d%%",
+                "gEnhancements.MM3D.Lighting.DirectionalScale",
+                "Força da luz do sol, da lua e das lâmpadas. 100 = igual ao N64.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 50, 200, 110 } } } } });
     enhancementsSidebar.push_back({ "Dificuldade",
                                     3,
                                     { { { "Takkuri Não Rouba",

@@ -771,6 +771,13 @@ void DrawEnhancementsMenu() {
                 "Bombers' Notebook Guide", "gEnhancements.MM3D.BombersNotebookGuide",
                 { .tooltip = "Opening the Bombers' Notebook also opens a guide with each person's reward, the day "
                              "and time to meet them, where, and the mask or condition needed." });
+            UIWidgets::CVarCheckbox(
+                "MM3D-style Lighting", "gEnhancements.MM3D.Lighting.Enabled",
+                { .tooltip = "Brighter scenes with much less distance fog, closer to Majora's Mask 3D." });
+            UIWidgets::CVarSliderInt("Fog Reduction: %d%%", "gEnhancements.MM3D.Lighting.FogReduction", 0, 100, 50);
+            UIWidgets::CVarSliderInt("Ambient Boost: %d", "gEnhancements.MM3D.Lighting.AmbientBoost", 0, 100, 20);
+            UIWidgets::CVarSliderInt("Direct Light: %d%%", "gEnhancements.MM3D.Lighting.DirectionalScale", 50, 200,
+                                     110);
 
             ImGui::EndMenu();
         }

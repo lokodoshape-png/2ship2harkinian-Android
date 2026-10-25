@@ -8,7 +8,11 @@ void RegisterTimeSongVariantsInPause();
 extern "C" {
 #endif
 
+struct EnvironmentContext;
+struct LightContext;
+
 int TimeSongVariantsInPause_GetSongIndex(int defaultSongIndex, int cursor);
+void MM3DLighting_Apply(struct EnvironmentContext* envCtx, struct LightContext* lightCtx);
 
 #ifdef __cplusplus
 }
