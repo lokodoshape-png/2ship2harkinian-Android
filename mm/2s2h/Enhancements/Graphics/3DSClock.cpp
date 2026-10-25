@@ -137,6 +137,23 @@ void Register3DSClock() {
                                                       CLOCK_SECTION_WIDTH, 12, posX + CLOCK_SECTION_HALFWIDTH, posY,
                                                       CLOCK_SECTION_WIDTH, 12, 1 << 10, 1 << 10);
 
+                    // Day number in the middle of each day section, the current one fully lit
+                    for (s16 day = 1; day <= 3; day++) {
+                        bool isCurrentDay = (day == std::min<s32>(std::max<s32>(gSaveContext.save.day, 1), 3));
+                        u16 dayAlpha = isCurrentDay ? sThreeDayClockAlpha : (sThreeDayClockAlpha * 96) / 255;
+                        s16 dayX = posX + (day - 2) * CLOCK_SECTION_WIDTH - 4;
+
+                        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 0, 0, 0, dayAlpha);
+                        HudEditor_SetActiveElement(HUD_EDITOR_ELEMENT_CLOCK);
+                        OVERLAY_DISP = Gfx_DrawTexRectI8(OVERLAY_DISP, sDigitTextures[day], 8, 8, dayX + 1, posY + 3, 8,
+                                                         8, 1 << 10, 1 << 10);
+
+                        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 255, 255, 255, dayAlpha);
+                        HudEditor_SetActiveElement(HUD_EDITOR_ELEMENT_CLOCK);
+                        OVERLAY_DISP = Gfx_DrawTexRectI8(OVERLAY_DISP, sDigitTextures[day], 8, 8, dayX, posY + 2, 8, 8,
+                                                         1 << 10, 1 << 10);
+                    }
+
                     // This next part is for the little arrow that shows what the current time is
 
                     s32 timeUntilCrash = (s32)TIME_TO_SECONDS_F(TIME_UNTIL_MOON_CRASH);
