@@ -70,6 +70,9 @@ jobs:
           echo "cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")" >> Android/local.properties
           sed -i '/version "3.28.3"/d' Android/app/build.gradle
           sed -i "s/abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'/abiFilters 'arm64-v8a'/" Android/app/build.gradle
+          # Renderer patches (the GLES renderer lives in the submodule): brightness/saturation for "Iluminação
+          # estilo MM3D", and clearing the game framebuffer each frame (garbage below cutscene letterboxes).
+          git -C libultraship apply ../Android/libultraship-android-fixes.patch
           # Standalone install: own data folder, matching MainActivity.DATA_FOLDER.
           sed -i 's|"/storage/emulated/0/2S2H"|"/storage/emulated/0/2S2H-MM3D"|g' libultraship/src/Context.cpp
           test "$(grep -c '"/storage/emulated/0/2S2H-MM3D"' libultraship/src/Context.cpp)" -eq 2

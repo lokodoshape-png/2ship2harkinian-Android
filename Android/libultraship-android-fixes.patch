@@ -1,0 +1,95 @@
+diff --git a/src/graphic/Fast3D/gfx_opengl.cpp b/src/graphic/Fast3D/gfx_opengl.cpp
+index f13b37f..e1507ed 100644
+--- a/src/graphic/Fast3D/gfx_opengl.cpp
++++ b/src/graphic/Fast3D/gfx_opengl.cpp
+@@ -58,6 +58,8 @@ struct ShaderProgram {
+     uint8_t num_attribs;
+     GLint frame_count_location;
+     GLint noise_scale_location;
++    GLint brightness_location;
++    GLint saturation_location;
+ };
+ 
+ struct Framebuffer {
+@@ -80,6 +82,14 @@ static uint32_t frame_count;
+ static vector<Framebuffer> framebuffers;
+ static size_t current_framebuffer;
+ static float current_noise_scale;
++// Optional colour grading (2Ship "MM3D-style lighting"): scales brightness and saturation of everything the
++// game draws. Read from CVars once per frame; 1.0 leaves the image untouched.
++static float current_brightness = 1.0f;
++// The first framebuffer clear of each frame (the game's own framebuffer) also clears colour, so screen areas the
++// game never draws to, such as rows below the cutscene letterbox on tall phone screens, show black instead of
++// leftovers from earlier frames.
++static bool clear_color_on_next_clear = false;
++static float current_saturation = 1.0f;
+ static FilteringMode current_filter_mode = FILTER_THREE_POINT;
+ static int8_t current_depth_test;
+ static int8_t current_depth_mask;
+@@ -122,6 +132,8 @@ static void gfx_opengl_vertex_array_set_attribs(struct ShaderProgram* prg) {
+ static void gfx_opengl_set_uniforms(struct ShaderProgram* prg) {
+     glUniform1i(prg->frame_count_location, frame_count);
+     glUniform1f(prg->noise_scale_location, current_noise_scale);
++    glUniform1f(prg->brightness_location, current_brightness);
++    glUniform1f(prg->saturation_location, current_saturation);
+ }
+ 
+ static void gfx_opengl_unload_shader(struct ShaderProgram* old_prg) {
+@@ -442,6 +454,8 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
+ 
+     append_line(fs_buf, &fs_len, "uniform int frame_count;");
+     append_line(fs_buf, &fs_len, "uniform float noise_scale;");
++    append_line(fs_buf, &fs_len, "uniform float color_brightness;");
++    append_line(fs_buf, &fs_len, "uniform float color_saturation;");
+ 
+     append_line(fs_buf, &fs_len, "float random(in vec3 value) {");
+     append_line(fs_buf, &fs_len, "    float random = dot(sin(value), vec3(12.9898, 78.233, 37.719));");
+@@ -585,6 +599,9 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
+ 
+     append_str(fs_buf, &fs_len, "texel = WRAP(texel, -0.51, 1.51);");
+     append_str(fs_buf, &fs_len, "texel = clamp(texel, 0.0, 1.0);");
++    append_line(fs_buf, &fs_len,
++                "texel.rgb = clamp(mix(vec3(dot(texel.rgb, vec3(0.299, 0.587, 0.114))), texel.rgb, "
++                "color_saturation) * color_brightness, 0.0, 1.0);");
+     // TODO discard if alpha is 0?
+     if (cc_features.opt_fog) {
+         if (cc_features.opt_alpha) {
+@@ -745,6 +762,8 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
+ 
+     prg->frame_count_location = glGetUniformLocation(shader_program, "frame_count");
+     prg->noise_scale_location = glGetUniformLocation(shader_program, "noise_scale");
++    prg->brightness_location = glGetUniformLocation(shader_program, "color_brightness");
++    prg->saturation_location = glGetUniformLocation(shader_program, "color_saturation");
+ 
+     gfx_opengl_load_shader(prg);
+ 
+@@ -954,6 +973,14 @@ static void gfx_opengl_on_resize(void) {
+ 
+ static void gfx_opengl_start_frame(void) {
+     frame_count++;
++    clear_color_on_next_clear = true;
++    if (CVarGetInteger("gEnhancements.MM3D.Lighting.Enabled", 0)) {
++        current_brightness = CVarGetInteger("gEnhancements.MM3D.Lighting.Brightness", 115) / 100.0f;
++        current_saturation = CVarGetInteger("gEnhancements.MM3D.Lighting.Saturation", 115) / 100.0f;
++    } else {
++        current_brightness = 1.0f;
++        current_saturation = 1.0f;
++    }
+ }
+ 
+ static void gfx_opengl_end_frame(void) {
+@@ -1059,7 +1086,13 @@ void gfx_opengl_start_draw_to_framebuffer(int fb_id, float noise_scale) {
+ void gfx_opengl_clear_framebuffer() {
+     glDisable(GL_SCISSOR_TEST);
+     glDepthMask(GL_TRUE);
+-    glClear(GL_DEPTH_BUFFER_BIT);
++    if (clear_color_on_next_clear) {
++        clear_color_on_next_clear = false;
++        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
++        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++    } else {
++        glClear(GL_DEPTH_BUFFER_BIT);
++    }
+     glDepthMask(current_depth_mask ? GL_TRUE : GL_FALSE);
+     glEnable(GL_SCISSOR_TEST);
+ }

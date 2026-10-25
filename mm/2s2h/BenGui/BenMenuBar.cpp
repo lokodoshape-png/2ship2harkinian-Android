@@ -830,12 +830,19 @@ void DrawEnhancementsMenu() {
                              "hora de encontrá-la, o lugar e a máscara ou condição necessária." });
             UIWidgets::CVarCheckbox(
                 "Iluminação estilo MM3D", "gEnhancements.MM3D.Lighting.Enabled",
-                { .tooltip = "Cenas mais claras e com bem menos neblina, mais perto do Majora's Mask 3D." });
+                { .tooltip = "Cenas mais claras, com cores mais vivas e bem menos neblina, mais perto do Majora's "
+                             "Mask 3D. Brilho geral e Saturação valem para o cenário todo; as outras opções "
+                             "afetam personagens e a neblina." });
             UIWidgets::CVarSliderInt("Redução da neblina: %d%%", "gEnhancements.MM3D.Lighting.FogReduction", 0, 100,
                                      50);
             UIWidgets::CVarSliderInt("Reforço da luz ambiente: %d", "gEnhancements.MM3D.Lighting.AmbientBoost", 0, 100,
                                      20);
             UIWidgets::CVarSliderInt("Luz direta: %d%%", "gEnhancements.MM3D.Lighting.DirectionalScale", 50, 200, 110);
+            UIWidgets::CVarSliderInt("Brilho geral: %d%%", "gEnhancements.MM3D.Lighting.Brightness", 80, 150, 115);
+            UIWidgets::Tooltip("Clareia tudo na tela, inclusive o cenário. 100 = igual ao N64.");
+            UIWidgets::CVarSliderInt("Saturação das cores: %d%%", "gEnhancements.MM3D.Lighting.Saturation", 50, 150,
+                                     115);
+            UIWidgets::Tooltip("Cores mais vivas, como no 3DS. 100 = igual ao N64.");
 
             ImGui::EndMenu();
         }
