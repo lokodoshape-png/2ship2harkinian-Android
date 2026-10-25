@@ -1324,7 +1324,16 @@ void AddEnhancements() {
               { "Pular Cenas da História", "gEnhancements.Cutscenes.SkipStoryCutscenes",
                 "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX },
               { "Pular Interações Diversas", "gEnhancements.Cutscenes.SkipMiscInteractions",
-                "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX } },
+                "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX },
+              { "Segurar B para Acelerar Cenas", "gEnhancements.Cutscenes.HoldBToFastForward",
+                "Durante uma cena, segure B por meio segundo para ela passar bem mais rápido. A cena roda "
+                "inteira, só que acelerada, então nada do jogo é pulado.",
+                WIDGET_CVAR_CHECKBOX },
+              { "Velocidade das Cenas Aceleradas: %dx",
+                "gEnhancements.Cutscenes.FastForwardSpeed",
+                "Quantas vezes mais rápido a cena passa enquanto B está segurado.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 2, 8, 5 } } },
             // Dialogue Enhancements
             { { .widgetName = "Diálogos", .widgetType = WIDGET_SEPARATOR_TEXT },
               { "Seleção Rápida no Banco", "gEnhancements.Dialogue.FastBankSelection",

@@ -556,6 +556,15 @@ void DrawEnhancementsMenu() {
                                         .tooltip = "Aviso: ainda faz pouco; mais cenas serão puladas com o tempo",
                                     });
 
+            UIWidgets::CVarCheckbox("Segurar B para acelerar cenas", "gEnhancements.Cutscenes.HoldBToFastForward",
+                                    { .tooltip = "Durante uma cena, segure B por meio segundo para ela passar bem "
+                                                 "mais rápido. A cena roda inteira, só que acelerada, então nada do "
+                                                 "jogo é pulado. Combine com Texto rápido para passar as falas." });
+            if (CVarGetInteger("gEnhancements.Cutscenes.HoldBToFastForward", 0)) {
+                UIWidgets::CVarSliderInt("Velocidade das cenas aceleradas: %dx",
+                                         "gEnhancements.Cutscenes.FastForwardSpeed", 2, 8, 5);
+            }
+
             ImGui::EndMenu();
         }
 
