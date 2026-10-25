@@ -9,7 +9,43 @@ permissions:
   contents: write
 
 jobs:
+  # The app copies 2ship.o2r (the port's own ROM-free resources) out of its APK assets on first run,
+  # so it is built here on the host the same way main.yml does for the desktop packages.
+  port-archive:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat .github/workflows/apt-deps.txt) libzip-dev zipcmp zipmerge ziptool
+      - name: Install SDL2 and tinyxml2
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-2.28.5.tar.gz
+          tar -xzf SDL2-2.28.5.tar.gz
+          (cd SDL2-2.28.5 && ./configure --enable-hidapi-libusb > /dev/null && make -j4 > /dev/null && sudo make install > /dev/null)
+          sudo cp -a /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+          sudo apt-get remove -y libtinyxml2-dev
+          wget -q https://github.com/leethomason/tinyxml2/archive/refs/tags/10.0.0.tar.gz
+          tar -xzf 10.0.0.tar.gz
+          cmake -S tinyxml2-10.0.0 -B tinyxml2-10.0.0/build > /dev/null
+          cmake --build tinyxml2-10.0.0/build -j4 > /dev/null
+          sudo cmake --install tinyxml2-10.0.0/build > /dev/null
+      - name: Generate 2ship.o2r
+        run: |
+          cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release
+          cmake --build build-cmake --config Release --target Generate2ShipOtr -j4
+          ls -la 2ship.o2r
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: 2ship.o2r
+          retention-days: 3
+
   apk:
+    needs: port-archive
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
@@ -37,6 +73,11 @@ jobs:
           # Standalone install: own data folder, matching MainActivity.DATA_FOLDER.
           sed -i 's|"/storage/emulated/0/2S2H"|"/storage/emulated/0/2S2H-MM3D"|g' libultraship/src/Context.cpp
           test "$(grep -c '"/storage/emulated/0/2S2H-MM3D"' libultraship/src/Context.cpp)" -eq 2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: Android/app/src/main/assets
 
       - name: Build debug APK
         working-directory: Android
