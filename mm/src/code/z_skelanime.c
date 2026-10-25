@@ -1040,7 +1040,8 @@ void AnimationContext_SetLoadFrame(PlayState* play, PlayerAnimationHeader* anima
         if (frame < 0) {
             frame = 0;
         }
-        memcpy(ram, (u8*)(uintptr_t)animData + (((sizeof(Vec3s) * limbCount + 2) * frame)), sizeof(Vec3s) * limbCount + 2);
+        memcpy(ram, (u8*)(uintptr_t)animData + (((sizeof(Vec3s) * limbCount + 2) * frame)),
+               sizeof(Vec3s) * limbCount + 2);
     }
 }
 
