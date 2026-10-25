@@ -762,6 +762,11 @@ void DrawEnhancementsMenu() {
                                  "Town instead of after the Bombers' hide-and-seek game." })) {
                 RegisterEarlyBombersNotebook();
             }
+            UIWidgets::CVarCheckbox(
+                "Song of Time Variants in Pause", "gEnhancements.MM3D.TimeSongVariantsInPause",
+                { .tooltip = "Like in Majora's Mask 3D, the Song of Time on the Quest Status page also shows the "
+                             "Inverted Song of Time, the Song of Double Time and the Scarecrow's Song. With the "
+                             "cursor on the Song of Time, press L or C-Down to cycle and A to hear the notes." });
 
             ImGui::EndMenu();
         }

@@ -1385,7 +1385,12 @@ void AddEnhancements() {
                 "esconde-esconde dos Bombers.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
-                [](widgetInfo& info) { RegisterEarlyBombersNotebook(); } } } } });
+                [](widgetInfo& info) { RegisterEarlyBombersNotebook(); } },
+              { "Variações da Song of Time na Pausa", "gEnhancements.MM3D.TimeSongVariantsInPause",
+                "Como no Majora's Mask 3D, a Song of Time da tela de Status mostra também a Inverted Song of Time, "
+                "a Song of Double Time e a música do espantalho. Com o cursor na Song of Time, aperte L ou C-Baixo "
+                "para alternar e A para ouvir as notas.",
+                WIDGET_CVAR_CHECKBOX } } } });
     enhancementsSidebar.push_back({ "Dificuldade",
                                     3,
                                     { { { "Takkuri Não Rouba",

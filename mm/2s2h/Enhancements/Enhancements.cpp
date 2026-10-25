@@ -68,6 +68,7 @@ void InitEnhancements() {
 
     // MM3D
     RegisterEarlyBombersNotebook();
+    RegisterTimeSongVariantsInPause();
 
     // Restorations
     RegisterPowerCrouchStab();
