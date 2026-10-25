@@ -261,9 +261,7 @@ std::vector<SidebarEntry> enhancementsSidebar;
 std::vector<SidebarEntry> devToolsSidebar;
 uint8_t searchSidebarIndex = 0;
 SidebarEntry searchSidebarEntry = {
-    "Search",
-    1,
-    { { { "Menu Theme", "", "Searches all menus for the given text, including tooltips.", WIDGET_SEARCH } } }
+    "Buscar", 1, { { { "Tema do Menu", "", "Busca o texto em todos os menus, incluindo as dicas.", WIDGET_SEARCH } } }
 };
 
 static std::map<DisableOption, disabledInfo> disabledMap = {
@@ -272,138 +270,138 @@ static std::map<DisableOption, disabledInfo> disabledMap = {
            return !CVarGetInteger("gEnhancements.Camera.DebugCam.Enable", 0) &&
                   !CVarGetInteger("gEnhancements.Camera.FreeLook.Enable", 0);
        },
-        "Both Debug Camera and Free Look are Disabled" } },
+        "Câmera de Depuração e Câmera Livre estão desativadas" } },
     { DISABLE_FOR_DEBUG_CAM_ON,
       { [](disabledInfo& info) -> bool { return CVarGetInteger("gEnhancements.Camera.DebugCam.Enable", 0); },
-        "Debug Camera is Enabled" } },
+        "Câmera de Depuração está ativada" } },
     { DISABLE_FOR_DEBUG_CAM_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gEnhancements.Camera.DebugCam.Enable", 0); },
-        "Debug Camera is Disabled" } },
+        "Câmera de Depuração está desativada" } },
     { DISABLE_FOR_FREE_LOOK_ON,
       { [](disabledInfo& info) -> bool { return CVarGetInteger("gEnhancements.Camera.FreeLook.Enable", 0); },
-        "Free Look is Enabled" } },
+        "Câmera Livre está ativada" } },
     { DISABLE_FOR_FREE_LOOK_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gEnhancements.Camera.FreeLook.Enable", 0); },
-        "Free Look is Disabled" } },
+        "Câmera Livre está desativada" } },
     { DISABLE_FOR_GYRO_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gEnhancements.Camera.FirstPerson.GyroEnabled", 0); },
-        "Gyro Aiming is Disabled" } },
+        "Mira por Giroscópio está desativada" } },
     { DISABLE_FOR_GYRO_ON,
       { [](disabledInfo& info) -> bool { return CVarGetInteger("gEnhancements.Camera.FirstPerson.GyroEnabled", 0); },
-        "Gyro Aiming is Enabled" } },
+        "Mira por Giroscópio está ativada" } },
     { DISABLE_FOR_RIGHT_STICK_OFF,
       { [](disabledInfo& info) -> bool {
            return !CVarGetInteger("gEnhancements.Camera.FirstPerson.RightStickEnabled", 0);
        },
-        "Right Stick Aiming is Disabled" } },
+        "Mira pelo Analógico Direito está desativada" } },
     { DISABLE_FOR_AUTO_SAVE_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gEnhancements.Saving.Autosave", 0); },
-        "AutoSave is Disabled" } },
+        "Salvamento Automático está desativado" } },
     { DISABLE_FOR_NULL_PLAY_STATE,
-      { [](disabledInfo& info) -> bool { return gPlayState == NULL; }, "Save Not Loaded" } },
+      { [](disabledInfo& info) -> bool { return gPlayState == NULL; }, "Nenhum save carregado" } },
     { DISABLE_FOR_DEBUG_MODE_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gDeveloperTools.DebugEnabled", 0); },
-        "Debug Mode is Disabled" } },
+        "Modo de Depuração está desativado" } },
     { DISABLE_FOR_NO_VSYNC,
       { [](disabledInfo& info) -> bool { return !Ship::Context::GetInstance()->GetWindow()->CanDisableVerticalSync(); },
-        "Disabling VSync not supported" } },
+        "Desativar o VSync não é suportado" } },
     { DISABLE_FOR_NO_WINDOWED_FULLSCREEN,
       { [](disabledInfo& info) -> bool {
            return !Ship::Context::GetInstance()->GetWindow()->SupportsWindowedFullscreen();
        },
-        "Windowed Fullscreen not supported" } },
+        "Tela cheia em janela não é suportada" } },
     { DISABLE_FOR_NO_MULTI_VIEWPORT,
       { [](disabledInfo& info) -> bool {
            return !Ship::Context::GetInstance()->GetWindow()->GetGui()->SupportsViewports();
        },
-        "Multi-viewports not supported" } },
+        "Múltiplas janelas não são suportadas" } },
     { DISABLE_FOR_NOT_DIRECTX,
       { [](disabledInfo& info) -> bool {
            return Ship::Context::GetInstance()->GetWindow()->GetWindowBackend() !=
                   Ship::WindowBackend::FAST3D_DXGI_DX11;
        },
-        "Available Only on DirectX" } },
+        "Disponível apenas no DirectX" } },
     { DISABLE_FOR_DIRECTX,
       { [](disabledInfo& info) -> bool {
            return Ship::Context::GetInstance()->GetWindow()->GetWindowBackend() ==
                   Ship::WindowBackend::FAST3D_DXGI_DX11;
        },
-        "Not Available on DirectX" } },
+        "Indisponível no DirectX" } },
     { DISABLE_FOR_MATCH_REFRESH_RATE_ON,
       { [](disabledInfo& info) -> bool { return CVarGetInteger("gMatchRefreshRate", 0); },
-        "Match Refresh Rate is Enabled" } },
+        "Igualar Taxa de Atualização está ativado" } },
     { DISABLE_FOR_MOTION_BLUR_MODE,
       { [](disabledInfo& info) -> bool {
            info.value = CVarGetInteger("gEnhancements.Graphics.MotionBlur.Mode", 0);
            return !info.value;
        },
-        "Motion Blur Mode mismatch" } },
+        "Modo de Desfoque de Movimento incompatível" } },
     { DISABLE_FOR_MOTION_BLUR_OFF,
-      { [](disabledInfo& info) -> bool { return !R_MOTION_BLUR_ENABLED; }, "Motion Blur is Disabled" } },
+      { [](disabledInfo& info) -> bool { return !R_MOTION_BLUR_ENABLED; }, "Desfoque de Movimento está desativado" } },
     { DISABLE_FOR_FRAME_ADVANCE_OFF,
       { [](disabledInfo& info) -> bool { return !(gPlayState != nullptr && gPlayState->frameAdvCtx.enabled); },
-        "Frame Advance is Disabled" } },
+        "Avanço de Quadro está desativado" } },
     { DISABLE_FOR_WARP_POINT_NOT_SET,
-      { [](disabledInfo& info) -> bool { return !CVarGetInteger(WARP_POINT_CVAR "Saved", 0); },
-        "Warp Point Not Saved" } },
+      { [](disabledInfo& info) -> bool { return !CVarGetInteger(WARP_POINT_CVAR "Salvo", 0); },
+        "Ponto de teletransporte não salvo" } },
     { DISABLE_FOR_INTRO_SKIP_OFF,
       { [](disabledInfo& info) -> bool { return !CVarGetInteger("gEnhancements.Cutscenes.SkipIntroSequence", 0); },
-        "Intro Skip Not Selected" } }
+        "Pular Introdução não está selecionado" } }
 };
 
 std::unordered_map<int32_t, const char*> menuThemeOptions = {
-    { COLOR_WHITE, "White" },
-    { COLOR_GRAY, "Gray" },
-    { COLOR_DARK_GRAY, "Dark Gray" },
-    { COLOR_INDIGO, "Indigo" },
-    { COLOR_RED, "Red" },
-    { COLOR_DARK_RED, "Dark Red" },
-    { COLOR_LIGHT_GREEN, "Light Green" },
-    { COLOR_GREEN, "Green" },
-    { COLOR_DARK_GREEN, "Dark Green" },
-    { COLOR_YELLOW, "Yellow" },
+    { COLOR_WHITE, "Branco" },
+    { COLOR_GRAY, "Cinza" },
+    { COLOR_DARK_GRAY, "Cinza Escuro" },
+    { COLOR_INDIGO, "Anil" },
+    { COLOR_RED, "Vermelho" },
+    { COLOR_DARK_RED, "Vermelho Escuro" },
+    { COLOR_LIGHT_GREEN, "Verde Claro" },
+    { COLOR_GREEN, "Verde" },
+    { COLOR_DARK_GREEN, "Verde Escuro" },
+    { COLOR_YELLOW, "Amarelo" },
 };
 
 static const std::unordered_map<int32_t, const char*> alwaysWinDoggyraceOptions = {
-    { ALWAYS_WIN_DOGGY_RACE_OFF, "Off" },
-    { ALWAYS_WIN_DOGGY_RACE_MASKOFTRUTH, "When owning Mask of Truth" },
-    { ALWAYS_WIN_DOGGY_RACE_ALWAYS, "Always" },
+    { ALWAYS_WIN_DOGGY_RACE_OFF, "Desligado" },
+    { ALWAYS_WIN_DOGGY_RACE_MASKOFTRUTH, "Com a Máscara da Verdade" },
+    { ALWAYS_WIN_DOGGY_RACE_ALWAYS, "Sempre" },
 };
 
 static const std::unordered_map<int32_t, const char*> cremiaRewardOptions = {
-    { CREMIA_REWARD_RANDOM, "Vanilla" },
-    { CREMIA_REWARD_ALWAYS_HUG, "Hug" },
-    { CREMIA_REWARD_ALWAYS_RUPEE, "Rupee" },
+    { CREMIA_REWARD_RANDOM, "Original" },
+    { CREMIA_REWARD_ALWAYS_HUG, "Abraço" },
+    { CREMIA_REWARD_ALWAYS_RUPEE, "Rupias" },
 };
 
 static const std::unordered_map<int32_t, const char*> clockTypeOptions = {
     { CLOCK_TYPE_ORIGINAL, "Original" },
-    { CLOCK_TYPE_3DS, "MM3D style" },
-    { CLOCK_TYPE_TEXT_BASED, "Text only" },
+    { CLOCK_TYPE_3DS, "Estilo MM3D" },
+    { CLOCK_TYPE_TEXT_BASED, "Só texto" },
 };
 
 static const std::unordered_map<int32_t, const char*> textureFilteringMap = {
-    { FILTER_THREE_POINT, "Three-Point" },
+    { FILTER_THREE_POINT, "Três pontos" },
     { FILTER_LINEAR, "Linear" },
-    { FILTER_NONE, "None" },
+    { FILTER_NONE, "Nenhum" },
 };
 
 static const std::unordered_map<int32_t, const char*> motionBlurOptions = {
-    { MOTION_BLUR_DYNAMIC, "Dynamic (default)" },
-    { MOTION_BLUR_ALWAYS_OFF, "Always Off" },
-    { MOTION_BLUR_ALWAYS_ON, "Always On" },
+    { MOTION_BLUR_DYNAMIC, "Dinâmico (padrão)" },
+    { MOTION_BLUR_ALWAYS_OFF, "Sempre desligado" },
+    { MOTION_BLUR_ALWAYS_ON, "Sempre ligado" },
 };
 
 static const std::unordered_map<int32_t, const char*> debugSaveOptions = {
-    { DEBUG_SAVE_INFO_COMPLETE, "100\% save" },
-    { DEBUG_SAVE_INFO_VANILLA_DEBUG, "Vanilla debug save" },
-    { DEBUG_SAVE_INFO_NONE, "Empty save" },
+    { DEBUG_SAVE_INFO_COMPLETE, "Save 100\%" },
+    { DEBUG_SAVE_INFO_VANILLA_DEBUG, "Save de depuração original" },
+    { DEBUG_SAVE_INFO_NONE, "Save vazio" },
 };
 
 static const std::unordered_map<int32_t, const char*> logLevels = {
-    { DEBUG_LOG_TRACE, "Trace" }, { DEBUG_LOG_DEBUG, "Debug" }, { DEBUG_LOG_INFO, "Info" },
-    { DEBUG_LOG_WARN, "Warn" },   { DEBUG_LOG_ERROR, "Error" }, { DEBUG_LOG_CRITICAL, "Critical" },
-    { DEBUG_LOG_OFF, "Off" },
+    { DEBUG_LOG_TRACE, "Trace" },   { DEBUG_LOG_DEBUG, "Debug" }, { DEBUG_LOG_INFO, "Info" },
+    { DEBUG_LOG_WARN, "Warn" },     { DEBUG_LOG_ERROR, "Error" }, { DEBUG_LOG_CRITICAL, "Critical" },
+    { DEBUG_LOG_OFF, "Desligado" },
 };
 
 static const std::unordered_map<Ship::AudioBackend, const char*> audioBackendsMap = {
@@ -418,13 +416,14 @@ static std::unordered_map<Ship::WindowBackend, const char*> windowBackendsMap = 
 };
 
 static const std::unordered_map<int32_t, const char*> timeStopOptions = {
-    { TIME_STOP_OFF, "Off" },
-    { TIME_STOP_TEMPLES, "Temples" },
-    { TIME_STOP_TEMPLES_DUNGEONS, "Temples + Mini Dungeons" },
+    { TIME_STOP_OFF, "Desligado" },
+    { TIME_STOP_TEMPLES, "Templos" },
+    { TIME_STOP_TEMPLES_DUNGEONS, "Templos + Mini Masmorras" },
 };
 
 static const std::unordered_map<int32_t, const char*> notificationPosition = {
-    { 0, "Top Left" }, { 1, "Top Right" }, { 2, "Bottom Left" }, { 3, "Bottom Right" }, { 4, "Hidden" },
+    { 0, "Superior Esquerdo" }, { 1, "Superior Direito" }, { 2, "Inferior Esquerdo" },
+    { 3, "Inferior Direito" },  { 4, "Oculto" },
 };
 
 void FreeLookPitchMinMax() {
@@ -443,23 +442,23 @@ void InsertSidebarSearch() {
 void AddSettings() {
     // General Settings
     settingsSidebar.push_back(
-        { "General",
+        { "Geral",
           3,
           { {
-              { "Menu Theme",
+              { "Tema do Menu",
                 "gSettings.MenuTheme",
-                "Changes the Theme of the Menu Widgets.",
+                "Muda o tema dos elementos do menu.",
                 WIDGET_CVAR_COMBOBOX,
                 { .defaultVariant = COLOR_INDIGO, .comboBoxOptions = menuThemeOptions } },
 #if not defined(__SWITCH__) and not defined(__WIIU__)
-              { "Menu Controller Navigation", CVAR_IMGUI_CONTROLLER_NAV,
-                "Allows controller navigation of the 2Ship menu (Settings, Enhancements,...)\nCAUTION: "
-                "This will disable game inputs while the menu is visible.\n\nD-pad to move between "
-                "items, A to select, B to move up in scope.",
+              { "Navegar no Menu com Controle", CVAR_IMGUI_CONTROLLER_NAV,
+                "Permite navegar no menu do 2Ship (Configurações, Melhorias...) com o controle.\nATENÇÃO: os comandos "
+                "do jogo ficam desativados enquanto o menu estiver aberto.\n\nD-pad para mover entre os itens, A para "
+                "selecionar, B para voltar.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Cursor Always Visible",
+              { "Cursor Sempre Visível",
                 "gSettings.CursorVisibility",
-                "Makes the cursor always visible, even in full screen.",
+                "Deixa o cursor sempre visível, mesmo em tela cheia.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) {
@@ -467,9 +466,9 @@ void AddSettings() {
                         CVarGetInteger("gSettings.CursorVisibility", 0));
                 } },
 #endif
-              { "Search In Sidebar",
+              { "Busca na Barra Lateral",
                 "gSettings.SidebarSearch",
-                "Displays the Search menu as a sidebar entry in Settings instead of in the header.",
+                "Mostra a Busca como item da barra lateral em Configurações, em vez de no topo.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) {
@@ -488,17 +487,16 @@ void AddSettings() {
                         CVarSetInteger(menuEntries[0].sidebarCvar, sidebarVal);
                     }
                 } },
-              { "Search Input Autofocus", "gSettings.SearchAutofocus",
-                "Search input box gets autofocus when visible. Does not affect using other widgets.",
-                WIDGET_CVAR_CHECKBOX },
-              { .widgetName = "Alt Assets Tab hotkey",
+              { "Foco Automático na Busca", "gSettings.SearchAutofocus",
+                "A caixa de busca recebe o foco ao aparecer. Não afeta os outros elementos.", WIDGET_CVAR_CHECKBOX },
+              { .widgetName = "Atalho Tab para Assets Alternativos",
                 .widgetCVar = "gEnhancements.Mods.AlternateAssetsHotkey",
-                .widgetTooltip = "Allows pressing the Tab key to toggle alternate assets",
+                .widgetTooltip = "Permite usar a tecla Tab para alternar os assets alternativos",
                 .widgetType = WIDGET_CVAR_CHECKBOX,
                 .widgetOptions = { .defaultVariant = true } },
-              { "Open App Files Folder",
+              { "Abrir Pasta de Arquivos do App",
                 "",
-                "Opens the folder that contains the save and mods folders, etc.",
+                "Abre a pasta que contém as pastas de saves, mods etc.",
                 WIDGET_BUTTON,
                 {},
                 [](widgetInfo& info) {
@@ -508,11 +506,11 @@ void AddSettings() {
           } } });
     // Audio Settings
     settingsSidebar.push_back(
-        { "Audio",
+        { "Áudio",
           3,
-          { { { "Master Volume: %.0f%%",
+          { { { "Volume Geral: %.0f%%",
                 "gSettings.Audio.MasterVolume",
-                "Adjust overall sound volume.",
+                "Ajusta o volume geral do som.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -520,9 +518,9 @@ void AddSettings() {
                   .showButtons = false,
                   .format = "",
                   .isPercentage = true } },
-              { "Main Music Volume: %.0f%%",
+              { "Volume da Música Principal: %.0f%%",
                 "gSettings.Audio.MainMusicVolume",
-                "Adjust the Background Music volume.",
+                "Ajusta o volume da música de fundo.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -534,9 +532,9 @@ void AddSettings() {
                     AudioSeq_SetPortVolumeScale(SEQ_PLAYER_BGM_MAIN,
                                                 CVarGetFloat("gSettings.Audio.MainMusicVolume", 1.0f));
                 } },
-              { "Sub Music Volume: %.0f%%",
+              { "Volume da Música Secundária: %.0f%%",
                 "gSettings.Audio.SubMusicVolume",
-                "Adjust the Sub Music volume.",
+                "Ajusta o volume da música secundária.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -548,9 +546,9 @@ void AddSettings() {
                     AudioSeq_SetPortVolumeScale(SEQ_PLAYER_BGM_SUB,
                                                 CVarGetFloat("gSettings.Audio.SubMusicVolume", 1.0f));
                 } },
-              { "Sound Effects Volume: %.0f%%",
+              { "Volume dos Efeitos Sonoros: %.0f%%",
                 "gSettings.Audio.SoundEffectsVolume",
-                "Adjust the Sound Effects volume.",
+                "Ajusta o volume dos efeitos sonoros.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -562,9 +560,9 @@ void AddSettings() {
                     AudioSeq_SetPortVolumeScale(SEQ_PLAYER_SFX,
                                                 CVarGetFloat("gSettings.Audio.SoundEffectsVolume", 1.0f));
                 } },
-              { "Fanfare Volume: %.0f%%",
+              { "Volume das Fanfarras: %.0f%%",
                 "gSettings.Audio.FanfareVolume",
-                "Adjust the Fanfare volume.",
+                "Ajusta o volume das fanfarras.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -576,9 +574,9 @@ void AddSettings() {
                     AudioSeq_SetPortVolumeScale(SEQ_PLAYER_FANFARE,
                                                 CVarGetFloat("gSettings.Audio.FanfareVolume", 1.0f));
                 } },
-              { "Ambience Volume: %.0f%%",
+              { "Volume do Ambiente: %.0f%%",
                 "gSettings.Audio.AmbienceVolume",
-                "Adjust the Ambient Sound volume.",
+                "Ajusta o volume dos sons de ambiente.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f,
                   .max = 1.0f,
@@ -590,35 +588,35 @@ void AddSettings() {
                     AudioSeq_SetPortVolumeScale(SEQ_PLAYER_AMBIENCE,
                                                 CVarGetFloat("gSettings.Audio.AmbienceVolume", 1.0f));
                 } },
-              { "Audio API", NULL, "Sets the audio API used by the game. Requires a relaunch to take effect.",
+              { "API de Áudio", NULL, "Define a API de áudio usada pelo jogo. É preciso reiniciar para aplicar.",
                 WIDGET_AUDIO_BACKEND } } } });
     // Graphics Settings
     static int32_t maxFps;
     const char* tooltip = "";
     if (Ship::Context::GetInstance()->GetWindow()->GetWindowBackend() == Ship::WindowBackend::FAST3D_DXGI_DX11) {
         maxFps = 360;
-        tooltip = "Uses Matrix Interpolation to create extra frames, resulting in smoother graphics. This is "
-                  "purely visual and does not impact game logic, execution of glitches etc.\n\nA higher target "
-                  "FPS than your monitor's refresh rate will waste resources, and might give a worse result.";
+        tooltip = "Usa interpolação de matrizes para criar quadros extras e deixar a imagem mais fluida. É puramente "
+                  "visual e não afeta a lógica do jogo, glitches etc.\n\nUm FPS acima da taxa de atualização da tela "
+                  "desperdiça recursos e pode piorar o resultado.";
     } else {
         maxFps = Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate();
-        tooltip = "Uses Matrix Interpolation to create extra frames, resulting in smoother graphics. This is "
-                  "purely visual and does not impact game logic, execution of glitches etc.";
+        tooltip = "Usa interpolação de matrizes para criar quadros extras e deixar a imagem mais fluida. É puramente "
+                  "visual e não afeta a lógica do jogo, glitches etc.";
     }
     settingsSidebar.push_back(
-        { "Graphics",
+        { "Gráficos",
           3,
-          { { { "Toggle Fullscreen",
+          { { { "Alternar Tela Cheia",
                 "gSettings.Fullscreen",
-                "Toggles Fullscreen On/Off.",
+                "Liga/desliga a tela cheia.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { Ship::Context::GetInstance()->GetWindow()->ToggleFullscreen(); } },
 #ifndef __APPLE__
-              { "Internal Resolution: %.0f%%",
+              { "Resolução Interna: %.0f%%",
                 CVAR_INTERNAL_RESOLUTION,
-                "Multiplies your output resolution by the value inputted, as a more intensive but effective "
-                "form of anti-aliasing.",
+                "Multiplica a resolução de saída pelo valor escolhido. É uma forma de anti-aliasing mais pesada, porém "
+                "eficaz.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.5f,
                   .max = 2.0f,
@@ -634,9 +632,8 @@ void AddSettings() {
 #ifndef __WIIU__
               { "Anti-aliasing (MSAA): %d",
                 CVAR_MSAA_VALUE,
-                "Activates MSAA (multi-sample anti-aliasing) from 2x up to 8x, to smooth the edges of rendered "
-                "geometry.\n"
-                "Higher sample count will result in smoother edges on models, but may reduce performance.",
+                "Ativa o MSAA (anti-aliasing por multiamostragem) de 2x a 8x para suavizar as bordas dos "
+                "modelos.\nMais amostras deixam as bordas mais suaves, mas podem reduzir o desempenho.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 8, 1 },
                 [](widgetInfo& info) {
@@ -644,7 +641,7 @@ void AddSettings() {
                 } },
 #endif
 
-              { "Current FPS: %d",
+              { "FPS atual: %d",
                 "gInterpolationFPS",
                 tooltip,
                 WIDGET_CVAR_SLIDER_INT,
@@ -652,18 +649,18 @@ void AddSettings() {
                 [](widgetInfo& info) {
                     int32_t defaultVariant = std::get<int32_t>(info.widgetOptions.defaultVariant);
                     if (CVarGetInteger(info.widgetCVar, defaultVariant) == defaultVariant) {
-                        info.widgetName = "Current FPS: Original (%d)";
+                        info.widgetName = "FPS atual: Original (%d)";
                     } else {
-                        info.widgetName = "Current FPS: %d";
+                        info.widgetName = "FPS atual: %d";
                     }
                 },
                 [](widgetInfo& info) {
                     if (disabledMap.at(DISABLE_FOR_MATCH_REFRESH_RATE_ON).active)
                         info.activeDisables.push_back(DISABLE_FOR_MATCH_REFRESH_RATE_ON);
                 } },
-              { "Match Refresh Rate",
+              { "Igualar Taxa de Atualização",
                 "",
-                "Matches interpolation value to the current game's window refresh rate.",
+                "Iguala a interpolação à taxa de atualização da janela do jogo.",
                 WIDGET_BUTTON,
                 {},
                 [](widgetInfo& info) {
@@ -674,94 +671,94 @@ void AddSettings() {
                     }
                 },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NOT_DIRECTX).active; } },
-              { "Match Refresh Rate",
+              { "Igualar Taxa de Atualização",
                 "gMatchRefreshRate",
-                "Matches interpolation value to the current game's window refresh rate.",
+                "Iguala a interpolação à taxa de atualização da janela do jogo.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DIRECTX).active; } },
-              { "Jitter fix : >= % d FPS",
+              { "Correção de tremulação: >= % d FPS",
                 "gExtraLatencyThreshold",
-                "When Interpolation FPS setting is at least this threshold, add one frame of input "
-                "lag (e.g. 16.6 ms for 60 FPS) in order to avoid jitter. This setting allows the "
-                "CPU to work on one frame while GPU works on the previous frame.\nThis setting "
-                "should be used when your computer is too slow to do CPU + GPU work in time.",
+                "Quando o FPS de interpolação atinge este valor, adiciona um quadro de atraso nos comandos (ex.: 16,6 "
+                "ms a 60 FPS) para evitar tremulação. Assim a CPU trabalha em um quadro enquanto a GPU termina o "
+                "anterior.\nUse quando o aparelho for lento demais para fazer o trabalho de CPU + GPU a tempo.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 0, 360, 80 },
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NOT_DIRECTX).active; } },
-              { "Renderer API (Needs reload)", NULL, "Sets the renderer API used by the game.", WIDGET_VIDEO_BACKEND },
-              { "Enable Vsync",
+              { "API de Renderização (requer reinício)", NULL, "Define a API de renderização usada pelo jogo.",
+                WIDGET_VIDEO_BACKEND },
+              { "Ativar VSync",
                 CVAR_VSYNC_ENABLED,
-                "Enables Vsync.",
+                "Ativa o VSync.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NO_VSYNC).active; } },
-              { "Windowed Fullscreen",
+              { "Tela Cheia em Janela",
                 CVAR_SDL_WINDOWED_FULLSCREEN,
-                "Enables Windowed Fullscreen Mode.",
+                "Ativa o modo tela cheia em janela.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NO_WINDOWED_FULLSCREEN).active; } },
-              { "Allow multi-windows",
+              { "Permitir Várias Janelas",
                 CVAR_ENABLE_MULTI_VIEWPORTS,
-                "Allows multiple windows to be opened at once. Requires a reload to take effect.",
+                "Permite abrir várias janelas ao mesmo tempo. É preciso reiniciar para aplicar.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NO_MULTI_VIEWPORT).active; } },
-              { "Texture Filter (Needs reload)",
+              { "Filtro de Textura (requer reinício)",
                 CVAR_TEXTURE_FILTER,
-                "Sets the applied Texture Filtering.",
+                "Define o filtro aplicado às texturas.",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = textureFilteringMap } } } } });
     // Input Editor
-    settingsSidebar.push_back({ "Input Editor",
+    settingsSidebar.push_back({ "Editor de Controles",
                                 1,
-                                { { { "Popout Input Editor",
+                                { { { "Abrir Editor de Controles em Janela",
                                       "gWindows.BenInputEditor",
-                                      "Enables the separate Input Editor window.",
+                                      "Abre o Editor de Controles em uma janela separada.",
                                       WIDGET_WINDOW_BUTTON,
                                       { .size = UIWidgets::Sizes::Inline, .windowName = "2S2H Input Editor" } } } } });
 
     settingsSidebar.push_back(
-        { "Notifications",
+        { "Notificações",
           1,
           { {
-              { "Position",
+              { "Posição",
                 "gNotifications.Position",
-                "Which corner of the screen notifications appear in.",
+                "Em qual canto da tela as notificações aparecem.",
                 WIDGET_CVAR_COMBOBOX,
                 { .defaultVariant = 3, .comboBoxOptions = notificationPosition } },
-              { "Duration: %.0f seconds",
+              { "Duração: %.0f segundos",
                 "gNotifications.Duration",
-                "How long notifications are displayed for.",
+                "Por quanto tempo as notificações ficam na tela.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 3.0f, .max = 30.0f, .defaultVariant = 10.0f, .format = "%.1f", .step = 0.1f } },
-              { "Background Opacity: %.0f%%",
+              { "Opacidade do Fundo: %.0f%%",
                 "gNotifications.BgOpacity",
-                "How opaque the background of notifications is.",
+                "Quão opaco é o fundo das notificações.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.0f, .max = 1.0f, .defaultVariant = 0.5f, .format = "%.0f%%", .isPercentage = true } },
-              { "Size %.1f",
+              { "Tamanho %.1f",
                 "gNotifications.Size",
-                "How large notifications are.",
+                "Tamanho das notificações.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 1.0f, .max = 5.0f, .defaultVariant = 1.8f, .format = "%.1f", .step = 0.1f } },
-              { "Test Notification",
+              { "Testar Notificação",
                 "",
-                "Displays a test notification.",
+                "Mostra uma notificação de teste.",
                 WIDGET_BUTTON,
                 {},
                 [](widgetInfo& info) {
                     Notification::Emit({
                         .itemIcon = "__OTR__icon_item_24_static_yar/gQuestIconGoldSkulltulaTex",
-                        .prefix = "This",
-                        .message = "is a",
-                        .suffix = "test.",
+                        .prefix = "Isto",
+                        .message = "é um",
+                        .suffix = "teste.",
                     });
                 } },
           } } });
@@ -775,19 +772,19 @@ int32_t motionBlurStrength;
 void AddEnhancements() {
     // Camera Snap Fix
     enhancementsSidebar.push_back(
-        { "Camera",
+        { "Câmera",
           3,
           { {
-                { .widgetName = "Fixes", .widgetType = WIDGET_SEPARATOR_TEXT },
-                { "Fix Targeting Camera Snap",
+                { .widgetName = "Correções", .widgetType = WIDGET_SEPARATOR_TEXT },
+                { "Corrigir Salto da Câmera ao Mirar",
                   "gEnhancements.Camera.FixTargettingCameraSnap",
-                  "Fixes the camera snap that occurs when you are moving and press the targeting button.",
+                  "Corrige o salto da câmera que acontece quando você se move e aperta o botão de mirar.",
                   WIDGET_CVAR_CHECKBOX,
                   {} },
-                { .widgetName = "First Person", .widgetType = WIDGET_SEPARATOR_TEXT },
-                { "Disable Auto-Centering",
+                { .widgetName = "Primeira Pessoa", .widgetType = WIDGET_SEPARATOR_TEXT },
+                { "Desativar Centralização Automática",
                   "gEnhancements.Camera.FirstPerson.DisableFirstPersonAutoCenterView",
-                  "Disables the auto-centering of the camera in first person mode.",
+                  "Desativa a centralização automática da câmera em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr,
@@ -795,64 +792,64 @@ void AddEnhancements() {
                       if (disabledMap.at(DISABLE_FOR_GYRO_ON).active)
                           info.activeDisables.push_back(DISABLE_FOR_GYRO_ON);
                   } },
-                { "Invert X Axis", "gEnhancements.Camera.FirstPerson.InvertX",
-                  "Inverts the X Axis of the Camera in First Person Mode.", WIDGET_CVAR_CHECKBOX },
-                { "Invert Y Axis",
+                { "Inverter Eixo X", "gEnhancements.Camera.FirstPerson.InvertX",
+                  "Inverte o eixo X da câmera em primeira pessoa.", WIDGET_CVAR_CHECKBOX },
+                { "Inverter Eixo Y",
                   "gEnhancements.Camera.FirstPerson.InvertY",
-                  "Inverts the Y Axis of the Camera in First Person Mode.",
+                  "Inverte o eixo Y da câmera em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   { .defaultVariant = true } },
-                { "X Axis Sensitivity: %.0f%%",
+                { "Sensibilidade do Eixo X: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.SensitivityX",
-                  "Adjusts the Sensitivity of the X Axis in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo X em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr },
-                { "Y Axis Sensitivity: %.0f%%",
+                { "Sensibilidade do Eixo Y: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.SensitivityY",
-                  "Adjusts the Sensitivity of the Y Axis in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo Y em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr },
-                { "Gyro Aiming",
+                { "Mira por Giroscópio",
                   "gEnhancements.Camera.FirstPerson.GyroEnabled",
-                  "Enables Gyro Aiming in First Person Mode.",
+                  "Ativa a mira por giroscópio em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr },
-                { "Invert Gyro X Axis",
+                { "Inverter Eixo X do Giroscópio",
                   "gEnhancements.Camera.FirstPerson.GyroInvertX",
-                  "Inverts the X Axis of the Gyro in First Person Mode.",
+                  "Inverte o eixo X do giroscópio em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_GYRO_OFF).active; } },
-                { "Invert Gyro Y Axis",
+                { "Inverter Eixo Y do Giroscópio",
                   "gEnhancements.Camera.FirstPerson.GyroInvertY",
-                  "Inverts the Y Axis of the Gyro in First Person Mode.",
+                  "Inverte o eixo Y do giroscópio em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_GYRO_OFF).active; } },
-                { "Gyro X Axis Sensitivity: %.0f%%",
+                { "Sensibilidade X do Giroscópio: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.GyroSensitivityX",
-                  "Adjusts the Sensitivity of the X Axis of the Gyro in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo X do giroscópio em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_GYRO_OFF).active; } },
-                { "Gyro Y Axis Sensitivity: %.0f%%",
+                { "Sensibilidade Y do Giroscópio: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.GyroSensitivityY",
-                  "Adjusts the Sensitivity of the Y Axis of the Gyro in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo Y do giroscópio em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_GYRO_OFF).active; } },
-                { "Right Stick Aiming", "gEnhancements.Camera.FirstPerson.RightStickEnabled",
-                  "Enables Right Stick Aiming in First Person Mode.", WIDGET_CVAR_CHECKBOX },
-                { "Move while aiming",
+                { "Mira pelo Analógico Direito", "gEnhancements.Camera.FirstPerson.RightStickEnabled",
+                  "Ativa a mira pelo analógico direito em primeira pessoa.", WIDGET_CVAR_CHECKBOX },
+                { "Mover enquanto mira",
                   "gEnhancements.Camera.FirstPerson.MoveInFirstPerson",
-                  "Allows movement with the left stick while in first person mode.",
+                  "Permite andar com o analógico esquerdo em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr,
@@ -860,41 +857,41 @@ void AddEnhancements() {
                       if (disabledMap.at(DISABLE_FOR_RIGHT_STICK_OFF).active)
                           info.activeDisables.push_back(DISABLE_FOR_RIGHT_STICK_OFF);
                   } },
-                { "Invert Right Stick X Axis",
+                { "Inverter Eixo X do Analógico Direito",
                   "gEnhancements.Camera.FirstPerson.RightStickInvertX",
-                  "Inverts the X Axis of the Right Stick in First Person Mode.",
+                  "Inverte o eixo X do analógico direito em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   {},
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_RIGHT_STICK_OFF).active; } },
-                { "Invert Right Stick Y Axis",
+                { "Inverter Eixo Y do Analógico Direito",
                   "gEnhancements.Camera.FirstPerson.RightStickInvertY",
-                  "Inverts the Y Axis of the Right Stick in First Person Mode.",
+                  "Inverte o eixo Y do analógico direito em primeira pessoa.",
                   WIDGET_CVAR_CHECKBOX,
                   { .defaultVariant = true },
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_RIGHT_STICK_OFF).active; } },
-                { "Right Stick X Axis Sensitivity: %.0f%%",
+                { "Sensibilidade X do Analógico Direito: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.RightStickSensitivityX",
-                  "Adjusts the Sensitivity of the X Axis of the Right Stick in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo X do analógico direito em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_RIGHT_STICK_OFF).active; } },
-                { "Right Stick Y Axis Sensitivity: %.0f%%",
+                { "Sensibilidade Y do Analógico Direito: %.0f%%",
                   "gEnhancements.Camera.FirstPerson.RightStickSensitivityY",
-                  "Adjusts the Sensitivity of the Y Axis of the Right Stick in First Person Mode.",
+                  "Ajusta a sensibilidade do eixo Y do analógico direito em primeira pessoa.",
                   WIDGET_CVAR_SLIDER_FLOAT,
                   { .min = 0.01f, .max = 2.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                   nullptr,
                   [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_RIGHT_STICK_OFF).active; } },
             },
             // Camera Enhancements
-            { { .widgetName = "Cameras", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Free Look",
+            { { .widgetName = "Câmeras", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Câmera Livre",
                 "gEnhancements.Camera.FreeLook.Enable",
-                "Enables free look camera control\nNote: You must remap C buttons off of the right "
-                "stick in the controller config menu, and map the camera stick to the right stick.",
+                "Ativa o controle livre da câmera.\nObs.: tire os botões C do analógico direito nas configurações do "
+                "controle e mapeie a câmera no analógico direito.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterCameraFreeLook(); },
@@ -902,37 +899,37 @@ void AddEnhancements() {
                     if (disabledMap.at(DISABLE_FOR_DEBUG_CAM_ON).active)
                         info.activeDisables.push_back(DISABLE_FOR_DEBUG_CAM_ON);
                 } },
-              { "Camera Distance: %d",
+              { "Distância da Câmera: %d",
                 "gEnhancements.Camera.FreeLook.MaxCameraDistance",
-                "Maximum Camera Distance for Free Look.",
+                "Distância máxima da Câmera Livre.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 100, 900, 185 },
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_FREE_LOOK_OFF).active; } },
-              { "Camera Transition Speed: %d",
+              { "Velocidade de Transição da Câmera: %d",
                 "gEnhancements.Camera.FreeLook.TransitionSpeed",
-                "Can someone help me?",
+                "Alguém pode me ajudar?",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 900, 25 },
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_FREE_LOOK_OFF).active; } },
-              { "Max Camera Height Angle: %.0f\xC2\xB0",
+              { "Ângulo Máximo de Altura: %.0f\xC2\xB0",
                 "gEnhancements.Camera.FreeLook.MaxPitch",
-                "Maximum Height of the Camera.",
+                "Altura máxima da câmera.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = -89.0f, .max = 89.0f, .defaultVariant = 72.0f, .format = "%.0f\xC2\xB0" },
                 [](widgetInfo& info) { FreeLookPitchMinMax(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_FREE_LOOK_OFF).active; } },
-              { "Min Camera Height Angle: %.0f\xC2\xB0",
+              { "Ângulo Mínimo de Altura: %.0f\xC2\xB0",
                 "gEnhancements.Camera.FreeLook.MinPitch",
-                "Minimum Height of the Camera.",
+                "Altura mínima da câmera.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = -89.0f, .max = 89.0f, .defaultVariant = -49.0f, .format = "%.0f\xC2\xB0" },
                 [](widgetInfo& info) { FreeLookPitchMinMax(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_FREE_LOOK_OFF).active; } },
-              { "Debug Camera",
+              { "Câmera de Depuração",
                 "gEnhancements.Camera.DebugCam.Enable",
-                "Enables free camera control.",
+                "Ativa o controle livre da câmera.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 ([](widgetInfo& info) { RegisterDebugCam(); }),
@@ -941,9 +938,9 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_FREE_LOOK_ON);
                     }
                 } },
-              { "Invert Camera X Axis",
+              { "Inverter Eixo X da Câmera",
                 "gEnhancements.Camera.RightStick.InvertXAxis",
-                "Inverts the Camera X Axis",
+                "Inverte o eixo X da câmera",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
@@ -952,9 +949,9 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_CAMERAS_OFF);
                     }
                 } },
-              { "Invert Camera Y Axis",
+              { "Inverter Eixo Y da Câmera",
                 "gEnhancements.Camera.RightStick.InvertYAxis",
-                "Inverts the Camera Y Axis",
+                "Inverte o eixo Y da câmera",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
@@ -963,9 +960,9 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_CAMERAS_OFF);
                     }
                 } },
-              { "Third-Person Horizontal Sensitivity: %.0f",
+              { "Sensibilidade Horizontal em Terceira Pessoa: %.0f",
                 "gEnhancements.Camera.RightStick.CameraSensitivity.X",
-                "Adjust the Sensitivity of the x axis when in Third Person.",
+                "Ajusta a sensibilidade do eixo X em terceira pessoa.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.01f, .max = 5.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                 nullptr,
@@ -974,9 +971,9 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_CAMERAS_OFF);
                     }
                 } },
-              { "Third-Person Vertical Sensitivity: %.0f",
+              { "Sensibilidade Vertical em Terceira Pessoa: %.0f",
                 "gEnhancements.Camera.RightStick.CameraSensitivity.Y",
-                "Adjust the Sensitivity of the x axis when in Third Person.",
+                "Ajusta a sensibilidade do eixo X em terceira pessoa.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.01f, .max = 5.0f, .defaultVariant = 1.0f, .format = "%.0f%%", .isPercentage = true },
                 nullptr,
@@ -985,118 +982,112 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_CAMERAS_OFF);
                     }
                 } },
-              { "Enable Roll (6\xC2\xB0 of Freedom)",
+              { "Ativar Rolagem (6 graus de liberdade)",
                 "gEnhancements.Camera.DebugCam.6DOF",
-                "This allows for all six degrees of movement with the camera, NOTE: Yaw will work "
-                "differently in this system, instead rotating around the focal point"
-                ", rather than a polar axis.",
+                "Permite os seis graus de movimento da câmera. Obs.: a guinada funciona diferente aqui, girando em "
+                "torno do ponto focal em vez de um eixo polar.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_CAM_OFF).active; } },
-              { "Camera Speed: %.0f",
+              { "Velocidade da Câmera: %.0f",
                 "gEnhancements.Camera.DebugCam.CameraSpeed",
-                "Adjusts the speed of the Camera.",
+                "Ajusta a velocidade da câmera.",
                 WIDGET_CVAR_SLIDER_FLOAT,
                 { .min = 0.1f, .max = 3.0f, .defaultVariant = 0.5f, .format = "%.0f%%", .isPercentage = true },
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_CAM_OFF).active; } } } } });
     // Cheats
     enhancementsSidebar.push_back(
-        { "Cheats",
+        { "Trapaças",
           3,
-          { { { "Infinite Health", "gCheats.InfiniteHealth", "Always have full Hearts.", WIDGET_CVAR_CHECKBOX, {} },
-              { "Infinite Magic", "gCheats.InfiniteMagic", "Always have full Magic.", WIDGET_CVAR_CHECKBOX, {} },
-              { "Infinite Rupees", "gCheats.InfiniteRupees", "Always have a full Wallet.", WIDGET_CVAR_CHECKBOX, {} },
-              { "Infinite Consumables", "gCheats.InfiniteConsumables",
-                "Always have max Consumables, you must have collected the consumables first.", WIDGET_CVAR_CHECKBOX },
-              { "Longer Deku Flower Glide",
+          { { { "Vida Infinita", "gCheats.InfiniteHealth", "Corações sempre cheios.", WIDGET_CVAR_CHECKBOX, {} },
+              { "Magia Infinita", "gCheats.InfiniteMagic", "Magia sempre cheia.", WIDGET_CVAR_CHECKBOX, {} },
+              { "Rupias Infinitas", "gCheats.InfiniteRupees", "Carteira sempre cheia.", WIDGET_CVAR_CHECKBOX, {} },
+              { "Consumíveis Infinitos", "gCheats.InfiniteConsumables",
+                "Consumíveis sempre no máximo. É preciso já ter coletado cada consumível.", WIDGET_CVAR_CHECKBOX },
+              { "Planar Mais com a Flor Deku",
                 "gCheats.LongerFlowerGlide",
-                "Allows Deku Link to glide longer, no longer dropping after a certain distance.",
+                "Deku Link plana por mais tempo, sem cair depois de certa distância.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterLongerFlowerGlide(); } },
-              { "No Clip", "gCheats.NoClip", "Allows Link to phase through collision.", WIDGET_CVAR_CHECKBOX },
-              { "Unbreakable Razor Sword", "gCheats.UnbreakableRazorSword",
-                "Allows to Razor Sword to be used indefinitely without dulling its blade.", WIDGET_CVAR_CHECKBOX },
-              { "Unrestricted Items", "gCheats.UnrestrictedItems", "Allows all Forms to use all Items.",
+              { "Atravessar Paredes", "gCheats.NoClip", "Link atravessa paredes e objetos.", WIDGET_CVAR_CHECKBOX },
+              { "Razor Sword Inquebrável", "gCheats.UnbreakableRazorSword",
+                "A Razor Sword pode ser usada sem perder o fio.", WIDGET_CVAR_CHECKBOX },
+              { "Itens sem Restrição", "gCheats.UnrestrictedItems", "Todas as formas podem usar todos os itens.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Moon Jump on L",
+              { "Pulo Lunar no L",
                 "gCheats.MoonJumpOnL",
-                "Holding L makes you float into the air.",
+                "Segurar L faz Link flutuar.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterMoonJumpOnL(); } },
-              { "Elegy of Emptiness Anywhere", "gCheats.ElegyAnywhere", "Allows Elegy of Emptiness outside of Ikana",
-                WIDGET_CVAR_CHECKBOX },
-              { "Stop Time in Dungeons",
+              { "Elegy of Emptiness em Qualquer Lugar", "gCheats.ElegyAnywhere",
+                "Permite tocar a Elegy of Emptiness fora de Ikana", WIDGET_CVAR_CHECKBOX },
+              { "Parar o Tempo nas Masmorras",
                 "gCheats.TempleTimeStop",
-                "Stops time from advancing in selected areas. Requires a room change to update.\n\n"
-                "- Off: Vanilla behaviour.\n"
-                "- Temples: Stops time in Woodfall, Snowhead, Great Bay, and Stone Tower Temples.\n"
-                "- Temples + Mini Dungeons: In addition to the above temples, stops time in both Spider "
-                "Houses, Pirate's Fortress, Beneath the Well, Ancient Castle of Ikana, and Secret Shrine.",
+                "Impede o tempo de passar nas áreas escolhidas. Mude de sala para aplicar.\n\n- Desligado: "
+                "comportamento original.\n- Templos: para o tempo nos templos de Woodfall, Snowhead, Great Bay e Stone "
+                "Tower.\n- Templos + Mini Masmorras: além dos templos, para o tempo nas duas Spider Houses, Pirates' "
+                "Fortress, Beneath the Well, Ancient Castle of Ikana e Secret Shrine.",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = timeStopOptions } } } } });
     // Gameplay Enhancements
     enhancementsSidebar.push_back(
-        { "Gameplay",
+        { "Jogabilidade",
           3,
-          { { { .widgetName = "Player", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Fast Deku Flower Launch",
+          { { { .widgetName = "Jogador", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Lançamento Rápido da Flor Deku",
                 "gEnhancements.Player.FastFlowerLaunch",
-                "Speeds up the time it takes to be able to get maximum height from launching out of a deku flower",
+                "Reduz o tempo para atingir a altura máxima ao sair de uma flor Deku",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 ([](widgetInfo& info) { RegisterFastFlowerLaunch(); }) },
-              { "Instant Putaway", "gEnhancements.Player.InstantPutaway",
-                "Allows Link to instantly puts away held item without waiting.", WIDGET_CVAR_CHECKBOX },
-              { "Fierce Deity Putaway", "gEnhancements.Player.FierceDeityPutaway",
-                "Allows Fierce Deity Link to put away his sword.", WIDGET_CVAR_CHECKBOX },
-              { "Climb speed",
+              { "Guardar Instantâneo", "gEnhancements.Player.InstantPutaway",
+                "Link guarda o item na mão na hora, sem esperar.", WIDGET_CVAR_CHECKBOX },
+              { "Fierce Deity Guarda a Espada", "gEnhancements.Player.FierceDeityPutaway",
+                "Permite que o Fierce Deity Link guarde a espada.", WIDGET_CVAR_CHECKBOX },
+              { "Velocidade de Escalada",
                 "gEnhancements.Player.ClimbSpeed",
-                "Increases the speed at which Link climbs vines and ladders.",
+                "Aumenta a velocidade com que Link sobe trepadeiras e escadas.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 5, 1 } },
-              { "Dpad Equips", "gEnhancements.Dpad.DpadEquips", "Allows you to equip items to your d-pad",
+              { "Equipar no D-pad", "gEnhancements.Dpad.DpadEquips", "Permite equipar itens no D-pad",
                 WIDGET_CVAR_CHECKBOX },
-              { "Always Win Doggy Race",
+              { "Sempre Vencer a Corrida de Cães",
                 "gEnhancements.Minigames.AlwaysWinDoggyRace",
-                "Makes the Doggy Race easier to win.",
+                "Deixa a Corrida de Cães mais fácil de vencer.",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = alwaysWinDoggyraceOptions } },
-              { "Milk Run Reward Options",
+              { "Prêmio da Corrida do Leite",
                 "gEnhancements.Minigames.CremiaHugs",
-                "Choose what reward you get for winning the Milk Run minigame after the first time. \n"
-                "-Vanilla: Reward is Random\n"
-                "-Hug: Get the hugging cutscene\n"
-                "-Rupee: Get the rupee reward",
+                "Escolha o prêmio ao vencer a escolta do leite depois da primeira vez.\n-Original: prêmio "
+                "aleatório\n-Abraço: cena do abraço\n-Rupias: prêmio em rupias",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = cremiaRewardOptions } },
-              { "Swordsman School Winning Score",
+              { "Pontuação para Vencer na Escola de Espadachim",
                 "gEnhancements.Minigames.SwordsmanSchoolScore",
-                "Sets the score required to win the Swordsman School.",
+                "Define a pontuação necessária para vencer na Escola de Espadachim.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 30, 30 } },
-              { "Fast Magic Arrow Equip Animation", "gEnhancements.Equipment.MagicArrowEquipSpeed",
-                "Removes the animation for equipping Magic Arrows.", WIDGET_CVAR_CHECKBOX },
-              { "Instant Fin Boomerangs Recall", "gEnhancements.PlayerActions.InstantRecall",
-                "Pressing B will instantly recall the fin boomerang back to Zora Link after they are thrown.",
-                WIDGET_CVAR_CHECKBOX },
-              { "Two-Handed Sword Spin Attack", "gEnhancements.Equipment.TwoHandedSwordSpinAttack",
-                "Enables magic spin attacks for the Fierce Deity Sword and Great Fairy's Sword.",
-                WIDGET_CVAR_CHECKBOX } },
-            { { .widgetName = "Modes", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Play as Kafei", "gModes.PlayAsKafei", "Requires scene reload to take effect.", WIDGET_CVAR_CHECKBOX },
-              { "Time Moves when you Move",
+              { "Equipar Flechas Mágicas Rápido", "gEnhancements.Equipment.MagicArrowEquipSpeed",
+                "Remove a animação de equipar as flechas mágicas.", WIDGET_CVAR_CHECKBOX },
+              { "Retorno Instantâneo das Barbatanas", "gEnhancements.PlayerActions.InstantRecall",
+                "Apertar B faz as barbatanas-bumerangue voltarem na hora para o Zora Link.", WIDGET_CVAR_CHECKBOX },
+              { "Giro com Espada de Duas Mãos", "gEnhancements.Equipment.TwoHandedSwordSpinAttack",
+                "Ativa o giro mágico com a espada do Fierce Deity e a Great Fairy's Sword.", WIDGET_CVAR_CHECKBOX } },
+            { { .widgetName = "Modos", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Jogar como Kafei", "gModes.PlayAsKafei", "Recarregue a cena para aplicar.", WIDGET_CVAR_CHECKBOX },
+              { "O Tempo Anda Quando Você Anda",
                 "gModes.TimeMovesWhenYouMove",
-                "Time only moves when Link is not standing still.",
+                "O tempo só passa quando Link não está parado.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 ([](widgetInfo& info) { RegisterTimeMovesWhenYouMove(); }) },
-              { "Mirrored World",
+              { "Mundo Espelhado",
                 "gModes.MirroredWorld.Mode",
-                "Mirrors the world horizontally.",
+                "Espelha o mundo na horizontal.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 ([](widgetInfo& info) {
@@ -1106,29 +1097,26 @@ void AddEnhancements() {
                         CVarClear("gModes.MirroredWorld.State");
                     }
                 }) } },
-            { { .widgetName = "Saving", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Persistent Owl Saves", "gEnhancements.Saving.PersistentOwlSaves",
-                "Continuing a save will not remove the owl save. Playing Song of "
-                "Time, allowing the moon to crash or finishing the "
-                "game will remove the owl save and become the new last save.",
+            { { .widgetName = "Salvamento", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Save da Coruja Permanente", "gEnhancements.Saving.PersistentOwlSaves",
+                "Continuar um save não apaga o save da coruja. Tocar a Song of Time, deixar a lua cair ou zerar o jogo "
+                "apaga o save da coruja e vira o novo último save.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Pause Menu Save", "gEnhancements.Saving.PauseSave",
-                "Re-introduce the pause menu save system. Pressing B in the pause menu will give you the "
-                "option to create a persistent Owl Save from your current location.\n\nWhen loading back "
-                "into the game, you will be placed either at the entrance of the dungeon you saved in, or "
-                "in South Clock Town.",
+              { "Salvar no Menu de Pausa", "gEnhancements.Saving.PauseSave",
+                "Traz de volta o salvamento pelo menu de pausa. Apertar B no menu de pausa oferece criar um save da "
+                "coruja permanente no local atual.\n\nAo carregar, você volta na entrada da masmorra onde salvou ou em "
+                "South Clock Town.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Autosave",
+              { "Salvamento Automático",
                 "gEnhancements.Saving.Autosave",
-                "Automatically create a persistent Owl Save on the chosen interval.\n\nWhen loading "
-                "back into the game, you will be placed either at the entrance of the dungeon you "
-                "saved in, or in South Clock Town.",
+                "Cria automaticamente um save da coruja permanente no intervalo escolhido.\n\nAo carregar, você volta "
+                "na entrada da masmorra onde salvou ou em South Clock Town.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 ([](widgetInfo& info) { RegisterAutosave(); }) },
-              { "Autosave Interval: %d minutes",
+              { "Intervalo do Salvamento Automático: %d minutos",
                 "gEnhancements.Saving.AutosaveInterval",
-                "Sets the interval between Autosaves.",
+                "Define o intervalo entre os salvamentos automáticos.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 60, 5 },
                 nullptr,
@@ -1137,69 +1125,68 @@ void AddEnhancements() {
                         info.activeDisables.push_back(DISABLE_FOR_AUTO_SAVE_OFF);
                     }
                 } },
-              { .widgetName = "Time Cycle", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Do not reset Bottle content", "gEnhancements.Cycle.DoNotResetBottleContent",
-                "Playing the Song Of Time will not reset the bottles' content.", WIDGET_CVAR_CHECKBOX },
-              { "Do not reset Consumables", "gEnhancements.Cycle.DoNotResetConsumables",
-                "Playing the Song Of Time will not reset the consumables.", WIDGET_CVAR_CHECKBOX },
-              { "Do not reset Razor Sword", "gEnhancements.Cycle.DoNotResetRazorSword",
-                "Playing the Song Of Time will not reset the Sword back to Kokiri Sword.", WIDGET_CVAR_CHECKBOX },
-              { "Do not reset Rupees", "gEnhancements.Cycle.DoNotResetRupees",
-                "Playing the Song Of Time will not reset the your rupees.", WIDGET_CVAR_CHECKBOX },
-              { "Do not reset Time Speed", "gEnhancements.Cycle.DoNotResetTimeSpeed",
-                "Playing the Song Of Time will not reset the current time speed set by Inverted Song of Time.",
+              { .widgetName = "Ciclo de Tempo", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Não Esvaziar as Garrafas", "gEnhancements.Cycle.DoNotResetBottleContent",
+                "Tocar a Song of Time não esvazia as garrafas.", WIDGET_CVAR_CHECKBOX },
+              { "Não Zerar Consumíveis", "gEnhancements.Cycle.DoNotResetConsumables",
+                "Tocar a Song of Time não zera os consumíveis.", WIDGET_CVAR_CHECKBOX },
+              { "Não Perder a Razor Sword", "gEnhancements.Cycle.DoNotResetRazorSword",
+                "Tocar a Song of Time não volta a espada para a Kokiri Sword.", WIDGET_CVAR_CHECKBOX },
+              { "Não Zerar Rupias", "gEnhancements.Cycle.DoNotResetRupees",
+                "Tocar a Song of Time não zera suas rupias.", WIDGET_CVAR_CHECKBOX },
+              { "Não Resetar a Velocidade do Tempo", "gEnhancements.Cycle.DoNotResetTimeSpeed",
+                "Tocar a Song of Time não desfaz a velocidade do tempo definida pela Inverted Song of Time.",
                 WIDGET_CVAR_CHECKBOX },
               {
-                  .widgetName = "Keep Express Mail",
+                  .widgetName = "Manter a Express Mail",
                   .widgetCVar = "gEnhancements.Cycle.KeepExpressMail",
-                  .widgetTooltip = "Allows the player to keep the Express Mail in their inventory after delivering it "
-                                   "the first time, so that both deliveries can be done within one cycle",
+                  .widgetTooltip = "Mantém a Express Mail no inventário depois da primeira entrega, para fazer as duas "
+                                   "entregas no mesmo ciclo",
                   .widgetType = WIDGET_CVAR_CHECKBOX,
                   .widgetCallback = [](widgetInfo& info) { RegisterKeepExpressMail(); },
               },
-              { .widgetName = "Unstable",
+              { .widgetName = "Instável",
                 .widgetType = WIDGET_SEPARATOR_TEXT,
                 .widgetOptions = { .color = UIWidgets::Colors::Yellow } },
-              { "Disable Save Delay", "gEnhancements.Saving.DisableSaveDelay",
-                "Removes the arbitrary 2 second timer for saving from the original game. This is known to "
-                "cause issues when attempting the 0th Day Glitch",
+              { "Remover Espera ao Salvar", "gEnhancements.Saving.DisableSaveDelay",
+                "Remove a espera de 2 segundos ao salvar do jogo original. Pode causar problemas no glitch do Dia 0",
                 WIDGET_CVAR_CHECKBOX } } } });
     // Graphics Enhancements
     enhancementsSidebar.push_back(
-        { "Graphics",
+        { "Gráficos",
           3,
           { {
-              { .widgetName = "Clock", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Clock Type",
+              { .widgetName = "Relógio", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Tipo de Relógio",
                 "gEnhancements.Graphics.ClockType",
-                "Swaps between Graphical and Text only Clock types.",
+                "Alterna entre o relógio gráfico e o relógio só em texto.",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = clockTypeOptions } },
-              { "24 Hours Clock", "gEnhancements.Graphics.24HoursClock", "Changes from a 12 Hour to a 24 Hour Clock",
+              { "Relógio de 24 Horas", "gEnhancements.Graphics.24HoursClock", "Muda o relógio de 12 para 24 horas",
                 WIDGET_CVAR_CHECKBOX },
               { .widgetName = "Mods", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { .widgetName = "Use Alternate Assets",
+              { .widgetName = "Usar Assets Alternativos",
                 .widgetCVar = "gEnhancements.Mods.AlternateAssets",
-                .widgetTooltip = "Toggle between standard assets and alternate assets. Usually mods will indicate if "
-                                 "this setting has to be used or not.",
+                .widgetTooltip = "Alterna entre os assets padrão e os alternativos. Os mods costumam dizer se é "
+                                 "preciso usar esta opção.",
                 .widgetType = WIDGET_CVAR_CHECKBOX },
-              { .widgetName = "Motion Blur", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Motion Blur Mode",
+              { .widgetName = "Desfoque de Movimento", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Modo do Desfoque de Movimento",
                 "gEnhancements.Graphics.MotionBlur.Mode",
-                "Selects the Mode for Motion Blur.",
+                "Escolhe o modo do desfoque de movimento.",
                 WIDGET_CVAR_COMBOBOX,
                 { .comboBoxOptions = motionBlurOptions, .labelPosition = UIWidgets::LabelPosition::None } },
-              { "Interpolate",
+              { "Interpolar",
                 "gEnhancements.Graphics.MotionBlur.Interpolate",
-                "Change motion blur capture to also happen on interpolated frames instead of only on game frames.\n"
-                "This notably reduces the overall motion blur strength but smooths out the trails.",
+                "Captura o desfoque também nos quadros interpolados, não só nos quadros do jogo.\nIsso reduz bastante "
+                "a força do desfoque, mas suaviza os rastros.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_MOTION_BLUR_MODE).value == 1; } },
-              { "On/Off",
+              { "Ligado/Desligado",
                 "",
-                "Enables Motion Blur.",
+                "Ativa o desfoque de movimento.",
                 WIDGET_CHECKBOX,
                 { .valuePointer = (bool*)&R_MOTION_BLUR_ENABLED },
                 nullptr,
@@ -1207,16 +1194,16 @@ void AddEnhancements() {
                     info.widgetOptions.valuePointer = (bool*)&R_MOTION_BLUR_ENABLED;
                     info.isHidden = disabledMap.at(DISABLE_FOR_MOTION_BLUR_MODE).value != 0;
                 } },
-              { "Strength",
+              { "Intensidade",
                 "gEnhancements.Graphics.MotionBlur.Strength",
-                "Motion Blur strength.",
+                "Intensidade do desfoque de movimento.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 0, 255, 180 },
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_MOTION_BLUR_MODE).value != 2; } },
-              { "Strength",
+              { "Intensidade",
                 "",
-                "Motion Blur strength.",
+                "Intensidade do desfoque de movimento.",
                 WIDGET_SLIDER_INT,
                 { 0, 255, 180, {}, &motionBlurStrength },
                 [](widgetInfo& info) { R_MOTION_BLUR_ALPHA = motionBlurStrength; },
@@ -1225,218 +1212,202 @@ void AddEnhancements() {
                     info.isHidden = disabledMap.at(DISABLE_FOR_MOTION_BLUR_MODE).value != 0 ||
                                     disabledMap.at(DISABLE_FOR_MOTION_BLUR_OFF).active;
                 } },
-              { .widgetName = "Other", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "3D Item Drops",
+              { .widgetName = "Outros", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Itens Soltos em 3D",
                 "gEnhancements.Graphics.3DItemDrops",
-                "Makes item drops 3D",
+                "Deixa em 3D os itens que caem no chão",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { Register3DItemDrops(); } },
-              { "Authentic Logo", "gEnhancements.Graphics.AuthenticLogo",
-                "Hide the game version and build details and display the authentic "
-                "model and texture on the boot logo start screen",
+              { "Logo Autêntico", "gEnhancements.Graphics.AuthenticLogo",
+                "Esconde a versão e os detalhes da build e mostra o modelo e a textura originais no logo da tela "
+                "inicial",
                 WIDGET_CVAR_CHECKBOX },
-              { "Bow Reticle", "gEnhancements.Graphics.BowReticle", "Gives the bow a reticle when you draw an arrow.",
+              { "Mira do Arco", "gEnhancements.Graphics.BowReticle", "Mostra uma mira ao puxar uma flecha.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Disable Black Bar Letterboxes", "gEnhancements.Graphics.DisableBlackBars",
-                "Disables Black Bar Letterboxes during cutscenes and Z-targeting\nNote: there may be "
-                "minor visual glitches that were covered up by the black bars\nPlease disable this "
-                "setting before reporting a bug.",
+              { "Remover Barras Pretas", "gEnhancements.Graphics.DisableBlackBars",
+                "Remove as barras pretas nas cenas e ao mirar com Z.\nObs.: podem aparecer pequenas falhas visuais que "
+                "as barras escondiam.\nDesative esta opção antes de relatar um bug.",
                 WIDGET_CVAR_CHECKBOX },
-              { .widgetName = "Unstable",
+              { .widgetName = "Instável",
                 .widgetType = WIDGET_SEPARATOR_TEXT,
                 .widgetOptions = { .color = UIWidgets::Colors::Yellow } },
-              { "Disable Scene Geometry Distance Check",
+              { "Desativar Limite de Distância do Cenário",
                 "gEnhancements.Graphics.DisableSceneGeometryDistanceCheck",
-                "Disables the distance check for scene geometry, allowing it to be drawn no matter how far "
-                "away it is from the player. This may have unintended side effects.",
+                "Desenha o cenário a qualquer distância do jogador. Pode ter efeitos colaterais.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { GfxPatcher_ApplyGeometryIssuePatches(); } },
-              { "Widescreen Actor Culling", "gEnhancements.Graphics.ActorCullingAccountsForWidescreen",
-                "Adjusts the culling planes to account for widescreen resolutions. "
-                "This may have unintended side effects.",
-                WIDGET_CVAR_CHECKBOX },
+              { "Corte de Objetos para Widescreen", "gEnhancements.Graphics.ActorCullingAccountsForWidescreen",
+                "Ajusta o corte de objetos para telas widescreen. Pode ter efeitos colaterais.", WIDGET_CVAR_CHECKBOX },
               {
-                  "Increase Actor Draw Distance: %dx",
+                  "Aumentar Distância de Desenho: %dx",
                   "gEnhancements.Graphics.IncreaseActorDrawDistance",
-                  "Increase the range in which Actors are drawn. This may have unintended side effects.",
+                  "Aumenta a distância em que personagens e objetos aparecem. Pode ter efeitos colaterais.",
                   WIDGET_CVAR_SLIDER_INT,
                   { 1, 5, 1 },
               },
           } } });
     enhancementsSidebar.push_back(
-        { "Items/Songs",
+        { "Itens/Músicas",
           3,
           { // Mask Enhancements
-            { { .widgetName = "Masks", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Blast Mask has Powder Keg Force", "gEnhancements.Masks.BlastMaskKeg",
-                "Blast Mask can also destroy objects only the Powder Keg can.", WIDGET_CVAR_CHECKBOX },
-              { "Fast Transformation", "gEnhancements.Masks.FastTransformation",
-                "Removes the delay when using transformation masks.", WIDGET_CVAR_CHECKBOX },
-              { "Fierce Deity's Mask Anywhere", "gEnhancements.Masks.FierceDeitysAnywhere",
-                "Allow using Fierce Deity's mask outside of boss rooms.", WIDGET_CVAR_CHECKBOX },
-              { "Persistent Bunny Hood",
+            { { .widgetName = "Máscaras", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Blast Mask com Força de Powder Keg", "gEnhancements.Masks.BlastMaskKeg",
+                "A Blast Mask também destrói o que só o Powder Keg destrói.", WIDGET_CVAR_CHECKBOX },
+              { "Transformação Rápida", "gEnhancements.Masks.FastTransformation",
+                "Remove a demora ao usar as máscaras de transformação.", WIDGET_CVAR_CHECKBOX },
+              { "Fierce Deity's Mask em Qualquer Lugar", "gEnhancements.Masks.FierceDeitysAnywhere",
+                "Permite usar a Fierce Deity's Mask fora das salas de chefe.", WIDGET_CVAR_CHECKBOX },
+              { "Bunny Hood Permanente",
                 "gEnhancements.Masks.PersistentBunnyHood.Enabled",
-                "Permanently toggle a speed boost from the bunny hood by pressing "
-                "'A' on it in the mask menu.",
+                "Liga/desliga para sempre o bônus de velocidade da Bunny Hood apertando A nela no menu de máscaras.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { UpdatePersistentMasksState(); } },
-              { "No Blast Mask Cooldown", "gEnhancements.Masks.NoBlastMaskCooldown",
-                "Eliminates the Cooldown between Blast Mask usage.", WIDGET_CVAR_CHECKBOX } },
+              { "Blast Mask sem Espera", "gEnhancements.Masks.NoBlastMaskCooldown",
+                "Remove a espera entre usos da Blast Mask.", WIDGET_CVAR_CHECKBOX } },
             // Song Enhancements
             { { .widgetName = "Ocarina", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Enable Sun's Song", "gEnhancements.Songs.EnableSunsSong",
-                "Enables the partially implemented Sun's Song. RIGHT-DOWN-UP-RIGHT-DOWN-UP to play it. "
-                "This song will make time move very fast until either Link moves to a different scene, "
-                "or when the time switches to a new time period.",
+              { "Ativar Sun's Song", "gEnhancements.Songs.EnableSunsSong",
+                "Ativa a Sun's Song, que ficou incompleta no jogo. Toque DIREITA-BAIXO-CIMA-DIREITA-BAIXO-CIMA. O "
+                "tempo passa muito rápido até Link mudar de cena ou mudar o período do dia.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Dpad Ocarina", "gEnhancements.Playback.DpadOcarina", "Enables using the Dpad for Ocarina playback.",
+              { "Ocarina no D-pad", "gEnhancements.Playback.DpadOcarina", "Permite tocar a ocarina com o D-pad.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Pause Owl Warp", "gEnhancements.Songs.PauseOwlWarp",
-                "Allows warping to registered Owl Statues from the pause menu map screen. "
-                "Requires that you can play Song of Soaring normally.\n\n"
-                "Accounts for Index-Warp being active, by presenting all valid warps for the registered map points. "
-                "Great Bay Coast warp is always given for index 0 warp as a convenience.",
+              { "Teletransporte pelo Menu de Pausa", "gEnhancements.Songs.PauseOwlWarp",
+                "Permite viajar para as estátuas de coruja ativadas pelo mapa do menu de pausa. Exige poder tocar a "
+                "Song of Soaring normalmente.\n\nFunciona com o Index-Warp ativo, mostrando todos os destinos válidos. "
+                "O destino Great Bay Coast sempre aparece para o índice 0.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Song of Double Time Hour Select", "gEnhancements.Songs.DoubleTimeHourSelect",
-                "Like in Majora's Mask 3D, choose which hour the Song of Double Time takes you to. "
-                "Use Left/Right on the stick or Dpad while the confirmation is shown. "
-                "Hours up to the next dawn or dusk can be picked.",
+              { "Escolher a Hora na Song of Double Time", "gEnhancements.Songs.DoubleTimeHourSelect",
+                "Como no Majora's Mask 3D, escolha a hora para onde a Song of Double Time te leva. Use "
+                "esquerda/direita no analógico ou D-pad enquanto a confirmação aparece. Dá para escolher até o próximo "
+                "amanhecer ou anoitecer.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Zora Eggs For Bossa Nova",
+              { "Ovos Zora para a Bossa Nova",
                 "gEnhancements.Songs.ZoraEggCount",
-                "The number of eggs required to unlock new wave bossa nova.",
+                "Quantos ovos são necessários para liberar a New Wave Bossa Nova.",
                 WIDGET_CVAR_SLIDER_INT,
                 { 1, 7, 7 } },
-              { "Prevent Dropped Ocarina Inputs", "gEnhancements.Playback.NoDropOcarinaInput",
-                "Prevent dropping inputs when playing the ocarina quickly.", WIDGET_CVAR_CHECKBOX },
-              { "Skip Scarecrow Song", "gEnhancements.Playback.SkipScarecrowSong",
-                "Pierre appears when the Ocarina is pulled out.", WIDGET_CVAR_CHECKBOX },
-              { "Faster Song Playback",
+              { "Não Perder Notas da Ocarina", "gEnhancements.Playback.NoDropOcarinaInput",
+                "Evita perder notas ao tocar a ocarina rápido.", WIDGET_CVAR_CHECKBOX },
+              { "Pular a Música do Espantalho", "gEnhancements.Playback.SkipScarecrowSong",
+                "Pierre aparece quando você pega a ocarina.", WIDGET_CVAR_CHECKBOX },
+              { "Músicas Mais Rápidas",
                 "gEnhancements.Songs.FasterSongPlayback",
-                "Speeds up the playback of songs.",
+                "Acelera a reprodução das músicas.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterFasterSongPlayback(); } } } } });
     enhancementsSidebar.push_back(
-        { "Time Savers",
+        { "Economia de Tempo",
           3,
           { // Cutscene Skips
-            { { .widgetName = "Cutscenes", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Hide Title Cards", "gEnhancements.Cutscenes.HideTitleCards", "Hides Title Cards when entering areas.",
-                WIDGET_CVAR_CHECKBOX },
-              { "Skip Entrance Cutscenes", "gEnhancements.Cutscenes.SkipEntranceCutscenes",
-                "Skip cutscenes that occur when first entering a new area.", WIDGET_CVAR_CHECKBOX },
-              { "Skip to File Select", "gEnhancements.Cutscenes.SkipToFileSelect",
-                "Skip the opening title sequence and go straight to the file select menu after boot.",
-                WIDGET_CVAR_CHECKBOX },
-              { "Skip Intro Sequence", "gEnhancements.Cutscenes.SkipIntroSequence",
-                "When starting a game you will be taken straight to South Clock Town as Deku Link.",
-                WIDGET_CVAR_CHECKBOX },
-              { "Skip First Cycle",
+            { { .widgetName = "Cenas", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Esconder Títulos das Áreas", "gEnhancements.Cutscenes.HideTitleCards",
+                "Esconde o nome da área ao entrar nela.", WIDGET_CVAR_CHECKBOX },
+              { "Pular Cenas de Entrada", "gEnhancements.Cutscenes.SkipEntranceCutscenes",
+                "Pula as cenas da primeira entrada em uma área nova.", WIDGET_CVAR_CHECKBOX },
+              { "Ir Direto para a Seleção de Save", "gEnhancements.Cutscenes.SkipToFileSelect",
+                "Pula a abertura e vai direto para a seleção de save ao iniciar.", WIDGET_CVAR_CHECKBOX },
+              { "Pular Introdução", "gEnhancements.Cutscenes.SkipIntroSequence",
+                "Ao começar um jogo, você vai direto para South Clock Town como Deku Link.", WIDGET_CVAR_CHECKBOX },
+              { "Pular o Primeiro Ciclo",
                 "gEnhancements.Cutscenes.SkipFirstCycle",
-                "When starting a game you will be taken straight to South Clock Town as Human Link "
-                "with Deku Mask, Ocarina, Song of Time, and Song of Healing.",
+                "Ao começar um jogo, você vai direto para South Clock Town como Link humano, com a Deku Mask, a "
+                "ocarina, a Song of Time e a Song of Healing.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_INTRO_SKIP_OFF).active; } },
-              { "Skip Story Cutscenes", "gEnhancements.Cutscenes.SkipStoryCutscenes",
-                "Disclaimer: This doesn't do much yet, we will be progressively adding more skips over time.",
-                WIDGET_CVAR_CHECKBOX },
-              { "Skip Misc Interactions", "gEnhancements.Cutscenes.SkipMiscInteractions",
-                "Disclaimer: This doesn't do much yet, we will be progressively adding more skips over time.",
-                WIDGET_CVAR_CHECKBOX } },
+              { "Pular Cenas da História", "gEnhancements.Cutscenes.SkipStoryCutscenes",
+                "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX },
+              { "Pular Interações Diversas", "gEnhancements.Cutscenes.SkipMiscInteractions",
+                "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX } },
             // Dialogue Enhancements
-            { { .widgetName = "Dialogue", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Fast Bank Selection", "gEnhancements.Dialogue.FastBankSelection",
-                "Pressing the Z or R buttons while the Deposit/Withdrawal Rupees dialogue is open will set "
-                "the Rupees to Links current Rupees or 0 respectively.",
+            { { .widgetName = "Diálogos", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Seleção Rápida no Banco", "gEnhancements.Dialogue.FastBankSelection",
+                "Com o diálogo de depósito/saque aberto, Z coloca todas as rupias de Link e R coloca 0.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Fast Text", "gEnhancements.Dialogue.FastText",
-                "Speeds up text rendering, and enables holding of B progress to next message.",
-                WIDGET_CVAR_CHECKBOX } } } });
+              { "Texto Rápido", "gEnhancements.Dialogue.FastText",
+                "Acelera o texto e permite segurar B para passar as mensagens.", WIDGET_CVAR_CHECKBOX } } } });
     enhancementsSidebar.push_back(
-        { "Fixes",
+        { "Correções",
           3,
           { // Fixes
-            { { .widgetName = "Fixes", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Fix Ammo Count Color", "gFixes.FixAmmoCountEnvColor",
-                "Fixes a missing gDPSetEnvColor, which causes the ammo count to be "
-                "the wrong color prior to obtaining magic or other conditions.",
+            { { .widgetName = "Correções", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Corrigir Cor da Munição", "gFixes.FixAmmoCountEnvColor",
+                "Corrige a cor errada da contagem de munição antes de obter a magia e em outros casos.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Fix Fierce Deity Z-Target movement", "gEnhancements.Fixes.FierceDeityZTargetMovement",
-                "Fixes Fierce Deity movement being choppy when Z-targeting", WIDGET_CVAR_CHECKBOX },
-              { "Fix Hess and Weirdshot Crash", "gEnhancements.Fixes.HessCrash",
-                "Fixes a crash that can occur when performing a HESS or Weirdshot.", WIDGET_CVAR_CHECKBOX },
-              { "Fix Text Control Characters", "gEnhancements.Fixes.ControlCharacters",
-                "Fixes certain control characters not functioning properly "
-                "depending on their position within the text.",
+              { "Corrigir Movimento do Fierce Deity ao Mirar", "gEnhancements.Fixes.FierceDeityZTargetMovement",
+                "Corrige o movimento travado do Fierce Deity ao mirar com Z", WIDGET_CVAR_CHECKBOX },
+              { "Corrigir Travamento do HESS e Weirdshot", "gEnhancements.Fixes.HessCrash",
+                "Corrige um travamento que pode acontecer ao fazer HESS ou Weirdshot.", WIDGET_CVAR_CHECKBOX },
+              { "Corrigir Caracteres de Controle do Texto", "gEnhancements.Fixes.ControlCharacters",
+                "Corrige caracteres de controle que falham dependendo da posição no texto.", WIDGET_CVAR_CHECKBOX },
+              { "Corrigir Cor da Fonte da Great Fairy de Ikana", "gFixes.FixIkanaGreatFairyFountainColor",
+                "Corrige a fonte da Great Fairy de Ikana que aparece verde em vez de amarela. Isso foi corrigido na "
+                "versão europeia",
                 WIDGET_CVAR_CHECKBOX },
-              { "Fix Ikana Great Fairy Fountain Color", "gFixes.FixIkanaGreatFairyFountainColor",
-                "Fixes a bug that results in the Ikana Great Fairy fountain looking green instead of yellow, this was "
-                "fixed in the EU version",
-                WIDGET_CVAR_CHECKBOX },
-              { .widgetName = "Fix Texture overflow OOB",
+              { .widgetName = "Corrigir Texturas Fora dos Limites",
                 .widgetCVar = "gEnhancements.Fixes.FixTexturesOOB",
-                .widgetTooltip = "Fixes textures that normally overflow to be patched with the correct size or format",
+                .widgetTooltip = "Corrige texturas que estouram o tamanho, usando o tamanho ou formato certo",
                 .widgetType = WIDGET_CVAR_CHECKBOX,
                 .widgetOptions = { .defaultVariant = true },
                 .widgetCallback = [](widgetInfo& info) { GfxPatcher_ApplyOverflowTexturePatches(); } } } } });
     enhancementsSidebar.push_back(
-        { "Restorations",
+        { "Restaurações",
           3,
           { // Restorations
-            { { .widgetName = "Restorations", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Constant Distance Backflips and Sidehops", "gEnhancements.Restorations.ConstantFlipsHops",
-                "Backflips and Sidehops travel a constant distance as they did in OoT.", WIDGET_CVAR_CHECKBOX },
-              { "Power Crouch Stab", "gEnhancements.Restorations.PowerCrouchStab",
-                "Crouch stabs will use the power of Link's previous melee attack, as is in MM JP 1.0 and OoT.",
+            { { .widgetName = "Restaurações", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Mortais e Pulos Laterais com Distância Fixa", "gEnhancements.Restorations.ConstantFlipsHops",
+                "Mortais para trás e pulos laterais percorrem sempre a mesma distância, como no OoT.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Side Rolls", "gEnhancements.Restorations.SideRoll", "Restores side rolling from OoT.",
+              { "Golpe Agachado Forte", "gEnhancements.Restorations.PowerCrouchStab",
+                "O golpe agachado usa a força do último ataque de Link, como no MM JP 1.0 e no OoT.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Tatl ISG", "gEnhancements.Restorations.TatlISG", "Restores Navi ISG from OoT, but now with Tatl.",
+              { "Rolamento Lateral", "gEnhancements.Restorations.SideRoll", "Traz de volta o rolamento lateral do OoT.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Woodfall Mountain Appearance",
+              { "ISG com a Tatl", "gEnhancements.Restorations.TatlISG",
+                "Traz de volta o ISG da Navi do OoT, agora com a Tatl.", WIDGET_CVAR_CHECKBOX },
+              { "Aparência da Montanha de Woodfall",
                 "gEnhancements.Restorations.WoodfallMountainAppearance",
-                "Restores the appearance of Woodfall mountain to not look poisoned "
-                "when viewed from Termina Field after clearing Woodfall Temple\n\n"
-                "Requires a scene reload to take effect",
+                "Depois de terminar o Woodfall Temple, a montanha de Woodfall deixa de parecer envenenada vista de "
+                "Termina Field\n\nRecarregue a cena para aplicar",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterWoodfallMountainAppearance(); } },
               { .widgetName = "Majora's Mask 3D", .widgetType = WIDGET_SEPARATOR_TEXT },
-              { "Early Bombers' Notebook",
+              { "Bombers' Notebook desde o Início",
                 "gEnhancements.MM3D.EarlyBombersNotebook",
-                "Like in Majora's Mask 3D, get the Bombers' Notebook on your first visit to Clock Town "
-                "instead of after the Bombers' hide-and-seek game.",
+                "Como no Majora's Mask 3D, receba o Bombers' Notebook na primeira visita a Clock Town, sem precisar do "
+                "esconde-esconde dos Bombers.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterEarlyBombersNotebook(); } } } } });
-    enhancementsSidebar.push_back(
-        { "Difficulty Options",
-          3,
-          { { { "Disable Takkuri Steal",
-                "gEnhancements.Cheats.DisableTakkuriSteal",
-                "Prevents the Takkuri from stealing key items like bottles and swords. It may still steal other items.",
-                WIDGET_CVAR_CHECKBOX,
-                {},
-                [](widgetInfo& info) { RegisterDisableTakkuriSteal(); } } } } });
-    enhancementsSidebar.push_back({ "HUD Editor",
+    enhancementsSidebar.push_back({ "Dificuldade",
+                                    3,
+                                    { { { "Takkuri Não Rouba",
+                                          "gEnhancements.Cheats.DisableTakkuriSteal",
+                                          "Impede o Takkuri de roubar itens importantes, como garrafas e espadas. Ele "
+                                          "ainda pode roubar outros itens.",
+                                          WIDGET_CVAR_CHECKBOX,
+                                          {},
+                                          [](widgetInfo& info) { RegisterDisableTakkuriSteal(); } } } } });
+    enhancementsSidebar.push_back({ "Editor de HUD",
                                     1,
                                     { // HUD Editor
-                                      { { "Popout HUD Editor",
+                                      { { "Abrir Editor de HUD em Janela",
                                           "gWindows.HudEditor",
-                                          "Enables the HUD Editor window, allowing you to modify your HUD",
+                                          "Abre a janela do Editor de HUD para personalizar a interface",
                                           WIDGET_WINDOW_BUTTON,
                                           { .size = UIWidgets::Sizes::Inline, .windowName = "HUD Editor" } } } } });
     enhancementsSidebar.push_back(
-        { "Item Tracker",
+        { "Rastreador de Itens",
           1,
           { // Item Tracker Settings
-            { { "Popout Item Tracker Settings",
+            { { "Abrir Configurações do Rastreador em Janela",
                 "gWindows.ItemTrackerSettings",
                 "",
                 WIDGET_WINDOW_BUTTON,
@@ -1445,29 +1416,29 @@ void AddEnhancements() {
 
 void AddDevTools() {
     devToolsSidebar.push_back(
-        { "General",
+        { "Geral",
           3,
-          { { { "Popout Menu", "gSettings.Menu.Popout", "Changes the menu display from overlay to windowed.",
+          { { { "Menu em Janela", "gSettings.Menu.Popout", "Mostra o menu em uma janela em vez de sobreposto ao jogo.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Set Warp Point",
+              { "Marcar Ponto de Teletransporte",
                 "",
-                "Creates warp point that you can teleport to later",
+                "Cria um ponto para onde você pode se teletransportar depois",
                 WIDGET_BUTTON,
                 {},
                 [](widgetInfo& info) {
                     Player* player = GET_PLAYER(gPlayState);
 
-                    CVarSetInteger(WARP_POINT_CVAR "Entrance", gSaveContext.save.entrance);
-                    CVarSetInteger(WARP_POINT_CVAR "Room", gPlayState->roomCtx.curRoom.num);
+                    CVarSetInteger(WARP_POINT_CVAR "Entrada", gSaveContext.save.entrance);
+                    CVarSetInteger(WARP_POINT_CVAR "Sala", gPlayState->roomCtx.curRoom.num);
                     CVarSetFloat(WARP_POINT_CVAR "X", player->actor.world.pos.x);
                     CVarSetFloat(WARP_POINT_CVAR "Y", player->actor.world.pos.y);
                     CVarSetFloat(WARP_POINT_CVAR "Z", player->actor.world.pos.z);
-                    CVarSetFloat(WARP_POINT_CVAR "Rotation", player->actor.shape.rot.y);
-                    CVarSetInteger(WARP_POINT_CVAR "Saved", 1);
+                    CVarSetFloat(WARP_POINT_CVAR "Rotação", player->actor.shape.rot.y);
+                    CVarSetInteger(WARP_POINT_CVAR "Salvo", 1);
                     Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesOnNextTick();
                 },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_NULL_PLAY_STATE).active; } },
-              { "Scene Room ID",
+              { "ID da Sala da Cena",
                 "",
                 "",
                 WIDGET_TEXT,
@@ -1475,34 +1446,34 @@ void AddDevTools() {
                 nullptr,
                 [](widgetInfo& info) {
                     u32 sceneId = Entrance_GetSceneIdAbsolute(
-                        CVarGetInteger(WARP_POINT_CVAR "Entrance", ENTRANCE(SOUTH_CLOCK_TOWN, 0)));
+                        CVarGetInteger(WARP_POINT_CVAR "Entrada", ENTRANCE(SOUTH_CLOCK_TOWN, 0)));
                     info.widgetName = fmt::format("{} Room {}", warpPointSceneList[sceneId],
-                                                  CVarGetInteger(WARP_POINT_CVAR "Room", 0));
+                                                  CVarGetInteger(WARP_POINT_CVAR "Sala", 0));
                     info.isHidden = disabledMap.at(DISABLE_FOR_NULL_PLAY_STATE).active ||
                                     disabledMap.at(DISABLE_FOR_WARP_POINT_NOT_SET).active;
                 } },
               { ICON_FA_TIMES,
                 "",
-                "Clear warp point",
+                "Apagar ponto de teletransporte",
                 WIDGET_BUTTON,
                 { .size = UIWidgets::Sizes::Inline, .sameLine = true },
                 [](widgetInfo& info) {
-                    CVarClear(WARP_POINT_CVAR "Entrance");
-                    CVarClear(WARP_POINT_CVAR "Room");
+                    CVarClear(WARP_POINT_CVAR "Entrada");
+                    CVarClear(WARP_POINT_CVAR "Sala");
                     CVarClear(WARP_POINT_CVAR "X");
                     CVarClear(WARP_POINT_CVAR "Y");
                     CVarClear(WARP_POINT_CVAR "Z");
-                    CVarClear(WARP_POINT_CVAR "Rotation");
-                    CVarClear(WARP_POINT_CVAR "Saved");
+                    CVarClear(WARP_POINT_CVAR "Rotação");
+                    CVarClear(WARP_POINT_CVAR "Salvo");
                     Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesOnNextTick();
                 },
                 [](widgetInfo& info) {
                     info.isHidden = disabledMap.at(DISABLE_FOR_NULL_PLAY_STATE).active ||
                                     disabledMap.at(DISABLE_FOR_WARP_POINT_NOT_SET).active;
                 } },
-              { "Warp",
+              { "Teletransportar",
                 "",
-                "Teleport to the set warp point",
+                "Teletransporta para o ponto marcado",
                 WIDGET_BUTTON,
                 { .size = UIWidgets::Sizes::Inline, .sameLine = true },
                 [](widgetInfo& info) { Warp(); },
@@ -1510,9 +1481,9 @@ void AddDevTools() {
                     info.isHidden = disabledMap.at(DISABLE_FOR_NULL_PLAY_STATE).active ||
                                     disabledMap.at(DISABLE_FOR_WARP_POINT_NOT_SET).active;
                 } } },
-            { { "Debug Mode",
+            { { "Modo de Depuração",
                 "gDeveloperTools.DebugEnabled",
-                "Enables Debug Mode, allowing you to select maps with L + R + Z.",
+                "Ativa o modo de depuração, que permite escolher mapas com L + R + Z.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) {
@@ -1531,55 +1502,54 @@ void AddDevTools() {
                         RegisterPreventActorInitHooks();
                     }
                 } },
-              { "Better Map Select",
+              { "Seleção de Mapas Melhorada",
                 "gDeveloperTools.BetterMapSelect.Enabled",
-                "Overrides the original map select with a translated, more user-friendly version.",
+                "Troca a seleção de mapas original por uma versão traduzida e mais fácil de usar.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Debug Save File Mode",
+              { "Tipo de Save de Depuração",
                 "gDeveloperTools.DebugSaveFileMode",
-                "Change the behavior of creating saves while debug mode is enabled:\n\n"
-                "- Empty Save: The default 3 heart save file in first cycle\n"
-                "- Vanilla Debug Save: Uses the title screen save info (8 hearts, all items and masks)\n"
-                "- 100\% Save: All items, equipment, mask, quest status and bombers notebook complete",
+                "Muda o save criado com o modo de depuração ativo:\n\n- Save vazio: save padrão de 3 corações no "
+                "primeiro ciclo\n- Save de depuração original: usa o save da tela de título (8 corações, todos os "
+                "itens e máscaras)\n- Save 100\%: todos os itens, equipamentos, máscaras, status de missão e Bombers' "
+                "Notebook completo",
                 WIDGET_CVAR_COMBOBOX,
                 { 0, 0, 0, debugSaveOptions },
                 [](widgetInfo& info) { RegisterDebugSaveCreate(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Prevent Actor Update",
+              { "Impedir Atualização dos Atores",
                 "gDeveloperTools.PreventActorUpdate",
-                "Prevents Actors from updating.",
+                "Impede os atores de atualizar.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterPreventActorUpdateHooks(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Prevent Actor Draw",
+              { "Impedir Desenho dos Atores",
                 "gDeveloperTools.PreventActorDraw",
-                "Prevents Actors from drawing.",
+                "Impede os atores de serem desenhados.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterPreventActorDrawHooks(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Prevent Actor Init",
+              { "Impedir Criação dos Atores",
                 "gDeveloperTools.PreventActorInit",
-                "Prevents Actors from initializing.",
+                "Impede os atores de serem criados.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterPreventActorInitHooks(); },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Disable Object Dependency",
+              { "Desativar Dependência de Objetos",
                 "gDeveloperTools.DisableObjectDependency",
-                "Disables dependencies when loading objects.",
+                "Desativa as dependências ao carregar objetos.",
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 nullptr,
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Log Level",
+              { "Nível de Log",
                 "gDeveloperTools.LogLevel",
-                "The log level determines which messages are printed to the "
-                "console. This does not affect the log file output",
+                "Define quais mensagens aparecem no console. Não afeta o arquivo de log",
                 WIDGET_CVAR_COMBOBOX,
                 { 0, 0, 0, logLevels },
                 [](widgetInfo& info) {
@@ -1587,11 +1557,10 @@ void AddDevTools() {
                         (spdlog::level::level_enum)CVarGetInteger("gDeveloperTools.LogLevel", 1));
                 },
                 [](widgetInfo& info) { info.isHidden = disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active; } },
-              { "Frame Advance",
+              { "Avanço de Quadro",
                 "",
-                "This allows you to advance through the game one frame at a time on command. "
-                "To advance a frame, hold Z and tap R on the second controller. Holding Z "
-                "and R will advance a frame every half second. You can also use the buttons below.",
+                "Permite avançar o jogo um quadro por vez. Para avançar, segure Z e toque R no segundo controle. "
+                "Segurar Z e R avança um quadro a cada meio segundo. Você também pode usar os botões abaixo.",
                 WIDGET_CHECKBOX,
                 {},
                 nullptr,
@@ -1604,9 +1573,9 @@ void AddDevTools() {
                         info.widgetOptions.valuePointer = (bool*)nullptr;
                     }
                 } },
-              { "Advance 1",
+              { "Avançar 1",
                 "",
-                "Advance 1 frame.",
+                "Avança 1 quadro.",
                 WIDGET_BUTTON,
                 { .size = UIWidgets::Sizes::Inline },
                 [](widgetInfo& info) { CVarSetInteger("gDeveloperTools.FrameAdvanceTick", 1); },
@@ -1614,9 +1583,9 @@ void AddDevTools() {
                     info.isHidden = disabledMap.at(DISABLE_FOR_FRAME_ADVANCE_OFF).active ||
                                     disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active;
                 } },
-              { "Advance (Hold)",
+              { "Avançar (Segurar)",
                 "",
-                "Advance frames while the button is held.",
+                "Avança quadros enquanto o botão estiver pressionado.",
                 WIDGET_BUTTON,
                 { .size = UIWidgets::Sizes::Inline, .sameLine = true },
                 nullptr,
@@ -1630,62 +1599,59 @@ void AddDevTools() {
                     }
                 } } } } });
     // dev tools windows
-    devToolsSidebar.push_back({ "Collision Viewer",
+    devToolsSidebar.push_back({ "Visualizador de Colisão",
                                 1,
-                                { { { "Popout Collision Viewer",
+                                { { { "Abrir Visualizador de Colisão em Janela",
                                       "gWindows.CollisionViewer",
-                                      "Makes collision visible on screen",
+                                      "Mostra a colisão na tela",
                                       WIDGET_WINDOW_BUTTON,
                                       { .size = UIWidgets::Sizes::Inline, .windowName = "Collision Viewer" } } } } });
-    devToolsSidebar.push_back(
-        { "Stats",
-          1,
-          { { { "Popout Stats",
-                "gOpenWindows.Stats",
-                "Shows the stats window, with your FPS and frametimes, and the OS you're playing on",
-                WIDGET_WINDOW_BUTTON,
-                { .size = UIWidgets::Sizes::Inline, .windowName = "Stats" } } } } });
-    devToolsSidebar.push_back(
-        { "Console",
-          1,
-          { { { "Popout Console",
-                "gOpenWindows.Console",
-                "Enables the console window, allowing you to input commands. Type help for some examples",
-                WIDGET_WINDOW_BUTTON,
-                { .size = UIWidgets::Sizes::Inline, .windowName = "Console" } } } } });
-    devToolsSidebar.push_back(
-        { "Gfx Debugger",
-          1,
-          { { { "Popout Gfx Debugger",
-                "gOpenWindows.GfxDebugger",
-                "Enables the Gfx Debugger window, allowing you to input commands, type help for some examples",
-                WIDGET_WINDOW_BUTTON,
-                { .size = UIWidgets::Sizes::Inline, .windowName = "GfxDebuggerWindow" } } } } });
-    devToolsSidebar.push_back({ "Save Editor",
+    devToolsSidebar.push_back({ "Estatísticas",
                                 1,
-                                { { { "Popout Save Editor",
+                                { { { "Abrir Estatísticas em Janela",
+                                      "gOpenWindows.Stats",
+                                      "Mostra a janela de estatísticas com FPS, tempo de quadro e sistema operacional",
+                                      WIDGET_WINDOW_BUTTON,
+                                      { .size = UIWidgets::Sizes::Inline, .windowName = "Stats" } } } } });
+    devToolsSidebar.push_back({ "Console",
+                                1,
+                                { { { "Abrir Console em Janela",
+                                      "gOpenWindows.Console",
+                                      "Abre o console para digitar comandos. Digite help para ver exemplos",
+                                      WIDGET_WINDOW_BUTTON,
+                                      { .size = UIWidgets::Sizes::Inline, .windowName = "Console" } } } } });
+    devToolsSidebar.push_back({ "Depurador Gráfico",
+                                1,
+                                { { { "Abrir Depurador Gráfico em Janela",
+                                      "gOpenWindows.GfxDebugger",
+                                      "Abre o Depurador Gráfico para digitar comandos. Digite help para ver exemplos",
+                                      WIDGET_WINDOW_BUTTON,
+                                      { .size = UIWidgets::Sizes::Inline, .windowName = "GfxDebuggerWindow" } } } } });
+    devToolsSidebar.push_back({ "Editor de Save",
+                                1,
+                                { { { "Abrir Editor de Save em Janela",
                                       "gWindows.SaveEditor",
-                                      "Enables the Save Editor window, allowing you to edit your save file",
+                                      "Abre o Editor de Save para editar seu save",
                                       WIDGET_WINDOW_BUTTON,
                                       { .size = UIWidgets::Sizes::Inline, .windowName = "Save Editor" } } } } });
-    devToolsSidebar.push_back({ "Actor Viewer",
+    devToolsSidebar.push_back({ "Visualizador de Atores",
                                 1,
-                                { { { "Popout Actor Viewer",
+                                { { { "Abrir Visualizador de Atores em Janela",
                                       "gWindows.ActorViewer",
-                                      "Enables the Actor Viewer window, allowing you to view actors in the world.",
+                                      "Abre o Visualizador de Atores para ver os atores do mundo.",
                                       WIDGET_WINDOW_BUTTON,
                                       { .size = UIWidgets::Sizes::Inline, .windowName = "Actor Viewer" } } } } });
-    devToolsSidebar.push_back({ "Event Log",
+    devToolsSidebar.push_back({ "Registro de Eventos",
                                 1,
-                                { { { "Popout Event Log",
+                                { { { "Abrir Registro de Eventos em Janela",
                                       "gWindows.EventLog",
-                                      "Enables the event log window",
+                                      "Abre a janela de registro de eventos",
                                       WIDGET_WINDOW_BUTTON,
                                       { .size = UIWidgets::Sizes::Inline, .windowName = "Event Log" } } } } });
 }
 
 void SearchMenuGetItem(widgetInfo& widget) {
-    disabledTempTooltip = "This setting is disabled because: \n\n";
+    disabledTempTooltip = "Esta opção está desativada porque: \n\n";
     disabledValue = false;
     disabledTooltip = " ";
 
@@ -1751,22 +1717,22 @@ void SearchMenuGetItem(widgetInfo& widget) {
             case WIDGET_AUDIO_BACKEND: {
                 auto currentAudioBackend = Ship::Context::GetInstance()->GetAudio()->GetAudioBackend();
                 if (UIWidgets::Combobox(
-                        "Audio API", &currentAudioBackend, audioBackendsMap,
+                        "API de Áudio", &currentAudioBackend, audioBackendsMap,
                         { .color = menuTheme[menuThemeIndex],
                           .tooltip = widget.widgetTooltip,
                           .disabled =
                               Ship::Context::GetInstance()->GetAudio()->GetAvailableAudioBackends()->size() <= 1,
-                          .disabledTooltip = "Only one audio API is available on this platform." })) {
+                          .disabledTooltip = "Só existe uma API de áudio nesta plataforma." })) {
                     Ship::Context::GetInstance()->GetAudio()->SetAudioBackend(currentAudioBackend);
                 }
             } break;
             case WIDGET_VIDEO_BACKEND: {
-                if (UIWidgets::Combobox(
-                        "Renderer API (Needs reload)", &configWindowBackend, availableWindowBackendsMap,
-                        { .color = menuTheme[menuThemeIndex],
-                          .tooltip = widget.widgetTooltip,
-                          .disabled = availableWindowBackends->size() <= 1,
-                          .disabledTooltip = "Only one renderer API is available on this platform." })) {
+                if (UIWidgets::Combobox("API de Renderização (requer reinício)", &configWindowBackend,
+                                        availableWindowBackendsMap,
+                                        { .color = menuTheme[menuThemeIndex],
+                                          .tooltip = widget.widgetTooltip,
+                                          .disabled = availableWindowBackends->size() <= 1,
+                                          .disabledTooltip = "Só existe uma API de renderização nesta plataforma." })) {
                     Ship::Context::GetInstance()->GetConfig()->SetInt("Window.Backend.Id",
                                                                       static_cast<int32_t>(configWindowBackend));
                     Ship::Context::GetInstance()->GetConfig()->SetString("Window.Backend.Name",
@@ -1937,7 +1903,7 @@ void SearchMenuGetItem(widgetInfo& widget) {
                 }
             } break;
             case WIDGET_SEARCH: {
-                if (ImGui::Button("Clear")) {
+                if (ImGui::Button("Limpar")) {
                     menuSearch.Clear();
                 }
                 ImGui::SameLine();
@@ -1950,10 +1916,10 @@ void SearchMenuGetItem(widgetInfo& widget) {
                 std::string menuSearchText(menuSearch.InputBuf);
 
                 if (menuSearchText == "") {
-                    ImGui::Text("Start typing to see results.");
+                    ImGui::Text("Digite para ver resultados.");
                     return;
                 }
-                ImGui::BeginChild("Search Results");
+                ImGui::BeginChild("Resultados da Busca");
                 for (auto& [menuLabel, menuSidebar, cvar] : menuEntries) {
                     for (auto& sidebar : menuSidebar) {
                         for (auto& widgets : sidebar.columnWidgets) {
