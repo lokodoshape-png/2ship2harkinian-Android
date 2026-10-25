@@ -39,6 +39,12 @@ import android.widget.ImageView;
 public class MainActivity extends SDLActivity{
 
     SharedPreferences preferences;
+    // Own data folder, so this build installs beside the original 2Ship (which uses /2S2H) without
+    // either app deleting or overwriting the other's archives. Must match libultraship's Context.cpp,
+    // which the Android workflow patches to the same name.
+    static final String DATA_FOLDER = "2S2H-MM3D";
+    private static final String ORIGINAL_DATA_FOLDER = "2S2H";
+
     private static final CountDownLatch setupLatch = new CountDownLatch(1);
 
     @Override
@@ -79,7 +85,7 @@ public class MainActivity extends SDLActivity{
     }
 
     private void deleteOutdatedAssets() {
-        File targetRootFolder = new File(Environment.getExternalStorageDirectory(), "2S2H");
+        File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
 
         File sohFile = new File(targetRootFolder, "2ship.o2r");
         File ootFile = new File(targetRootFolder, "mm.o2r");
@@ -162,7 +168,7 @@ public class MainActivity extends SDLActivity{
     }
 
     public void checkAndSetupFiles() {
-        File targetRootFolder = new File(Environment.getExternalStorageDirectory(), "2S2H");
+        File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
         File assetsFolder = new File(targetRootFolder, "assets");
         File sohOtrFile = new File(targetRootFolder, "2ship.o2r");
 
@@ -220,6 +226,19 @@ public class MainActivity extends SDLActivity{
             }
 
             runOnUiThread(() -> Toast.makeText(this, "Save data migrated", Toast.LENGTH_SHORT).show());
+        }
+
+        // === First run beside the original 2Ship: copy its saves once ===
+        File originalSavesDir = new File(new File(Environment.getExternalStorageDirectory(), ORIGINAL_DATA_FOLDER), "saves");
+        File targetSavesDir = new File(targetRootFolder, "saves");
+        if (originalSavesDir.isDirectory() && !targetSavesDir.exists()) {
+            try {
+                AssetCopyUtil.copyDirectory(originalSavesDir, targetSavesDir);
+                Log.i("setupFiles", "Copied saves from " + originalSavesDir.getAbsolutePath());
+                runOnUiThread(() -> Toast.makeText(this, "Saves do 2Ship original copiados", Toast.LENGTH_SHORT).show());
+            } catch (IOException e) {
+                Log.e("setupFiles", "Failed to copy original saves", e);
+            }
         }
 
         // Ensure root folder exists
@@ -286,7 +305,7 @@ public class MainActivity extends SDLActivity{
             Uri selectedFileUri = data.getData();
             String fileName = "MM.z64";
 
-            File destinationDirectory = new File(Environment.getExternalStorageDirectory(), "2S2H");
+            File destinationDirectory = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
             File destinationFile = new File(destinationDirectory, fileName);
 
             if (destinationDirectory != null && selectedFileUri != null) {

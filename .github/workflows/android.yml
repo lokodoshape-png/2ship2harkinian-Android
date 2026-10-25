@@ -34,6 +34,9 @@ jobs:
           echo "cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")" >> Android/local.properties
           sed -i '/version "3.28.3"/d' Android/app/build.gradle
           sed -i "s/abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'/abiFilters 'arm64-v8a'/" Android/app/build.gradle
+          # Standalone install: own data folder, matching MainActivity.DATA_FOLDER.
+          sed -i 's|"/storage/emulated/0/2S2H"|"/storage/emulated/0/2S2H-MM3D"|g' libultraship/src/Context.cpp
+          test "$(grep -c '"/storage/emulated/0/2S2H-MM3D"' libultraship/src/Context.cpp)" -eq 2
 
       - name: Build debug APK
         working-directory: Android
@@ -64,6 +67,8 @@ jobs:
           **Como instalar**
           1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular.
           2. Na primeira vez, aponte para a sua ROM do Majora's Mask (N64). O app gera o \`mm.o2r\` no próprio celular.
+
+          Este app se chama **2Ship MM3D** e instala separado do 2Ship original: os dois podem ficar no celular. Os arquivos dele ficam na pasta \`2S2H-MM3D\`, e na primeira abertura ele copia os saves da pasta \`2S2H\` do original.
 
           A ROM e os arquivos do jogo não fazem parte deste download.
 

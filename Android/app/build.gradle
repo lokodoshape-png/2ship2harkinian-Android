@@ -15,7 +15,7 @@ android {
     compileSdkVersion 33
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "com.dishii.mm"
+            applicationId "com.dishii.mm.mm3d"
             namespace("com.dishii.mm")
         }
         minSdkVersion 24
