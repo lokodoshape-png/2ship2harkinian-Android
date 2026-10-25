@@ -68,7 +68,7 @@ jobs:
           1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular.
           2. Na primeira vez, aponte para a sua ROM do Majora's Mask (N64). O app gera o \`mm.o2r\` no próprio celular.
 
-          Este app se chama **2Ship MM3D** e instala separado do 2Ship original: os dois podem ficar no celular. Os arquivos dele ficam na pasta \`2S2H-MM3D\`, e na primeira abertura ele copia os saves da pasta \`2S2H\` do original.
+          Este app se chama **2Ship MM3D** e instala separado do 2Ship original: os dois podem ficar no celular. Ele começa do zero na própria pasta \`2S2H-MM3D\` e não mexe nos arquivos do original. Na primeira vez, permita o acesso a todos os arquivos e escolha a sua ROM do Majora's Mask (N64).
 
           A ROM e os arquivos do jogo não fazem parte deste download.
 

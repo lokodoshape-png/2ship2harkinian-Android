@@ -546,34 +546,33 @@ void DetectArchiveVersion(std::string fileName, bool isO2rType) {
 
     if (isArchiveOld) {
 #if not defined(__SWITCH__) && not defined(__WIIU__)
-        char msgBuf[250];
+        char msgBuf[400];
         char version[18]; // 5 digits for int16_max (x3) + separators + terminator
 
         if (archiveVer.major != 0 || archiveVer.minor != 0 || archiveVer.patch != 0) {
             snprintf(version, 18, "%d.%d.%d", archiveVer.major, archiveVer.minor, archiveVer.patch);
         } else {
-            snprintf(version, 18, "no version found");
+            snprintf(version, 18, "sem versão");
         }
 
-        snprintf(msgBuf, 250,
-                 "The %s file was generated with a different version of 2 Ship 2 Harkinian.\n"
-                 "O2R version: %s\n\n"
-                 "You must regenerate to be able to play, otherwise the program will exit.\n"
-                 "Would you like to regenerate it now?",
+        snprintf(msgBuf, sizeof(msgBuf),
+                 "O arquivo %s foi gerado por outra versão do 2 Ship 2 Harkinian.\n"
+                 "Versão do O2R: %s\n\n"
+                 "É preciso gerá-lo de novo para jogar; se não, o app vai fechar.\n"
+                 "Gerar de novo agora?",
                  fileName.c_str(), version);
 
-        if (Extractor::ShowYesNoBox("Old O2R File Found", msgBuf) == IDYES) {
+        if (Extractor::ShowYesNoBox("O2R antigo encontrado", msgBuf) == IDYES) {
             std::string installPath = Ship::Context::GetAppBundlePath();
             if (!std::filesystem::exists(installPath + "/assets/extractor")) {
-                Extractor::ShowErrorBox(
-                    "Extractor assets not found",
-                    "Unable to regenerate. Missing assets/extractor folder needed to generate O2R file.\n\nExiting...");
+                Extractor::ShowErrorBox("Arquivos do extrator não encontrados",
+                                        "Não foi possível gerar de novo: falta a pasta assets/extractor.\n\nSaindo...");
                 exit(1);
             }
 
             Extractor extract;
             if (!extract.Run(Ship::Context::GetAppDirectoryPath(appShortName))) {
-                Extractor::ShowErrorBox("Error", "An error occurred, no O2R file was generated.\n\nExiting...");
+                Extractor::ShowErrorBox("Erro", "Ocorreu um erro e o arquivo O2R não foi gerado.\n\nSaindo...");
                 exit(1);
             }
 
@@ -634,15 +633,17 @@ extern "C" void InitOTR() {
         std::string installPath = Ship::Context::GetAppBundlePath();
         if (!std::filesystem::exists(installPath + "/assets/extractor")) {
             Extractor::ShowErrorBox(
-                "Extractor assets not found",
-                "No game O2R file found. Missing assets/extractor folder needed to generate O2R file. Exiting...");
+                "Arquivos do extrator não encontrados",
+                "O arquivo O2R do jogo não existe e falta a pasta assets/extractor para gerá-lo. Saindo...");
             exit(1);
         }
 
-        if (Extractor::ShowYesNoBox("No O2R File", "No O2R files found. Generate one now?") == IDYES) {
+        if (Extractor::ShowYesNoBox(
+                "Gerar arquivos do jogo",
+                "O mm.o2r ainda não existe. Gerar agora a partir da sua ROM do Majora's Mask (N64)?") == IDYES) {
             Extractor extract;
             if (!extract.Run(Ship::Context::GetAppDirectoryPath(appShortName))) {
-                Extractor::ShowErrorBox("Error", "An error occurred, no O2R file was generated. Exiting...");
+                Extractor::ShowErrorBox("Erro", "Ocorreu um erro e o arquivo O2R não foi gerado. Saindo...");
                 exit(1);
             }
             extract.CallZapd(installPath, Ship::Context::GetAppDirectoryPath(appShortName));

@@ -59,9 +59,9 @@ void SetupGuiElements() {
 
     if (!gui->GetMenuBar() && !CVarGetInteger("gSettings.DisableMenuShortcutNotify", 0)) {
 #if defined(__SWITCH__) || defined(__WIIU__) || defined(__ANDROID__)
-        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Press - to access enhancements menu");
+        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Aperte - para abrir o menu de melhorias");
 #else
-        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Press F1 to access enhancements menu");
+        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Aperte F1 para abrir o menu de melhorias");
 #endif
     }
 

@@ -39,11 +39,10 @@ import android.widget.ImageView;
 public class MainActivity extends SDLActivity{
 
     SharedPreferences preferences;
-    // Own data folder, so this build installs beside the original 2Ship (which uses /2S2H) without
-    // either app deleting or overwriting the other's archives. Must match libultraship's Context.cpp,
-    // which the Android workflow patches to the same name.
+    // Own data folder, so this build installs beside the original 2Ship (which uses /2S2H) and starts
+    // from scratch: nothing is read from or written to the original's folder. Must match
+    // libultraship's Context.cpp, which the Android workflow patches to the same name.
     static final String DATA_FOLDER = "2S2H-MM3D";
-    private static final String ORIGINAL_DATA_FOLDER = "2S2H";
 
     private static final CountDownLatch setupLatch = new CountDownLatch(1);
 
@@ -177,12 +176,12 @@ public class MainActivity extends SDLActivity{
 
         if (!targetRootFolder.exists() || isMissingAssets || isMissingSohOtr) {
             new AlertDialog.Builder(this)
-                    .setTitle("Setup Required")
-                    .setMessage("Some required files are missing. The app will create them (~30s). Press OK to begin.")
+                    .setTitle("Configuração inicial")
+                    .setMessage("O app vai criar os arquivos necessários na pasta " + DATA_FOLDER + " (cerca de 30s). Toque em OK para começar.")
                     .setCancelable(false)
                     .setPositiveButton("OK", (dialog, which) -> {
                         Executors.newSingleThreadExecutor().execute(() -> {
-                            runOnUiThread(() -> Toast.makeText(this, "Setting up files...", Toast.LENGTH_SHORT).show());
+                            runOnUiThread(() -> Toast.makeText(this, "Preparando os arquivos...", Toast.LENGTH_SHORT).show());
                             setupFilesInBackground(targetRootFolder);
                         });
                     })
@@ -225,27 +224,14 @@ public class MainActivity extends SDLActivity{
                 }
             }
 
-            runOnUiThread(() -> Toast.makeText(this, "Save data migrated", Toast.LENGTH_SHORT).show());
-        }
-
-        // === First run beside the original 2Ship: copy its saves once ===
-        File originalSavesDir = new File(new File(Environment.getExternalStorageDirectory(), ORIGINAL_DATA_FOLDER), "saves");
-        File targetSavesDir = new File(targetRootFolder, "saves");
-        if (originalSavesDir.isDirectory() && !targetSavesDir.exists()) {
-            try {
-                AssetCopyUtil.copyDirectory(originalSavesDir, targetSavesDir);
-                Log.i("setupFiles", "Copied saves from " + originalSavesDir.getAbsolutePath());
-                runOnUiThread(() -> Toast.makeText(this, "Saves do 2Ship original copiados", Toast.LENGTH_SHORT).show());
-            } catch (IOException e) {
-                Log.e("setupFiles", "Failed to copy original saves", e);
-            }
+            runOnUiThread(() -> Toast.makeText(this, "Saves migrados", Toast.LENGTH_SHORT).show());
         }
 
         // Ensure root folder exists
         if (!targetRootFolder.exists()) {
             if (!targetRootFolder.mkdirs()) {
                 Log.e("setupFiles", "Failed to create root folder");
-                runOnUiThread(() -> Toast.makeText(this, "Failed to create folder", Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(this, "Não foi possível criar a pasta " + DATA_FOLDER, Toast.LENGTH_LONG).show());
                 setupLatch.countDown();
                 return;
             }
@@ -264,10 +250,10 @@ public class MainActivity extends SDLActivity{
                 targetAssetsDir.mkdirs();
             }
             AssetCopyUtil.copyAssetsToExternal(this, "assets", targetAssetsDir.getAbsolutePath());
-            runOnUiThread(() -> Toast.makeText(this, "Assets copied", Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> Toast.makeText(this, "Arquivos copiados", Toast.LENGTH_SHORT).show());
         } catch (IOException e) {
             e.printStackTrace();
-            runOnUiThread(() -> Toast.makeText(this, "Error copying assets", Toast.LENGTH_LONG).show());
+            runOnUiThread(() -> Toast.makeText(this, "Erro ao copiar os arquivos", Toast.LENGTH_LONG).show());
         }
 
         // Copy 2ship.o2r from internal assets
@@ -281,11 +267,11 @@ public class MainActivity extends SDLActivity{
                 out.write(buffer, 0, read);
             }
 
-            runOnUiThread(() -> Toast.makeText(this, "2ship.o2r copied", Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> Toast.makeText(this, "2ship.o2r copiado", Toast.LENGTH_SHORT).show());
 
         } catch (IOException e) {
             e.printStackTrace();
-            runOnUiThread(() -> Toast.makeText(this, "Error copying 2ship.o2r", Toast.LENGTH_LONG).show());
+            runOnUiThread(() -> Toast.makeText(this, "Erro ao copiar o 2ship.o2r", Toast.LENGTH_LONG).show());
         }
 
         setupLatch.countDown();
@@ -300,7 +286,10 @@ public class MainActivity extends SDLActivity{
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+        if (requestCode == FILE_PICKER_REQUEST_CODE && (resultCode != RESULT_OK || data == null)) {
+            // Picker closed without a file: unblock the extractor, which reports that no ROM was chosen.
+            nativeHandleSelectedFile("");
+        } else if (requestCode == FILE_PICKER_REQUEST_CODE) {
             // Handle file selection
             Uri selectedFileUri = data.getData();
             String fileName = "MM.z64";
@@ -323,6 +312,9 @@ public class MainActivity extends SDLActivity{
                     out.close();
                 } catch (IOException e) {
                     e.printStackTrace();
+                    Toast.makeText(this, "Erro ao copiar a ROM: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    nativeHandleSelectedFile("");
+                    return;
                 }
             }
 
@@ -335,7 +327,7 @@ public class MainActivity extends SDLActivity{
                 if (Environment.isExternalStorageManager()) {
                     checkAndSetupFiles();
                 } else {
-                    Toast.makeText(this, "Storage permission is required to access files.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "É preciso permitir o acesso a todos os arquivos para o app funcionar.", Toast.LENGTH_LONG).show();
                 }
             }
         }

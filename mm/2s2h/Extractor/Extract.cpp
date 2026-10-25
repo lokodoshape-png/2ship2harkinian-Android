@@ -109,46 +109,47 @@ void Extractor::ShowErrorBox(const char* title, const char* text) {
 }
 
 void Extractor::ShowSizeErrorBox() const {
-    std::unique_ptr<char[]> boxBuffer = std::make_unique<char[]>(mCurrentRomPath.size() + 100);
-    snprintf(boxBuffer.get(), mCurrentRomPath.size() + 100,
-             "The rom file %s was not a valid size. Was %zu MB, expecting 32, 54, or 64MB.", mCurrentRomPath.c_str(),
-             mCurRomSize / MB_BASE);
-    ShowErrorBox("Invalid Rom Size", boxBuffer.get());
+    std::unique_ptr<char[]> boxBuffer = std::make_unique<char[]>(mCurrentRomPath.size() + 200);
+    snprintf(boxBuffer.get(), mCurrentRomPath.size() + 200,
+             "O arquivo de ROM %s não tem um tamanho válido. Tem %zu MB, o esperado é 32, 54 ou 64 MB.",
+             mCurrentRomPath.c_str(), mCurRomSize / MB_BASE);
+    ShowErrorBox("Tamanho de ROM inválido", boxBuffer.get());
 }
 
 void Extractor::ShowCrcErrorBox() const {
-    ShowErrorBox("Rom CRC invalid",
-                 "Rom CRC did not match the list of known compatible roms. Please find another.\n\n"
-                 "Visit https://2ship.equipment/ to validate your ROM and see a list of compatible versions");
+    ShowErrorBox("CRC da ROM inválido",
+                 "O CRC da ROM não está na lista de ROMs compatíveis. Escolha outra.\n\n"
+                 "Veja em https://2ship.equipment/ como validar a sua ROM e quais versões são compatíveis.");
 }
 
 void Extractor::ShowCompressedErrorBox() const {
-    ShowErrorBox("File is Compressed", "The selected file appears to be compressed. Please extract before using.");
+    ShowErrorBox("Arquivo compactado",
+                 "O arquivo escolhido parece estar compactado (.zip, .7z...). Extraia a ROM antes de usar.");
 }
 
 int Extractor::ShowRomPickBox(uint32_t verCrc) const {
-    std::unique_ptr<char[]> boxBuffer = std::make_unique<char[]>(mCurrentRomPath.size() + 100);
+    std::unique_ptr<char[]> boxBuffer = std::make_unique<char[]>(mCurrentRomPath.size() + 200);
     SDL_MessageBoxData boxData = { 0 };
     SDL_MessageBoxButtonData buttons[3] = { { 0 } };
     int ret;
 
     buttons[0].buttonid = 0;
-    buttons[0].text = "Yes";
+    buttons[0].text = "Sim";
     buttons[0].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
     buttons[1].buttonid = 1;
-    buttons[1].text = "No";
+    buttons[1].text = "Não";
     buttons[1].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
     buttons[2].buttonid = 2;
-    buttons[2].text = "Find ROM";
+    buttons[2].text = "Procurar ROM";
     boxData.numbuttons = 3;
     boxData.flags = SDL_MESSAGEBOX_INFORMATION;
     boxData.message = boxBuffer.get();
-    boxData.title = "Rom Detected";
+    boxData.title = "ROM encontrada";
     boxData.window = nullptr;
 
     boxData.buttons = buttons;
-    snprintf(boxBuffer.get(), mCurrentRomPath.size() + 100,
-             "Rom detected: %s, Header CRC32: %8X. It appears to be: %s. Use this rom?", mCurrentRomPath.c_str(),
+    snprintf(boxBuffer.get(), mCurrentRomPath.size() + 200,
+             "ROM encontrada: %s, CRC32 do cabeçalho: %8X. Parece ser: %s. Usar esta ROM?", mCurrentRomPath.c_str(),
              verCrc, verMap.at(verCrc));
 
     SDL_ShowMessageBox(&boxData, &ret);
@@ -164,10 +165,10 @@ int Extractor::ShowYesNoBox(const char* title, const char* box) {
     SDL_MessageBoxButtonData buttons[2] = { { 0 } };
 
     buttons[0].buttonid = IDYES;
-    buttons[0].text = "Yes";
+    buttons[0].text = "Sim";
     buttons[0].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
     buttons[1].buttonid = IDNO;
-    buttons[1].text = "No";
+    buttons[1].text = "Não";
     buttons[1].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
     boxData.numbuttons = 2;
     boxData.flags = SDL_MESSAGEBOX_INFORMATION;
@@ -324,7 +325,9 @@ bool Extractor::GetRomPathFromBox() {
         SDL_Delay(250);
     }
     SDL_Log("%s", javaRomPath);
-    selection.push_back(javaRomPath);
+    if (javaRomPath != NULL && javaRomPath[0] != '\0') {
+        selection.push_back(javaRomPath);
+    }
 #endif
     if (selection.empty()) {
         return false;
@@ -409,7 +412,7 @@ bool Extractor::ManuallySearchForRom() {
     std::ifstream inFile;
 
     if (!GetRomPathFromBox()) {
-        ShowErrorBox("No rom selected", "No Rom selected. Exiting");
+        ShowErrorBox("Nenhuma ROM escolhida", "Nenhuma ROM foi escolhida. Saindo.");
         return false;
     }
 
@@ -471,7 +474,8 @@ bool Extractor::Run(std::string searchPath, RomSearchMode searchMode) {
     FilterRoms(roms, searchMode);
 
     if (roms.empty()) {
-        int ret = ShowYesNoBox("No roms found", "No roms found. Look for one?");
+        int ret = ShowYesNoBox("Nenhuma ROM encontrada",
+                               "Nenhuma ROM encontrada. Escolher o arquivo da ROM do Majora's Mask (N64)?");
 
         switch (ret) {
             case IDYES:
@@ -480,7 +484,7 @@ bool Extractor::Run(std::string searchPath, RomSearchMode searchMode) {
                 }
                 break;
             case IDNO:
-                ShowErrorBox("No rom selected", "No rom selected. Exiting");
+                ShowErrorBox("Nenhuma ROM escolhida", "Nenhuma ROM foi escolhida. Saindo.");
                 return false;
             default:
                 UNREACHABLE;
@@ -510,9 +514,9 @@ bool Extractor::Run(std::string searchPath, RomSearchMode searchMode) {
                     ShowCrcErrorBox();
                 } else {
                     ShowErrorBox(
-                        "Rom CRC invalid",
-                        "Rom CRC did not match the list of known compatible roms. Trying the next one...\n\n"
-                        "Visit https://2ship.equipment/ to validate your ROM and see a list of compatible versions");
+                        "CRC da ROM inválido",
+                        "O CRC da ROM não está na lista de ROMs compatíveis. Tentando a próxima...\n\n"
+                        "Veja em https://2ship.equipment/ como validar a sua ROM e quais versões são compatíveis.");
                 }
                 continue;
             }
@@ -524,7 +528,7 @@ bool Extractor::Run(std::string searchPath, RomSearchMode searchMode) {
             break;
         } else if (option == (int)ButtonId::NO) {
             if (rom == roms.back()) {
-                ShowErrorBox("No rom provided", "No rom provided. Exiting");
+                ShowErrorBox("Nenhuma ROM escolhida", "Nenhuma ROM foi escolhida. Saindo.");
                 return false;
             }
             continue;
@@ -639,9 +643,9 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     SetWindowPos(cmdWindow, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 #else
     // Show extraction in background message until linux/mac can have visual progress
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Extracting",
-                             "Extraction will now begin in the background.\n\nPlease be patient for the process to "
-                             "finish. Do not close the main program.",
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Extraindo",
+                             "A extração dos arquivos do jogo vai começar agora.\n\nAguarde até terminar (pode levar "
+                             "alguns minutos). Não feche o app.",
                              nullptr);
 #endif
 
