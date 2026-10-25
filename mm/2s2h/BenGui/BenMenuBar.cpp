@@ -11,6 +11,7 @@
 #include "2s2h/Enhancements/GfxPatcher/AuthenticGfxPatches.h"
 #include "2s2h/DeveloperTools/DeveloperTools.h"
 #include "HudEditor.h"
+#include "2s2h/Language/GameLanguage.h"
 
 #include "2s2h/Enhancements/Trackers/ItemTracker.h"
 #include "2s2h/Enhancements/Trackers/ItemTrackerSettings.h"
@@ -42,6 +43,41 @@ static std::unordered_map<Ship::WindowBackend, const char*> windowBackendsMap = 
     { Ship::WindowBackend::FAST3D_DXGI_DX11, "DirectX" },
     { Ship::WindowBackend::FAST3D_SDL_OPENGL, "OpenGL" },
     { Ship::WindowBackend::FAST3D_SDL_METAL, "Metal" },
+};
+
+// Rendering resolution presets. Index 0 follows the screen; the others fix the vertical pixel count through
+// libultraship's advanced resolution settings and keep the screen's aspect ratio.
+static const std::unordered_map<int32_t, const char*> resolutionPresetOptions = {
+    { 0, "Tela do aparelho (padrão)" },
+    { 1, "N64 original (320x240, 4:3)" },
+    { 2, "240p" },
+    { 3, "360p" },
+    { 4, "480p" },
+    { 5, "540p" },
+    { 6, "720p" },
+    { 7, "900p" },
+    { 8, "1080p" },
+    { 9, "1440p" },
+};
+static const int32_t sResolutionPresetHeights[] = { 0, 240, 240, 360, 480, 540, 720, 900, 1080, 1440 };
+
+static void ApplyResolutionPreset(int32_t preset) {
+    const bool fixedHeight = preset >= 2;
+    CVarSetInteger(CVAR_LOW_RES_MODE, preset == 1 ? 1 : 0);
+    CVarSetInteger(CVAR_PREFIX_ADVANCED_RESOLUTION ".Enabled", fixedHeight ? 1 : 0);
+    if (fixedHeight) {
+        CVarSetInteger(CVAR_PREFIX_ADVANCED_RESOLUTION ".VerticalResolutionToggle", 1);
+        CVarSetInteger(CVAR_PREFIX_ADVANCED_RESOLUTION ".VerticalPixelCount", sResolutionPresetHeights[preset]);
+        // An aspect ratio of 0:0 makes the width follow the screen's shape.
+        CVarSetFloat(CVAR_PREFIX_ADVANCED_RESOLUTION ".AspectRatioX", 0.0f);
+        CVarSetFloat(CVAR_PREFIX_ADVANCED_RESOLUTION ".AspectRatioY", 0.0f);
+        CVarSetInteger(CVAR_PREFIX_ADVANCED_RESOLUTION ".PixelPerfectMode", 0);
+    }
+}
+
+static const std::unordered_map<int32_t, const char*> gameLanguageOptions = {
+    { GameLanguage::LANGUAGE_ENGLISH, "English (original)" },
+    { GameLanguage::LANGUAGE_PORTUGUESE_BR, "Português (pacote de tradução)" },
 };
 
 static const std::unordered_map<int32_t, const char*> clockTypeOptions = {
@@ -206,6 +242,12 @@ void DrawSettingsMenu() {
 
         if (UIWidgets::BeginMenu("Gráficos")) {
 
+            if (UIWidgets::CVarCombobox("Resolução", "gSettings.ResolutionPreset", resolutionPresetOptions)) {
+                ApplyResolutionPreset(CVarGetInteger("gSettings.ResolutionPreset", 0));
+            }
+            UIWidgets::Tooltip("Resolução em que o jogo é desenhado. Menor deixa mais leve e com cara de N64; maior "
+                               "deixa mais nítido, mas pesa mais no aparelho. Vale na hora.");
+
 #ifndef __APPLE__
             if (UIWidgets::CVarSliderFloat("Resolução interna: %f %%", CVAR_INTERNAL_RESOLUTION, 0.5f, 2.0f, 1.0f)) {
                 Ship::Context::GetInstance()->GetWindow()->SetResolutionMultiplier(
@@ -314,6 +356,23 @@ void DrawSettingsMenu() {
 
             // Currently this only has "Fonte dos textos sobrepostos", it doesn't use our new UIWidgets so it stands out
             // Ship::Context::GetInstance()->GetWindow()->GetGui()->GetGameOverlay()->DrawSettings();
+
+            ImGui::EndMenu();
+        }
+
+        if (UIWidgets::BeginMenu("Idioma")) {
+            static int32_t sGameLanguage = GameLanguage::GetSaved(appShortName);
+            static const std::string sPackFolder =
+                GameLanguage::GetPackFolder(GameLanguage::LANGUAGE_PORTUGUESE_BR, appShortName);
+            if (UIWidgets::Combobox("Idioma do texto do jogo (precisa reabrir)", &sGameLanguage, gameLanguageOptions)) {
+                GameLanguage::Save(static_cast<GameLanguage::Language>(sGameLanguage), appShortName);
+            }
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
+            ImGui::TextWrapped("Vale na próxima vez que o app abrir. Para português, coloque o pacote de tradução "
+                               "(.o2r, .zip ou .otr) na pasta:");
+            ImGui::TextWrapped("%s", sPackFolder.c_str());
+            ImGui::TextWrapped("Sem pacote nessa pasta, o texto do jogo continua em inglês.");
+            ImGui::PopTextWrapPos();
 
             ImGui::EndMenu();
         }
