@@ -703,6 +703,14 @@ void DrawEnhancementsMenu() {
                                                  "textura autênticos no logo da tela inicial" });
             UIWidgets::CVarCheckbox("Mira do arco", "gEnhancements.Graphics.BowReticle",
                                     { .tooltip = "Mostra uma mira ao puxar uma flecha" });
+            UIWidgets::CVarCheckbox(
+                "Cel shading (visual de desenho)", "gEnhancements.Graphics.CelShading",
+                { .tooltip = "Divide a luz do mundo 3D em poucas faixas de cor chapada, num visual de desenho "
+                             "animado. Não afeta o HUD. Vale na hora." });
+            if (CVarGetInteger("gEnhancements.Graphics.CelShading", 0)) {
+                UIWidgets::CVarSliderInt("Faixas de sombra: %d", "gEnhancements.Graphics.CelShadingBands", 2, 8, 4);
+                UIWidgets::Tooltip("Menos faixas = visual mais chapado; mais faixas = mais suave.");
+            }
             if (UIWidgets::CVarCheckbox("Itens soltos em 3D", "gEnhancements.Graphics.3DItemDrops",
                                         { .tooltip = "Deixa os itens que caem no chão em 3D" })) {
                 Register3DItemDrops();

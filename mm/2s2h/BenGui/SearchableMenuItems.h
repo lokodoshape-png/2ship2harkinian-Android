@@ -1225,6 +1225,15 @@ void AddEnhancements() {
                 WIDGET_CVAR_CHECKBOX },
               { "Mira do Arco", "gEnhancements.Graphics.BowReticle", "Mostra uma mira ao puxar uma flecha.",
                 WIDGET_CVAR_CHECKBOX },
+              { "Cel Shading (Visual de Desenho)", "gEnhancements.Graphics.CelShading",
+                "Divide a luz do mundo 3D em poucas faixas de cor chapada, num visual de desenho animado. Não afeta "
+                "o HUD.",
+                WIDGET_CVAR_CHECKBOX },
+              { "Faixas de Sombra: %d",
+                "gEnhancements.Graphics.CelShadingBands",
+                "Menos faixas = visual mais chapado; mais faixas = mais suave.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 2, 8, 4 } },
               { "Remover Barras Pretas", "gEnhancements.Graphics.DisableBlackBars",
                 "Remove as barras pretas nas cenas e ao mirar com Z.\nObs.: podem aparecer pequenas falhas visuais que "
                 "as barras escondiam.\nDesative esta opção antes de relatar um bug.",
