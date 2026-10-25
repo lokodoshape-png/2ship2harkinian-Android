@@ -1,0 +1,44 @@
+name: Build Android APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.0.10792818" "platforms;android-33" "build-tools;34.0.0"
+
+      - name: Use the runner's CMake and build arm64 only
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > Android/local.properties
+          echo "cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")" >> Android/local.properties
+          sed -i '/version "3.28.3"/d' Android/app/build.gradle
+          sed -i "s/abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'/abiFilters 'arm64-v8a'/" Android/app/build.gradle
+
+      - name: Build debug APK
+        working-directory: Android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2ship2harkinian-android-debug
+          path: Android/app/build/outputs/apk/debug/*.apk
