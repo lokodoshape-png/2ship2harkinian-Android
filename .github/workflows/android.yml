@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-24.04
@@ -42,3 +45,31 @@ jobs:
         with:
           name: 2ship2harkinian-android-debug
           path: Android/app/build/outputs/apk/debug/*.apk
+
+      # Publishes the APK on the fork's Releases page for pushes to the main branches. The release
+      # holds only the app; the game data (mm.o2r) is generated on the phone from the user's own ROM.
+      - name: Publish release
+        if: github.event_name == 'push' && (github.ref_name == 'android' || github.ref_name == 'ci/android-apk')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          short_sha="${GITHUB_SHA::7}"
+          tag="build-${GITHUB_RUN_NUMBER}"
+          apk="2ship2harkinian-mm3d-${short_sha}.apk"
+          cp Android/app/build/outputs/apk/debug/*.apk "$apk"
+          cat > notes.md <<NOTES
+          APK do 2Ship2Harkinian para Android (arm64) com as melhorias estilo Majora's Mask 3D e o menu em português.
+
+          **Como instalar**
+          1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular.
+          2. Na primeira vez, aponte para a sua ROM do Majora's Mask (N64). O app gera o \`mm.o2r\` no próprio celular.
+
+          A ROM e os arquivos do jogo não fazem parte deste download.
+
+          Commit: ${GITHUB_SHA} (branch ${GITHUB_REF_NAME})
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+            --title "2Ship MM3D Android - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+            --notes-file notes.md --latest
