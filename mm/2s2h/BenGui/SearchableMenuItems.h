@@ -1390,7 +1390,16 @@ void AddEnhancements() {
                 "Como no Majora's Mask 3D, a Song of Time da tela de Status mostra também a Inverted Song of Time, "
                 "a Song of Double Time e a música do espantalho. Com o cursor na Song of Time, aperte L ou C-Baixo "
                 "para alternar e A para ouvir as notas.",
-                WIDGET_CVAR_CHECKBOX } } } });
+                WIDGET_CVAR_CHECKBOX },
+              { "Guia do Bombers' Notebook Junto com o Caderno", "gEnhancements.MM3D.BombersNotebookGuide",
+                "Ao abrir o Bombers' Notebook, abre também um guia com o prêmio de cada pessoa, o dia e a hora certos, "
+                "o lugar e a máscara ou condição necessária. A pessoa selecionada no Caderno fica destacada.",
+                WIDGET_CVAR_CHECKBOX },
+              { "Abrir Guia do Bombers' Notebook",
+                "gWindows.BombersNotebookGuide",
+                "Abre o guia do Bombers' Notebook em uma janela",
+                WIDGET_WINDOW_BUTTON,
+                { .size = UIWidgets::Sizes::Inline, .windowName = "Bombers Notebook Guide" } } } } });
     enhancementsSidebar.push_back({ "Dificuldade",
                                     3,
                                     { { { "Takkuri Não Rouba",

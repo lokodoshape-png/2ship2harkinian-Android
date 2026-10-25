@@ -767,6 +767,10 @@ void DrawEnhancementsMenu() {
                 { .tooltip = "Like in Majora's Mask 3D, the Song of Time on the Quest Status page also shows the "
                              "Inverted Song of Time, the Song of Double Time and the Scarecrow's Song. With the "
                              "cursor on the Song of Time, press L or C-Down to cycle and A to hear the notes." });
+            UIWidgets::CVarCheckbox(
+                "Bombers' Notebook Guide", "gEnhancements.MM3D.BombersNotebookGuide",
+                { .tooltip = "Opening the Bombers' Notebook also opens a guide with each person's reward, the day "
+                             "and time to meet them, where, and the mask or condition needed." });
 
             ImGui::EndMenu();
         }
