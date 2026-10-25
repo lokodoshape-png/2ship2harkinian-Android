@@ -1406,7 +1406,15 @@ void AddEnhancements() {
                 "Requires a scene reload to take effect",
                 WIDGET_CVAR_CHECKBOX,
                 {},
-                [](widgetInfo& info) { RegisterWoodfallMountainAppearance(); } } } } });
+                [](widgetInfo& info) { RegisterWoodfallMountainAppearance(); } },
+              { .widgetName = "Majora's Mask 3D", .widgetType = WIDGET_SEPARATOR_TEXT },
+              { "Early Bombers' Notebook",
+                "gEnhancements.MM3D.EarlyBombersNotebook",
+                "Like in Majora's Mask 3D, get the Bombers' Notebook on your first visit to Clock Town "
+                "instead of after the Bombers' hide-and-seek game.",
+                WIDGET_CVAR_CHECKBOX,
+                {},
+                [](widgetInfo& info) { RegisterEarlyBombersNotebook(); } } } } });
     enhancementsSidebar.push_back(
         { "Difficulty Options",
           3,

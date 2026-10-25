@@ -66,6 +66,9 @@ void InitEnhancements() {
     RegisterSkipScarecrowSong();
     RegisterDoubleTimeHourSelect();
 
+    // MM3D
+    RegisterEarlyBombersNotebook();
+
     // Restorations
     RegisterPowerCrouchStab();
     RegisterSideRoll();

@@ -756,6 +756,12 @@ void DrawEnhancementsMenu() {
                                  "Requires a scene reload to take effect" })) {
                 RegisterWoodfallMountainAppearance();
             }
+            if (UIWidgets::CVarCheckbox(
+                    "Early Bombers' Notebook", "gEnhancements.MM3D.EarlyBombersNotebook",
+                    { .tooltip = "Like in Majora's Mask 3D, get the Bombers' Notebook on your first visit to Clock "
+                                 "Town instead of after the Bombers' hide-and-seek game." })) {
+                RegisterEarlyBombersNotebook();
+            }
 
             ImGui::EndMenu();
         }
