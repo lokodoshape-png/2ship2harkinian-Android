@@ -366,7 +366,11 @@ jobs:
               --title "2Ship MM3D PC - build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
               --notes "Versão para PC do 2Ship MM3D. Commit: ${GITHUB_SHA}"
         fi
-        gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber
+        for attempt in 1 2 3 4 5; do
+          gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber && exit 0
+          sleep 60
+        done
+        exit 1
 
   build-windows:
     needs: generate-2ship-otr
@@ -465,4 +469,8 @@ jobs:
               --title "2Ship MM3D PC - build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
               --notes "Versão para PC do 2Ship MM3D. Commit: ${GITHUB_SHA}"
         fi
-        gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber
+        for attempt in 1 2 3 4 5; do
+          gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber && exit 0
+          sleep 60
+        done
+        exit 1

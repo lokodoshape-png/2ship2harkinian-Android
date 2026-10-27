@@ -123,6 +123,14 @@ jobs:
           Commit: ${GITHUB_SHA} (branch ${GITHUB_REF_NAME})
           NOTES
           sed -i 's/^          //' notes.md
-          gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
-            --title "2Ship MM3D Android - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
-            --notes-file notes.md --latest
+          # Release creation sometimes gets a transient HTTP 403 from the API, so it is retried a few times.
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+              --title "2Ship MM3D Android - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+              --notes-file notes.md --latest; then
+              exit 0
+            fi
+            echo "Release creation failed (attempt $attempt), retrying in 60s"
+            sleep 60
+          done
+          exit 1
