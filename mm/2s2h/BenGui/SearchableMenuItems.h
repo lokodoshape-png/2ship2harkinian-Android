@@ -1294,11 +1294,13 @@ void AddEnhancements() {
                 "Song of Soaring normalmente.\n\nFunciona com o Index-Warp ativo, mostrando todos os destinos válidos. "
                 "O destino Great Bay Coast sempre aparece para o índice 0.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Escolher a Hora na Song of Double Time", "gEnhancements.Songs.DoubleTimeHourSelect",
+              { "Escolher a Hora na Song of Double Time",
+                "gEnhancements.Songs.DoubleTimeHourSelect",
                 "Como no Majora's Mask 3D, escolha a hora para onde a Song of Double Time te leva. Use "
                 "esquerda/direita no analógico ou D-pad enquanto a confirmação aparece. Dá para escolher até o próximo "
                 "amanhecer ou anoitecer.",
-                WIDGET_CVAR_CHECKBOX },
+                WIDGET_CVAR_CHECKBOX,
+                { .defaultVariant = true } },
               { "Ovos Zora para a Bossa Nova",
                 "gEnhancements.Songs.ZoraEggCount",
                 "Quantos ovos são necessários para liberar a New Wave Bossa Nova.",
@@ -1410,11 +1412,13 @@ void AddEnhancements() {
                 WIDGET_CVAR_CHECKBOX,
                 {},
                 [](widgetInfo& info) { RegisterEarlyBombersNotebook(); } },
-              { "Variações da Song of Time na Pausa", "gEnhancements.MM3D.TimeSongVariantsInPause",
+              { "Variações da Song of Time na Pausa",
+                "gEnhancements.MM3D.TimeSongVariantsInPause",
                 "Como no Majora's Mask 3D, a Song of Time da tela de Status mostra também a Inverted Song of Time, "
                 "a Song of Double Time e a música do espantalho. Com o cursor na Song of Time, aperte L ou C-Baixo "
                 "para alternar e A para ouvir as notas.",
-                WIDGET_CVAR_CHECKBOX },
+                WIDGET_CVAR_CHECKBOX,
+                { .defaultVariant = true } },
               { "Guia do Bombers' Notebook Junto com o Caderno", "gEnhancements.MM3D.BombersNotebookGuide",
                 "Ao abrir o Bombers' Notebook, abre também um guia com o prêmio de cada pessoa, o dia e a hora certos, "
                 "o lugar e a máscara ou condição necessária. A pessoa selecionada no Caderno fica destacada.",

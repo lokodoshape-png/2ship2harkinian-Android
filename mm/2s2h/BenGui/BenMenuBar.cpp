@@ -846,7 +846,8 @@ void DrawEnhancementsMenu() {
                 "Variações da Song of Time na pausa", "gEnhancements.MM3D.TimeSongVariantsInPause",
                 { .tooltip = "Como no Majora's Mask 3D, a Song of Time na tela de status também mostra a Inverted Song "
                              "of Time, a Song of Double Time e a música do espantalho. Com o cursor na Song of Time, "
-                             "aperte L ou C-baixo para trocar e A para ouvir as notas." });
+                             "aperte L ou C-baixo para trocar e A para ouvir as notas.",
+                  .defaultValue = true });
             UIWidgets::CVarCheckbox(
                 "Guia do Bombers' Notebook", "gEnhancements.MM3D.BombersNotebookGuide",
                 { .tooltip = "Ao abrir o Bombers' Notebook, abre também um guia com o prêmio de cada pessoa, o dia e a "
@@ -892,7 +893,8 @@ void DrawEnhancementsMenu() {
                 "Escolher a hora na Song of Double Time", "gEnhancements.Songs.DoubleTimeHourSelect",
                 { .tooltip = "Como no Majora's Mask 3D, escolha para qual hora a Song of Double Time leva você. Use "
                              "esquerda/direita no analógico ou no direcional durante a confirmação. Dá para escolher "
-                             "até o próximo amanhecer ou anoitecer." });
+                             "até o próximo amanhecer ou anoitecer.",
+                  .defaultValue = true });
             UIWidgets::CVarSliderInt(
                 "Ovos Zora para a Bossa Nova", "gEnhancements.Songs.ZoraEggCount", 1, 7, 7,
                 { .tooltip = "Quantidade de ovos necessária para liberar a New Wave Bossa Nova." });

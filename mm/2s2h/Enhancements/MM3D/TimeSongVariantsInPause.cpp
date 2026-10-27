@@ -44,7 +44,7 @@ static const char* sVariantNames[TIME_VARIANT_MAX] = {
 };
 
 static bool IsEnabled() {
-    return CVarGetInteger("gEnhancements.MM3D.TimeSongVariantsInPause", 0);
+    return CVarGetInteger("gEnhancements.MM3D.TimeSongVariantsInPause", 1);
 }
 
 static bool IsVariantAvailable(s32 variant) {
@@ -92,8 +92,9 @@ static void AfterKaleidoDrawPage(PauseContext* pauseCtx, u16 pauseIndex) {
         return;
     }
 
-    char text[48];
-    snprintf(text, sizeof(text), "%s (L)", sVariantNames[sVariant]);
+    char text[64];
+    snprintf(text, sizeof(text), "< %s >", sVariantNames[sVariant]);
+    const char* hint = "L ou C-baixo: trocar a musica";
 
     OPEN_DISPS(gPlayState->state.gfxCtx);
     Gfx_SetupDL39_Overlay(gPlayState->state.gfxCtx);
@@ -102,6 +103,9 @@ static void AfterKaleidoDrawPage(PauseContext* pauseCtx, u16 pauseIndex) {
     GfxPrint_SetColor(&printer, 255, 255, 120, 255);
     GfxPrint_SetPos(&printer, 20 - ((s32)strlen(text) / 2), 4);
     GfxPrint_Printf(&printer, "%s", text);
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    GfxPrint_SetPos(&printer, 20 - ((s32)strlen(hint) / 2), 5);
+    GfxPrint_Printf(&printer, "%s", hint);
 
     CLOSE_PRINTER(printer, OVERLAY_DISP);
     CLOSE_DISPS(gPlayState->state.gfxCtx);

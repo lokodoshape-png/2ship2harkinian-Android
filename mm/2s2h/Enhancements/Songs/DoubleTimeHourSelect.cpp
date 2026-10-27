@@ -36,7 +36,7 @@ static s32 GetTargetHour() {
 extern "C" void DoubleTimeHourSelect_Init(void) {
     sActive = false;
 
-    if (!CVarGetInteger("gEnhancements.Songs.DoubleTimeHourSelect", 0)) {
+    if (!CVarGetInteger("gEnhancements.Songs.DoubleTimeHourSelect", 1)) {
         return;
     }
 
@@ -132,9 +132,17 @@ static void DrawTargetHour() {
     Gfx_SetupDL39_Overlay(gPlayState->state.gfxCtx);
     OPEN_PRINTER(OVERLAY_DISP);
 
+    const char* title = "Avancar ate:";
+    const char* hint = "Esquerda/Direita: escolher a hora";
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    GfxPrint_SetPos(&printer, 20 - ((s32)strlen(title) / 2), 5);
+    GfxPrint_Printf(&printer, "%s", title);
     GfxPrint_SetColor(&printer, 255, 255, 120, 255);
     GfxPrint_SetPos(&printer, 20 - ((s32)strlen(text) / 2), 6);
     GfxPrint_Printf(&printer, "%s", text);
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    GfxPrint_SetPos(&printer, 20 - ((s32)strlen(hint) / 2), 7);
+    GfxPrint_Printf(&printer, "%s", hint);
 
     CLOSE_PRINTER(printer, OVERLAY_DISP);
     CLOSE_DISPS(gPlayState->state.gfxCtx);
