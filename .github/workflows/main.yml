@@ -243,9 +243,17 @@ jobs:
       shell: bash
       # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
       # default renderer on PC because those options only exist there.
+      # Windows checkouts can come with CRLF line endings, so both the patches and the files they touch are
+      # normalised to LF first.
       run: |
-        git -C libultraship apply ../Android/libultraship-android-fixes.patch
-        git -C libultraship apply ../Android/libultraship-pc-fixes.patch
+        for f in src/graphic/Fast3D/gfx_cc.h src/graphic/Fast3D/gfx_opengl.cpp src/graphic/Fast3D/gfx_opengl.h \
+                 src/graphic/Fast3D/gfx_pc.cpp src/config/Config.cpp; do
+          sed -i 's/\r$//' "libultraship/$f"
+        done
+        for p in libultraship-android-fixes libultraship-pc-fixes; do
+          tr -d '\r' < "Android/$p.patch" > "$RUNNER_TEMP/$p.patch"
+          git -C libultraship apply "$RUNNER_TEMP/$p.patch"
+        done
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -368,8 +376,6 @@ jobs:
       run: |
         choco install ninja -y
         Remove-Item -Path "C:\ProgramData\Chocolatey\bin\ccache.exe" -Force -ErrorAction SilentlyContinue
-        # Keep LF line endings so the libultraship patches apply
-        git config --system core.autocrlf false
     - uses: actions/checkout@v4
       with:
         submodules: true
@@ -377,9 +383,17 @@ jobs:
       shell: bash
       # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
       # default renderer on PC because those options only exist there.
+      # Windows checkouts can come with CRLF line endings, so both the patches and the files they touch are
+      # normalised to LF first.
       run: |
-        git -C libultraship apply ../Android/libultraship-android-fixes.patch
-        git -C libultraship apply ../Android/libultraship-pc-fixes.patch
+        for f in src/graphic/Fast3D/gfx_cc.h src/graphic/Fast3D/gfx_opengl.cpp src/graphic/Fast3D/gfx_opengl.h \
+                 src/graphic/Fast3D/gfx_pc.cpp src/config/Config.cpp; do
+          sed -i 's/\r$//' "libultraship/$f"
+        done
+        for p in libultraship-android-fixes libultraship-pc-fixes; do
+          tr -d '\r' < "Android/$p.patch" > "$RUNNER_TEMP/$p.patch"
+          git -C libultraship apply "$RUNNER_TEMP/$p.patch"
+        done
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2.13
       with:
