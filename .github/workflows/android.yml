@@ -116,6 +116,8 @@ jobs:
 
           Este app se chama **2Ship MM3D** e instala separado do 2Ship original: os dois podem ficar no celular. Ele começa do zero na própria pasta \`2S2H-MM3D\` e não mexe nos arquivos do original. Na primeira vez, permita o acesso a todos os arquivos e escolha a sua ROM do Majora's Mask (N64).
 
+          **PC:** os arquivos \`2ship-mm3d-windows-*.zip\` e \`2ship-mm3d-linux-*.zip\` aparecem aqui uns minutos depois. No Windows, extraia o zip numa pasta nova e abra o \`2ship.exe\`. Na primeira vez, ele pede a sua ROM. As opções de cel shading e cor usam o OpenGL, que já vem como padrão.
+
           A ROM e os arquivos do jogo não fazem parte deste download.
 
           Commit: ${GITHUB_SHA} (branch ${GITHUB_REF_NAME})

@@ -5,6 +5,8 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+  contents: write
 jobs:
   # build-linux-self-hosted:
   #   strategy:
@@ -237,6 +239,13 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - name: Apply libultraship fixes
+      shell: bash
+      # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
+      # default renderer on PC because those options only exist there.
+      run: |
+        git -C libultraship apply ../Android/libultraship-android-fixes.patch
+        git -C libultraship apply ../Android/libultraship-pc-fixes.patch
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -323,6 +332,33 @@ jobs:
         path: |
           2ship.appimage
           readme.txt
+    - name: Publish to release
+      if: github.event_name == 'push' && (github.ref_name == 'android' || github.ref_name == 'ci/android-apk')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      # Attaches the PC build to the release the Android workflow makes for the same commit, waiting for it if
+      # needed. If that release never shows up, the PC build gets a release of its own.
+      run: |
+        set -e
+        asset="2ship-mm3d-linux-${GITHUB_SHA::7}.zip"
+        zip -j "$asset" 2ship.appimage readme.txt
+        tag=""
+        for i in $(seq 1 60); do
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 30 --json tagName -q '.[].tagName' | while read t; do
+            [ "$(gh release view "$t" -R "$GITHUB_REPOSITORY" --json targetCommitish -q .targetCommitish)" = "$GITHUB_SHA" ] && echo "$t" && break
+          done)
+          [ -n "$tag" ] && break
+          sleep 30
+        done
+        if [ -z "$tag" ]; then
+          tag="build-pc-${GITHUB_RUN_NUMBER}"
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "2Ship MM3D PC - build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
+              --notes "Versão para PC do 2Ship MM3D. Commit: ${GITHUB_SHA}"
+        fi
+        gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber
 
   build-windows:
     needs: generate-2ship-otr
@@ -332,9 +368,18 @@ jobs:
       run: |
         choco install ninja -y
         Remove-Item -Path "C:\ProgramData\Chocolatey\bin\ccache.exe" -Force -ErrorAction SilentlyContinue
+        # Keep LF line endings so the libultraship patches apply
+        git config --global core.autocrlf false
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - name: Apply libultraship fixes
+      shell: bash
+      # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
+      # default renderer on PC because those options only exist there.
+      run: |
+        git -C libultraship apply ../Android/libultraship-android-fixes.patch
+        git -C libultraship apply ../Android/libultraship-pc-fixes.patch
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2.13
       with:
@@ -380,3 +425,30 @@ jobs:
       with:
         name: 2ship-windows
         path: 2ship-windows
+    - name: Publish to release
+      if: github.event_name == 'push' && (github.ref_name == 'android' || github.ref_name == 'ci/android-apk')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      # Attaches the PC build to the release the Android workflow makes for the same commit, waiting for it if
+      # needed. If that release never shows up, the PC build gets a release of its own.
+      run: |
+        set -e
+        asset="2ship-mm3d-windows-${GITHUB_SHA::7}.zip"
+        cp _packages/2ship-windows.zip "$asset"
+        tag=""
+        for i in $(seq 1 60); do
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 30 --json tagName -q '.[].tagName' | while read t; do
+            [ "$(gh release view "$t" -R "$GITHUB_REPOSITORY" --json targetCommitish -q .targetCommitish)" = "$GITHUB_SHA" ] && echo "$t" && break
+          done)
+          [ -n "$tag" ] && break
+          sleep 30
+        done
+        if [ -z "$tag" ]; then
+          tag="build-pc-${GITHUB_RUN_NUMBER}"
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "2Ship MM3D PC - build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
+              --notes "Versão para PC do 2Ship MM3D. Commit: ${GITHUB_SHA}"
+        fi
+        gh release upload "$tag" "$asset" -R "$GITHUB_REPOSITORY" --clobber
