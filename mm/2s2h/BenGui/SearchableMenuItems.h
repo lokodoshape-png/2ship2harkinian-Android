@@ -253,6 +253,7 @@ extern std::shared_ptr<std::vector<Ship::WindowBackend>> availableWindowBackends
 extern std::unordered_map<Ship::WindowBackend, const char*> availableWindowBackendsMap;
 extern Ship::WindowBackend configWindowBackend;
 extern void UpdateWindowBackendObjects();
+extern void DrawWindowBackendButtons();
 
 std::vector<MainMenuEntry> menuEntries;
 static ImGuiTextFilter menuSearch;
@@ -1799,19 +1800,7 @@ void SearchMenuGetItem(widgetInfo& widget) {
                 }
             } break;
             case WIDGET_VIDEO_BACKEND: {
-                if (UIWidgets::Combobox("API de Renderização (requer reinício)", &configWindowBackend,
-                                        availableWindowBackendsMap,
-                                        { .color = menuTheme[menuThemeIndex],
-                                          .tooltip = widget.widgetTooltip,
-                                          .disabled = availableWindowBackends->size() <= 1,
-                                          .disabledTooltip = "Só existe uma API de renderização nesta plataforma." })) {
-                    Ship::Context::GetInstance()->GetConfig()->SetInt("Window.Backend.Id",
-                                                                      static_cast<int32_t>(configWindowBackend));
-                    Ship::Context::GetInstance()->GetConfig()->SetString("Window.Backend.Name",
-                                                                         windowBackendsMap.at(configWindowBackend));
-                    Ship::Context::GetInstance()->GetConfig()->Save();
-                    UpdateWindowBackendObjects();
-                }
+                DrawWindowBackendButtons();
             } break;
             case WIDGET_SEPARATOR:
                 ImGui::Separator();

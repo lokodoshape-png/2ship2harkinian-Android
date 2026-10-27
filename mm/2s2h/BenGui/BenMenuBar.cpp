@@ -109,6 +109,34 @@ std::shared_ptr<std::vector<Ship::WindowBackend>> availableWindowBackends;
 std::unordered_map<Ship::WindowBackend, const char*> availableWindowBackendsMap;
 Ship::WindowBackend configWindowBackend;
 
+void UpdateWindowBackendObjects();
+
+// One button per renderer instead of a dropdown: picking one saves it for the next launch.
+void DrawWindowBackendButtons() {
+    if (availableWindowBackends == nullptr || availableWindowBackends->size() <= 1) {
+        return;
+    }
+    Ship::WindowBackend runningWindowBackend = Ship::Context::GetInstance()->GetWindow()->GetWindowBackend();
+    ImGui::Text("API de renderização (vale ao reabrir o jogo):");
+    for (auto backend : *availableWindowBackends) {
+        std::string label = windowBackendsMap[backend];
+        if (backend == configWindowBackend) {
+            label += (backend == runningWindowBackend) ? " (em uso)" : " (escolhida, reabra o jogo)";
+        }
+        label += "##WindowBackend";
+        if (UIWidgets::Button(label.c_str(), { .color = backend == configWindowBackend ? UIWidgets::Colors::Indigo
+                                                                                       : UIWidgets::Colors::Gray }) &&
+            backend != configWindowBackend) {
+            Ship::Context::GetInstance()->GetConfig()->SetInt("Window.Backend.Id", static_cast<int32_t>(backend));
+            Ship::Context::GetInstance()->GetConfig()->SetString("Window.Backend.Name", windowBackendsMap[backend]);
+            Ship::Context::GetInstance()->GetConfig()->Save();
+            UpdateWindowBackendObjects();
+        }
+    }
+    UIWidgets::Tooltip("DirectX 11 costuma rodar mais liso no Windows. O contorno preto do cel shading só existe no "
+                       "OpenGL; as cores MM3D e o cel shading funcionam nos dois.");
+}
+
 void UpdateWindowBackendObjects() {
     Ship::WindowBackend runningWindowBackend = Ship::Context::GetInstance()->GetWindow()->GetWindowBackend();
     int32_t configWindowBackendId = Ship::Context::GetInstance()->GetConfig()->GetInt("Window.Backend.Id", -1);
@@ -325,18 +353,7 @@ void DrawSettingsMenu() {
             // UIWidgets::PaddedSeparator(true, true, 3.0f, 3.0f);
             //  #endregion */
 
-            if (UIWidgets::Combobox(
-                    "API de renderização (precisa reabrir)", &configWindowBackend, availableWindowBackendsMap,
-                    { .tooltip = "Define a API de renderização usada pelo jogo. Precisa reabrir o app para valer.",
-                      .disabled = availableWindowBackends->size() <= 1,
-                      .disabledTooltip = "Só há uma API de renderização disponível nesta plataforma." })) {
-                Ship::Context::GetInstance()->GetConfig()->SetInt("Window.Backend.Id",
-                                                                  static_cast<int32_t>(configWindowBackend));
-                Ship::Context::GetInstance()->GetConfig()->SetString("Window.Backend.Name",
-                                                                     windowBackendsMap.at(configWindowBackend));
-                Ship::Context::GetInstance()->GetConfig()->Save();
-                UpdateWindowBackendObjects();
-            }
+            DrawWindowBackendButtons();
 
             if (Ship::Context::GetInstance()->GetWindow()->CanDisableVerticalSync()) {
                 UIWidgets::CVarCheckbox("Ativar Vsync", CVAR_VSYNC_ENABLED);

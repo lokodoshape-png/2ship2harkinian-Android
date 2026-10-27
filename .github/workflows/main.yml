@@ -241,16 +241,17 @@ jobs:
         submodules: true
     - name: Apply libultraship fixes
       shell: bash
-      # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
-      # default renderer on PC because those options only exist there.
+      # Same renderer changes as the Android APK: MM3D colour options and cel shading (OpenGL and DirectX 11),
+      # outlines (OpenGL).
       # Windows checkouts can come with CRLF line endings, so both the patches and the files they touch are
       # normalised to LF first.
       run: |
         for f in src/graphic/Fast3D/gfx_cc.h src/graphic/Fast3D/gfx_opengl.cpp src/graphic/Fast3D/gfx_opengl.h \
-                 src/graphic/Fast3D/gfx_pc.cpp src/config/Config.cpp; do
+                 src/graphic/Fast3D/gfx_pc.cpp src/graphic/Fast3D/gfx_cc.cpp \
+                 src/graphic/Fast3D/gfx_direct3d_common.cpp src/graphic/Fast3D/gfx_direct3d11.cpp; do
           sed -i 's/\r$//' "libultraship/$f"
         done
-        for p in libultraship-android-fixes libultraship-pc-fixes; do
+        for p in libultraship-android-fixes; do
           tr -d '\r' < "Android/$p.patch" > "$RUNNER_TEMP/$p.patch"
           git -C libultraship apply "$RUNNER_TEMP/$p.patch"
         done
@@ -385,16 +386,17 @@ jobs:
         submodules: true
     - name: Apply libultraship fixes
       shell: bash
-      # Same renderer changes as the Android APK (MM3D colour options, cel shading, outlines), plus OpenGL as the
-      # default renderer on PC because those options only exist there.
+      # Same renderer changes as the Android APK: MM3D colour options and cel shading (OpenGL and DirectX 11),
+      # outlines (OpenGL).
       # Windows checkouts can come with CRLF line endings, so both the patches and the files they touch are
       # normalised to LF first.
       run: |
         for f in src/graphic/Fast3D/gfx_cc.h src/graphic/Fast3D/gfx_opengl.cpp src/graphic/Fast3D/gfx_opengl.h \
-                 src/graphic/Fast3D/gfx_pc.cpp src/config/Config.cpp; do
+                 src/graphic/Fast3D/gfx_pc.cpp src/graphic/Fast3D/gfx_cc.cpp \
+                 src/graphic/Fast3D/gfx_direct3d_common.cpp src/graphic/Fast3D/gfx_direct3d11.cpp; do
           sed -i 's/\r$//' "libultraship/$f"
         done
-        for p in libultraship-android-fixes libultraship-pc-fixes; do
+        for p in libultraship-android-fixes; do
           tr -d '\r' < "Android/$p.patch" > "$RUNNER_TEMP/$p.patch"
           git -C libultraship apply "$RUNNER_TEMP/$p.patch"
         done

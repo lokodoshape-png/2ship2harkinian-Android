@@ -1,5 +1,17 @@
+diff --git a/src/graphic/Fast3D/gfx_cc.cpp b/src/graphic/Fast3D/gfx_cc.cpp
+index debf63f..26d26a1 100644
+--- a/src/graphic/Fast3D/gfx_cc.cpp
++++ b/src/graphic/Fast3D/gfx_cc.cpp
+@@ -30,6 +30,7 @@ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeat
+     cc_features->used_blend[0] = false;
+     cc_features->used_blend[1] = false;
+     cc_features->num_inputs = 0;
++    cc_features->shade_input = (shader_id1 >> GFX_CC_SHADE_INPUT_SHIFT) & 7;
+ 
+     for (int c = 0; c < 2; c++) {
+         for (int i = 0; i < 2; i++) {
 diff --git a/src/graphic/Fast3D/gfx_cc.h b/src/graphic/Fast3D/gfx_cc.h
-index 4783ca2..7357b02 100644
+index 4783ca2..78a0d60 100644
 --- a/src/graphic/Fast3D/gfx_cc.h
 +++ b/src/graphic/Fast3D/gfx_cc.h
 @@ -70,6 +70,9 @@ struct ColorCombinerKey {
@@ -12,6 +24,186 @@ index 4783ca2..7357b02 100644
  #define SHADER_MAX_TEXTURES 6
  #define SHADER_FIRST_TEXTURE 0
  #define SHADER_FIRST_MASK_TEXTURE 2
+@@ -94,6 +97,7 @@ struct CCFeatures {
+     bool do_multiply[2][2];
+     bool do_mix[2][2];
+     bool color_alpha_same[2];
++    int shade_input; // combiner input (1-7) carrying vertex shade, 0 if none (see GFX_CC_SHADE_INPUT_SHIFT)
+ };
+ 
+ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
+diff --git a/src/graphic/Fast3D/gfx_direct3d11.cpp b/src/graphic/Fast3D/gfx_direct3d11.cpp
+index bc96472..d134a8b 100644
+--- a/src/graphic/Fast3D/gfx_direct3d11.cpp
++++ b/src/graphic/Fast3D/gfx_direct3d11.cpp
+@@ -29,6 +29,7 @@
+ #include "window/gui/Gui.h"
+ #include "Context.h"
+ #include "config/ConsoleVariable.h"
++#include <public/bridge/consolevariablebridge.h>
+ 
+ #include "gfx_cc.h"
+ #include "gfx_rendering_api.h"
+@@ -42,7 +43,10 @@ namespace {
+ struct PerFrameCB {
+     uint32_t noise_frame;
+     float noise_scale;
+-    uint32_t padding[2]; // constant buffers must be multiples of 16 bytes in size
++    float color_brightness;
++    float color_saturation;
++    float color_cel_bands;
++    uint32_t padding[3]; // constant buffers must be multiples of 16 bytes in size
+ };
+ 
+ struct PerDrawCB {
+@@ -414,7 +418,7 @@ static struct ShaderProgram* gfx_d3d11_create_and_load_new_shader(uint64_t shade
+     CCFeatures cc_features;
+     gfx_cc_get_features(shader_id0, shader_id1, &cc_features);
+ 
+-    char buf[8192];
++    char buf[16384];
+     size_t len, num_floats;
+ 
+     gfx_direct3d_common_build_shader(buf, len, num_floats, cc_features, false,
+@@ -824,6 +828,22 @@ static void gfx_d3d11_start_frame(void) {
+         // No high values, as noise starts to look ugly
+         d3d.per_frame_cb_data.noise_frame = 0;
+     }
++
++    // Same colour options as the OpenGL renderer (2Ship MM3D lighting and cel shading); uploaded with the rest of
++    // the per-frame data when drawing to a framebuffer starts.
++    if (CVarGetInteger("gEnhancements.MM3D.Lighting.Enabled", 0)) {
++        d3d.per_frame_cb_data.color_brightness =
++            CVarGetInteger("gEnhancements.MM3D.Lighting.Brightness", 115) / 100.0f;
++        d3d.per_frame_cb_data.color_saturation =
++            CVarGetInteger("gEnhancements.MM3D.Lighting.Saturation", 115) / 100.0f;
++    } else {
++        d3d.per_frame_cb_data.color_brightness = 1.0f;
++        d3d.per_frame_cb_data.color_saturation = 1.0f;
++    }
++    d3d.per_frame_cb_data.color_cel_bands =
++        CVarGetInteger("gEnhancements.Graphics.CelShading", 0)
++            ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 3)
++            : 0.0f;
+ }
+ 
+ static void gfx_d3d11_end_frame(void) {
+diff --git a/src/graphic/Fast3D/gfx_direct3d_common.cpp b/src/graphic/Fast3D/gfx_direct3d_common.cpp
+index 8d543aa..6416822 100644
+--- a/src/graphic/Fast3D/gfx_direct3d_common.cpp
++++ b/src/graphic/Fast3D/gfx_direct3d_common.cpp
+@@ -20,6 +20,9 @@ static void append_line(char* buf, size_t* len, const char* str) {
+ 
+ #define RAND_NOISE "((random(float3(floor(screenSpace.xy * noise_scale), noise_frame)) + 1.0) / 2.0)"
+ 
++// Combiner input (1-4) read through celShade, the toon-quantised vertex shade, in the shader being built; 0 = none.
++static int cel_shade_input = 0;
++
+ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha,
+                                       bool first_cycle, bool hint_single_element) {
+     if (!only_alpha) {
+@@ -30,12 +33,24 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
+             case SHADER_1:
+                 return with_alpha ? "float4(1.0, 1.0, 1.0, 1.0)" : "float3(1.0, 1.0, 1.0)";
+             case SHADER_INPUT_1:
++                if (cel_shade_input == 1) {
++                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
++                }
+                 return with_alpha || !inputs_have_alpha ? "input.input1" : "input.input1.rgb";
+             case SHADER_INPUT_2:
++                if (cel_shade_input == 2) {
++                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
++                }
+                 return with_alpha || !inputs_have_alpha ? "input.input2" : "input.input2.rgb";
+             case SHADER_INPUT_3:
++                if (cel_shade_input == 3) {
++                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
++                }
+                 return with_alpha || !inputs_have_alpha ? "input.input3" : "input.input3.rgb";
+             case SHADER_INPUT_4:
++                if (cel_shade_input == 4) {
++                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
++                }
+                 return with_alpha || !inputs_have_alpha ? "input.input4" : "input.input4.rgb";
+             case SHADER_TEXEL0:
+                 return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
+@@ -73,13 +88,13 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
+             case SHADER_1:
+                 return "1.0";
+             case SHADER_INPUT_1:
+-                return "input.input1.a";
++                return cel_shade_input == 1 ? "celShade.a" : "input.input1.a";
+             case SHADER_INPUT_2:
+-                return "input.input2.a";
++                return cel_shade_input == 2 ? "celShade.a" : "input.input2.a";
+             case SHADER_INPUT_3:
+-                return "input.input3.a";
++                return cel_shade_input == 3 ? "celShade.a" : "input.input3.a";
+             case SHADER_INPUT_4:
+-                return "input.input4.a";
++                return cel_shade_input == 4 ? "celShade.a" : "input.input4.a";
+             case SHADER_TEXEL0:
+                 return first_cycle ? "texVal0.a" : "texVal1.a";
+             case SHADER_TEXEL0A:
+@@ -138,6 +153,10 @@ static void append_formula(char* buf, size_t* len, const uint8_t c[2][4], bool d
+ 
+ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_floats, const CCFeatures& cc_features,
+                                       bool include_root_signature, bool three_point_filtering, bool use_srgb) {
++    cel_shade_input = cc_features.opt_fog ? cc_features.shade_input : 0;
++    if (cel_shade_input > cc_features.num_inputs || cel_shade_input > 4) {
++        cel_shade_input = 0;
++    }
+     len = 0;
+     num_floats = 4;
+ 
+@@ -215,6 +234,9 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
+     append_line(buf, &len, "cbuffer PerFrameCB : register(b0) {");
+     append_line(buf, &len, "    uint noise_frame;");
+     append_line(buf, &len, "    float noise_scale;");
++    append_line(buf, &len, "    float color_brightness;");
++    append_line(buf, &len, "    float color_saturation;");
++    append_line(buf, &len, "    float color_cel_bands;");
+     append_line(buf, &len, "}");
+ 
+     append_line(buf, &len, "float random(in float3 value) {");
+@@ -417,6 +439,20 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
+         }
+     }
+ 
++    if (cel_shade_input != 0) {
++        // Cel shading: the vertex lighting snaps to a few flat tones; texture detail is left alone.
++        len += sprintf(buf + len, "    %s celShade = input.input%d;\r\n", cc_features.opt_alpha ? "float4" : "float3",
++                       cel_shade_input);
++        append_line(buf, &len, "    if (color_cel_bands > 0.5) {");
++        append_line(buf, &len, "        float celLight = max(celShade.r, max(celShade.g, celShade.b));");
++        append_line(buf, &len, "        float celX = celLight * color_cel_bands;");
++        append_line(buf, &len, "        float celW = max(fwidth(celX), 0.0001);");
++        append_line(buf, &len,
++                    "        float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;");
++        append_line(buf, &len, "        float celTone = min(celStep / color_cel_bands, 1.0);");
++        append_line(buf, &len, "        if (celLight > 0.001) celShade.rgb *= celTone / celLight;");
++        append_line(buf, &len, "    }");
++    }
+     append_str(buf, &len, cc_features.opt_alpha ? "    float4 texel;" : "    float3 texel;");
+     for (int c = 0; c < (cc_features.opt_2cyc ? 2 : 1); c++) {
+         if (c == 1) {
+@@ -457,8 +493,16 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
+ 
+     append_str(buf, &len, "texel = WRAP(texel, -0.51, 1.51);");
+     append_str(buf, &len, "texel = clamp(texel, 0.0, 1.0);");
++    // MM3D-style colour options: brightness and saturation for everything the game draws.
++    append_line(buf, &len,
++                "    texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, 0.114)).xxx, texel.rgb, "
++                "color_saturation) * color_brightness);");
+     // TODO discard if alpha is 0?
+     if (cc_features.opt_fog) {
++        // Cel shading gives the 3D world (fogged draws) more vivid, cartoon-like colours.
++        append_line(buf, &len,
++                    "    if (color_cel_bands > 0.5) texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, "
++                    "0.114)).xxx, texel.rgb, 1.25));");
+         if (cc_features.opt_alpha) {
+             append_line(buf, &len, "    texel = float4(lerp(texel.rgb, input.fog.rgb, input.fog.a), texel.a);");
+         } else {
 diff --git a/src/graphic/Fast3D/gfx_opengl.cpp b/src/graphic/Fast3D/gfx_opengl.cpp
 index f13b37f..1952ac0 100644
 --- a/src/graphic/Fast3D/gfx_opengl.cpp
