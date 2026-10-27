@@ -1,34 +1,38 @@
 diff --git a/src/graphic/Fast3D/gfx_cc.cpp b/src/graphic/Fast3D/gfx_cc.cpp
-index debf63f..26d26a1 100644
+index debf63f..b5358ac 100644
 --- a/src/graphic/Fast3D/gfx_cc.cpp
 +++ b/src/graphic/Fast3D/gfx_cc.cpp
-@@ -30,6 +30,7 @@ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeat
+@@ -30,6 +30,8 @@ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeat
      cc_features->used_blend[0] = false;
      cc_features->used_blend[1] = false;
      cc_features->num_inputs = 0;
 +    cc_features->shade_input = (shader_id1 >> GFX_CC_SHADE_INPUT_SHIFT) & 7;
++    cc_features->opt_world = (shader_id1 & GFX_CC_OPT_WORLD) != 0;
  
      for (int c = 0; c < 2; c++) {
          for (int i = 0; i < 2; i++) {
 diff --git a/src/graphic/Fast3D/gfx_cc.h b/src/graphic/Fast3D/gfx_cc.h
-index 4783ca2..78a0d60 100644
+index 4783ca2..2020652 100644
 --- a/src/graphic/Fast3D/gfx_cc.h
 +++ b/src/graphic/Fast3D/gfx_cc.h
-@@ -70,6 +70,9 @@ struct ColorCombinerKey {
+@@ -70,6 +70,11 @@ struct ColorCombinerKey {
  #endif
  };
  
 +// shader_id1 bits 24-26: which combiner input (1-7) carries vertex shade, 0 if none. Used for cel shading.
 +#define GFX_CC_SHADE_INPUT_SHIFT 24
++// shader_id1 bit 27: the draw is depth tested, i.e. part of the 3D world rather than the HUD. Used for cel shading.
++#define GFX_CC_OPT_WORLD (1u << 27)
 +
  #define SHADER_MAX_TEXTURES 6
  #define SHADER_FIRST_TEXTURE 0
  #define SHADER_FIRST_MASK_TEXTURE 2
-@@ -94,6 +97,7 @@ struct CCFeatures {
+@@ -94,6 +99,8 @@ struct CCFeatures {
      bool do_multiply[2][2];
      bool do_mix[2][2];
      bool color_alpha_same[2];
 +    int shade_input; // combiner input (1-7) carrying vertex shade, 0 if none (see GFX_CC_SHADE_INPUT_SHIFT)
++    bool opt_world;  // depth-tested draw (see GFX_CC_OPT_WORLD)
  };
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
@@ -89,7 +93,7 @@ index bc96472..d134a8b 100644
  
  static void gfx_d3d11_end_frame(void) {
 diff --git a/src/graphic/Fast3D/gfx_direct3d_common.cpp b/src/graphic/Fast3D/gfx_direct3d_common.cpp
-index 8d543aa..6416822 100644
+index 8d543aa..128cd03 100644
 --- a/src/graphic/Fast3D/gfx_direct3d_common.cpp
 +++ b/src/graphic/Fast3D/gfx_direct3d_common.cpp
 @@ -20,6 +20,9 @@ static void append_line(char* buf, size_t* len, const char* str) {
@@ -149,7 +153,7 @@ index 8d543aa..6416822 100644
  
  void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_floats, const CCFeatures& cc_features,
                                        bool include_root_signature, bool three_point_filtering, bool use_srgb) {
-+    cel_shade_input = cc_features.opt_fog ? cc_features.shade_input : 0;
++    cel_shade_input = cc_features.opt_world ? cc_features.shade_input : 0;
 +    if (cel_shade_input > cc_features.num_inputs || cel_shade_input > 4) {
 +        cel_shade_input = 0;
 +    }
@@ -177,7 +181,7 @@ index 8d543aa..6416822 100644
 +        append_line(buf, &len, "    if (color_cel_bands > 0.5) {");
 +        append_line(buf, &len, "        float celLight = max(celShade.r, max(celShade.g, celShade.b));");
 +        append_line(buf, &len, "        float celX = celLight * color_cel_bands;");
-+        append_line(buf, &len, "        float celW = max(fwidth(celX), 0.0001);");
++        append_line(buf, &len, "        float celW = max(fwidth(celX) * 1.5, 0.15);");
 +        append_line(buf, &len,
 +                    "        float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;");
 +        append_line(buf, &len, "        float celTone = min(celStep / color_cel_bands, 1.0);");
@@ -205,7 +209,7 @@ index 8d543aa..6416822 100644
              append_line(buf, &len, "    texel = float4(lerp(texel.rgb, input.fog.rgb, input.fog.a), texel.a);");
          } else {
 diff --git a/src/graphic/Fast3D/gfx_opengl.cpp b/src/graphic/Fast3D/gfx_opengl.cpp
-index f13b37f..1952ac0 100644
+index f13b37f..fa6ec29 100644
 --- a/src/graphic/Fast3D/gfx_opengl.cpp
 +++ b/src/graphic/Fast3D/gfx_opengl.cpp
 @@ -58,6 +58,9 @@ struct ShaderProgram {
@@ -300,8 +304,8 @@ index f13b37f..1952ac0 100644
  static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shader_id0, uint32_t shader_id1) {
      struct CCFeatures cc_features;
      gfx_cc_get_features(shader_id0, shader_id1, &cc_features);
-+    // Toon shading applies to the vertex shade of fogged (3D world) draws; gfx_pc stores which input it is.
-+    cel_shade_input = cc_features.opt_fog ? (int)((shader_id1 >> GFX_CC_SHADE_INPUT_SHIFT) & 7) : 0;
++    // Toon shading applies to the vertex shade of depth-tested (3D world) draws; gfx_pc stores which input it is.
++    cel_shade_input = cc_features.opt_world ? cc_features.shade_input : 0;
 +    if (cel_shade_input > cc_features.num_inputs || cel_shade_input > 4) {
 +        cel_shade_input = 0;
 +    }
@@ -323,14 +327,14 @@ index f13b37f..1952ac0 100644
      }
  
 +    if (cel_shade_input != 0) {
-+        // Cel shading: the light falling on the surface snaps to a few flat tones, with a thin soft edge so the
++        // Cel shading: the light falling on the surface snaps to a few flat tones, with a soft edge so the
 +        // bands do not shimmer. Texture detail is left alone, only the lighting is flattened.
 +        fs_len += sprintf(fs_buf + fs_len, "%s celShade = vInput%d;\n", cc_features.opt_alpha ? "vec4" : "vec3",
 +                          cel_shade_input);
 +        append_line(fs_buf, &fs_len, "if (color_cel_bands > 0.5) {");
 +        append_line(fs_buf, &fs_len, "    float celLight = max(celShade.r, max(celShade.g, celShade.b));");
 +        append_line(fs_buf, &fs_len, "    float celX = celLight * color_cel_bands;");
-+        append_line(fs_buf, &fs_len, "    float celW = max(fwidth(celX), 0.0001);");
++        append_line(fs_buf, &fs_len, "    float celW = max(fwidth(celX) * 1.5, 0.15);");
 +        append_line(fs_buf, &fs_len,
 +                    "    float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, fract(celX)) + 1.0;");
 +        append_line(fs_buf, &fs_len, "    float celTone = min(celStep / color_cel_bands, 1.0);");
@@ -598,7 +602,7 @@ index 95be897..912c04e 100644
 +
  #endif
 diff --git a/src/graphic/Fast3D/gfx_pc.cpp b/src/graphic/Fast3D/gfx_pc.cpp
-index fccd6fc..3819021 100644
+index fccd6fc..befb4cb 100644
 --- a/src/graphic/Fast3D/gfx_pc.cpp
 +++ b/src/graphic/Fast3D/gfx_pc.cpp
 @@ -30,6 +30,9 @@
@@ -624,7 +628,17 @@ index fccd6fc..3819021 100644
      comb->shader_id0 = shader_id0;
      comb->shader_id1 = shader_id1;
      comb->used_textures[0] = used_textures[0];
-@@ -4100,6 +4109,11 @@ void gfx_start_frame(void) {
+@@ -1512,6 +1521,9 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
+     if (use_grayscale) {
+         cc_options |= SHADER_OPT(GRAYSCALE);
+     }
++    if (depth_test) {
++        cc_options |= GFX_CC_OPT_WORLD;
++    }
+     if (g_rdp.loaded_texture[0].masked) {
+         cc_options |= SHADER_OPT(TEXEL0_MASK);
+     }
+@@ -4100,6 +4112,11 @@ void gfx_start_frame(void) {
  
      bool different_size = gfx_current_dimensions.width != gfx_current_game_window_viewport.width ||
                            gfx_current_dimensions.height != gfx_current_game_window_viewport.height;
@@ -636,7 +650,7 @@ index fccd6fc..3819021 100644
      if (different_size || gfx_msaa_level > 1) {
          game_renders_to_framebuffer = true;
          if (different_size) {
-@@ -4182,6 +4196,11 @@ void gfx_run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_replacemen
+@@ -4182,6 +4199,11 @@ void gfx_run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_replacemen
      currentDir = std::stack<std::string>();
  
      if (game_renders_to_framebuffer) {
