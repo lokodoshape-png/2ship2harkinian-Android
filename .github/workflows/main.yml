@@ -369,7 +369,7 @@ jobs:
         choco install ninja -y
         Remove-Item -Path "C:\ProgramData\Chocolatey\bin\ccache.exe" -Force -ErrorAction SilentlyContinue
         # Keep LF line endings so the libultraship patches apply
-        git config --global core.autocrlf false
+        git config --system core.autocrlf false
     - uses: actions/checkout@v4
       with:
         submodules: true
