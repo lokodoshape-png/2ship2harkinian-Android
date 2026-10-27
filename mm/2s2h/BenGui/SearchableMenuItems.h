@@ -1225,15 +1225,20 @@ void AddEnhancements() {
                 WIDGET_CVAR_CHECKBOX },
               { "Mira do Arco", "gEnhancements.Graphics.BowReticle", "Mostra uma mira ao puxar uma flecha.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Cel Shading (Visual de Desenho)", "gEnhancements.Graphics.CelShading",
-                "Divide a luz do mundo 3D em poucas faixas de cor chapada, num visual de desenho animado. Não afeta "
-                "o HUD.",
+              { "Cel Shading (Visual de Anime)", "gEnhancements.Graphics.CelShading",
+                "Visual de anime estilo DBZ Budokai: a luz do mundo 3D vira poucos tons chapados de sombra, as "
+                "cores ficam mais vivas e tudo ganha contorno preto. As texturas e o HUD continuam iguais.",
                 WIDGET_CVAR_CHECKBOX },
-              { "Faixas de Sombra: %d",
+              { "Tons de Sombra: %d",
                 "gEnhancements.Graphics.CelShadingBands",
-                "Menos faixas = visual mais chapado; mais faixas = mais suave.",
+                "2 = luz e sombra bem marcadas, como no Budokai; mais tons = mais suave.",
                 WIDGET_CVAR_SLIDER_INT,
-                { 2, 8, 4 } },
+                { 2, 6, 3 } },
+              { "Espessura do Contorno: %d",
+                "gEnhancements.Graphics.CelOutlineThickness",
+                "Largura das linhas pretas do cel shading.",
+                WIDGET_CVAR_SLIDER_INT,
+                { 1, 4, 2 } },
               { "Remover Barras Pretas", "gEnhancements.Graphics.DisableBlackBars",
                 "Remove as barras pretas nas cenas e ao mirar com Z.\nObs.: podem aparecer pequenas falhas visuais que "
                 "as barras escondiam.\nDesative esta opção antes de relatar um bug.",
@@ -1336,7 +1341,8 @@ void AddEnhancements() {
                 "Aviso: ainda faz pouca coisa. Mais cenas serão puladas com o tempo.", WIDGET_CVAR_CHECKBOX },
               { "Segurar B para Acelerar Cenas", "gEnhancements.Cutscenes.HoldBToFastForward",
                 "Durante uma cena, segure B por meio segundo para ela passar bem mais rápido. A cena roda "
-                "inteira, só que acelerada, então nada do jogo é pulado.",
+                "inteira, só que acelerada, então nada do jogo é pulado. Segurar B também passa os "
+                "diálogos sozinho (menos as perguntas, que continuam esperando o A).",
                 WIDGET_CVAR_CHECKBOX },
               { "Velocidade das Cenas Aceleradas: %dx",
                 "gEnhancements.Cutscenes.FastForwardSpeed",

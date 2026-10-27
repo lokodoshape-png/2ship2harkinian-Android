@@ -565,7 +565,8 @@ void DrawEnhancementsMenu() {
             UIWidgets::CVarCheckbox("Segurar B para acelerar cenas", "gEnhancements.Cutscenes.HoldBToFastForward",
                                     { .tooltip = "Durante uma cena, segure B por meio segundo para ela passar bem "
                                                  "mais rápido. A cena roda inteira, só que acelerada, então nada do "
-                                                 "jogo é pulado. Combine com Texto rápido para passar as falas." });
+                                                 "jogo é pulado. Segurar B também passa os diálogos sozinho "
+                                                 "(menos as perguntas, que continuam esperando o A)." });
             if (CVarGetInteger("gEnhancements.Cutscenes.HoldBToFastForward", 0)) {
                 UIWidgets::CVarSliderInt("Velocidade das cenas aceleradas: %dx",
                                          "gEnhancements.Cutscenes.FastForwardSpeed", 2, 8, 5);
@@ -710,12 +711,20 @@ void DrawEnhancementsMenu() {
             UIWidgets::CVarCheckbox("Mira do arco", "gEnhancements.Graphics.BowReticle",
                                     { .tooltip = "Mostra uma mira ao puxar uma flecha" });
             UIWidgets::CVarCheckbox(
-                "Cel shading (visual de desenho)", "gEnhancements.Graphics.CelShading",
-                { .tooltip = "Divide a luz do mundo 3D em poucas faixas de cor chapada, num visual de desenho "
-                             "animado. Não afeta o HUD. Vale na hora." });
+                "Cel shading (visual de anime)", "gEnhancements.Graphics.CelShading",
+                { .tooltip = "Visual de anime estilo DBZ Budokai: a luz do mundo 3D vira poucos tons chapados de "
+                             "sombra, as cores ficam mais vivas e tudo ganha contorno preto. As texturas e o HUD "
+                             "continuam iguais. Vale na hora." });
             if (CVarGetInteger("gEnhancements.Graphics.CelShading", 0)) {
-                UIWidgets::CVarSliderInt("Faixas de sombra: %d", "gEnhancements.Graphics.CelShadingBands", 2, 8, 4);
-                UIWidgets::Tooltip("Menos faixas = visual mais chapado; mais faixas = mais suave.");
+                UIWidgets::CVarSliderInt("Tons de sombra: %d", "gEnhancements.Graphics.CelShadingBands", 2, 6, 3);
+                UIWidgets::Tooltip("2 = luz e sombra bem marcadas, como no Budokai; mais tons = mais suave.");
+                UIWidgets::CVarCheckbox(
+                    "Contorno preto", "gEnhancements.Graphics.CelOutline",
+                    { .tooltip = "Desenha linhas pretas em volta dos personagens e objetos.", .defaultValue = true });
+                if (CVarGetInteger("gEnhancements.Graphics.CelOutline", 1)) {
+                    UIWidgets::CVarSliderInt("Espessura do contorno: %d", "gEnhancements.Graphics.CelOutlineThickness",
+                                             1, 4, 2);
+                }
             }
             if (UIWidgets::CVarCheckbox("Itens soltos em 3D", "gEnhancements.Graphics.3DItemDrops",
                                         { .tooltip = "Deixa os itens que caem no chão em 3D" })) {
