@@ -1,7 +1,10 @@
 name: generate-builds
 on:
   push:
-  pull_request:
+    branches: [ mm3d-4.0 ]
+  workflow_dispatch:
+permissions:
+  contents: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -73,82 +76,6 @@ jobs:
         name: 2ship.o2r
         path: 2ship.o2r
         retention-days: 3
-
-  build-macos:
-    needs: generate-2ship-otr
-    runs-on: macos-14
-    steps:
-    - name: Git Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Configure ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        create-symlink: true
-        save: ${{ github.ref_name == github.event.repository.default_branch }}
-        key: ${{ runner.os }}-14-ccache-${{ github.ref }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-14-ccache-${{ github.ref }}
-          ${{ runner.os }}-14-ccache
-    # Needed to apply sudo for macports cache restore
-    - name: Install gtar wrapper
-      run: |
-        sudo mv /opt/homebrew/bin/gtar /opt/homebrew/bin/gtar.orig
-        sudo cp .github/workflows/gtar /opt/homebrew/bin/gtar
-        sudo chmod +x /opt/homebrew/bin/gtar
-    - name: Restore Cached MacPorts
-      id: restore-cache-macports
-      uses: actions/cache/restore@v4
-      with:
-        key: ${{ runner.os }}-14-macports-${{ hashFiles('.github/workflows/macports-deps.txt') }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-14-macports-${{ hashFiles('.github/workflows/macports-deps.txt') }}-
-          ${{ runner.os }}-14-macports-
-        path: /opt/local/
-    # Updated PATH applies to the next step and onwards
-    - name: Install MacPorts (if necessary)
-      run: |
-        if command -v /opt/local/bin/port 2>&1 >/dev/null; then
-          echo "MacPorts already installed"
-        else
-          echo "Installing MacPorts"
-          wget https://github.com/macports/macports-base/releases/download/v2.9.3/MacPorts-2.9.3-14-Sonoma.pkg
-          sudo installer -pkg ./MacPorts-2.9.3-14-Sonoma.pkg -target /
-        fi
-        echo "/opt/local/bin:/opt/local/sbin" >> "$GITHUB_PATH"
-    - name: Install dependencies
-      run: |
-        brew uninstall --ignore-dependencies libpng
-        sudo port install $(cat .github/workflows/macports-deps.txt)
-        brew install ninja
-    - name: Download 2ship.o2r
-      uses: actions/download-artifact@v4
-      with:
-        name: 2ship.o2r
-        path: build-cmake/mm
-    - name: Build 2Ship
-      run: |
-        export PATH="/usr/lib/ccache:/opt/homebrew/opt/ccache/libexec:/usr/local/opt/ccache/libexec:$PATH"
-        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
-        cmake --build build-cmake --config Release --parallel 10
-        (cd build-cmake && cpack)
-
-        mv _packages/*.dmg 2Ship.dmg
-        mv README.md readme.txt
-    - name: Upload build
-      uses: actions/upload-artifact@v4
-      with:
-        name: 2ship-mac
-        path: |
-          2Ship.dmg
-          readme.txt
-    - name: Save Cache MacPorts
-      if: ${{ github.ref_name == github.event.repository.default_branch }}
-      uses: actions/cache/save@v4
-      with:
-        key: ${{ steps.restore-cache-macports.outputs.cache-primary-key }}
-        path: /opt/local/
 
   build-linux:
     needs: generate-2ship-otr
@@ -315,3 +242,34 @@ jobs:
       with:
         key: ${{ steps.restore-cache-vcpkg.outputs.cache-primary-key }}
         path: vcpkg
+
+  # Publishes the Windows and Linux builds as a pre-release, so the Android release stays "latest".
+  publish:
+    needs: [ build-linux, build-windows ]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: 2ship-windows
+        path: 2ship-windows
+    - uses: actions/download-artifact@v4
+      with:
+        name: 2ship-linux
+        path: 2ship-linux
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        sha=${GITHUB_SHA::7}
+        (cd 2ship-windows && zip -qr "../2ship-mm3d-4.0-windows-$sha.zip" .)
+        (cd 2ship-linux && chmod +x 2ship.appimage && zip -qr "../2ship-mm3d-4.0-linux-$sha.zip" .)
+        tag="pc-4.0-build-${GITHUB_RUN_NUMBER}"
+        for i in 1 2 3 4 5; do
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              --title "PC (base 2Ship 4.0) build ${GITHUB_RUN_NUMBER}" \
+              --notes "2Ship MM3D na base 2Ship 4.0.2, Windows e Linux. Commit $sha." || { sleep $((i * 10)); continue; }
+          gh release upload "$tag" 2ship-mm3d-4.0-*.zip -R "$GITHUB_REPOSITORY" --clobber && exit 0
+          sleep $((i * 10))
+        done
+        exit 1
