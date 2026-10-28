@@ -37,7 +37,7 @@ index 4783ca2..2020652 100644
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
 diff --git a/src/graphic/Fast3D/gfx_direct3d11.cpp b/src/graphic/Fast3D/gfx_direct3d11.cpp
-index bc96472..e857542 100644
+index bc96472..46dc2bc 100644
 --- a/src/graphic/Fast3D/gfx_direct3d11.cpp
 +++ b/src/graphic/Fast3D/gfx_direct3d11.cpp
 @@ -29,6 +29,7 @@
@@ -192,7 +192,7 @@ index bc96472..e857542 100644
      // create_render_target_views(true);
  }
  
-+bool gfx_d3d11_outlines_wanted(void);
++bool d3d11_outlines_wanted(void);
 +
  static void gfx_d3d11_start_frame(void) {
      // Set per-frame constant buffer
@@ -214,11 +214,11 @@ index bc96472..e857542 100644
 +    d3d.per_frame_cb_data.color_cel_bands = CVarGetInteger("gEnhancements.Graphics.CelShading", 0)
 +                                                ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 2)
 +                                                : 0.0f;
-+    d3d.outline_enabled = gfx_d3d11_outlines_wanted() && d3d.feature_level >= D3D_FEATURE_LEVEL_10_0;
++    d3d.outline_enabled = d3d11_outlines_wanted() && d3d.feature_level >= D3D_FEATURE_LEVEL_10_0;
 +    d3d.outline_thickness = (float)CVarGetInteger("gEnhancements.Graphics.CelOutlineThickness", 2);
 +}
 +
-+bool gfx_d3d11_outlines_wanted(void) {
++bool d3d11_outlines_wanted(void) {
 +    return CVarGetInteger("gEnhancements.Graphics.CelShading", 0) &&
 +           CVarGetInteger("gEnhancements.Graphics.CelOutline", 1);
 +}
@@ -305,7 +305,7 @@ index bc96472..e857542 100644
 +
 +// Draws the cel shading outlines over a finished game frame (single-sample framebuffer with a readable depth
 +// buffer). Pipeline state it changes is either restored or marked dirty so the next draw sets it again.
-+void gfx_d3d11_draw_outlines(int fb_id) {
++void d3d11_draw_outlines(int fb_id) {
 +    if (!d3d.outline_enabled || d3d.outline_init_failed || fb_id <= 0 || (size_t)fb_id >= d3d.framebuffers.size()) {
 +        return;
 +    }
@@ -395,6 +395,23 @@ index bc96472..e857542 100644
      }
  }
  
+@@ -1225,6 +1431,16 @@ gfx_d3d11_get_pixel_depth(int fb_id, const std::set<std::pair<float, float>>& co
+ 
+ } // namespace
+ 
++// Exported entry points (gfx_direct3d11.h) for the outline helpers, which live in the anonymous namespace above.
++bool gfx_d3d11_outlines_wanted(void) {
++    return d3d11_outlines_wanted();
++}
++
++void gfx_d3d11_draw_outlines(int fb_id) {
++    d3d11_draw_outlines(fb_id);
++}
++
++
+ ImTextureID gfx_d3d11_get_texture_by_id(int id) {
+     return d3d.textures[id].resource_view.Get();
+ }
 diff --git a/src/graphic/Fast3D/gfx_direct3d11.h b/src/graphic/Fast3D/gfx_direct3d11.h
 index d1eea89..7422eb4 100644
 --- a/src/graphic/Fast3D/gfx_direct3d11.h
