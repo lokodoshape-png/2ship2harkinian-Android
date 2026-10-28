@@ -37,7 +37,7 @@ index 4783ca2..2020652 100644
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
 diff --git a/src/graphic/Fast3D/gfx_direct3d11.cpp b/src/graphic/Fast3D/gfx_direct3d11.cpp
-index bc96472..a0d4f6c 100644
+index bc96472..e857542 100644
 --- a/src/graphic/Fast3D/gfx_direct3d11.cpp
 +++ b/src/graphic/Fast3D/gfx_direct3d11.cpp
 @@ -29,6 +29,7 @@
@@ -188,7 +188,16 @@ index bc96472..a0d4f6c 100644
      }
  
      if (d3d.last_zmode_decal != d3d.zmode_decal) {
-@@ -824,6 +860,170 @@ static void gfx_d3d11_start_frame(void) {
+@@ -814,6 +850,8 @@ static void gfx_d3d11_on_resize(void) {
+     // create_render_target_views(true);
+ }
+ 
++bool gfx_d3d11_outlines_wanted(void);
++
+ static void gfx_d3d11_start_frame(void) {
+     // Set per-frame constant buffer
+     ID3D11Buffer* buffers[2] = { d3d.per_frame_cb.Get(), d3d.per_draw_cb.Get() };
+@@ -824,6 +862,170 @@ static void gfx_d3d11_start_frame(void) {
          // No high values, as noise starts to look ugly
          d3d.per_frame_cb_data.noise_frame = 0;
      }
@@ -359,7 +368,7 @@ index bc96472..a0d4f6c 100644
  }
  
  static void gfx_d3d11_end_frame(void) {
-@@ -914,12 +1114,15 @@ static void gfx_d3d11_update_framebuffer_parameters(int fb_id, uint32_t width, u
+@@ -914,12 +1116,15 @@ static void gfx_d3d11_update_framebuffer_parameters(int fb_id, uint32_t width, u
      if (has_depth_buffer &&
          (diff || !fb.has_depth_buffer || (fb.depth_stencil_srv.Get() != nullptr) != can_extract_depth)) {
          fb.depth_stencil_srv.Reset();
@@ -376,7 +385,7 @@ index bc96472..a0d4f6c 100644
      }
  
      fb.has_depth_buffer = has_depth_buffer;
-@@ -949,7 +1152,8 @@ void gfx_d3d11_start_draw_to_framebuffer(int fb_id, float noise_scale) {
+@@ -949,7 +1154,8 @@ void gfx_d3d11_start_draw_to_framebuffer(int fb_id, float noise_scale) {
  void gfx_d3d11_clear_framebuffer(void) {
      Framebuffer& fb = d3d.framebuffers[d3d.current_framebuffer];
      if (fb.has_depth_buffer) {
