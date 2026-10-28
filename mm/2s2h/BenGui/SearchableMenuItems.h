@@ -83,7 +83,8 @@ typedef enum {
     WIDGET_WINDOW_BUTTON,
     WIDGET_AUDIO_BACKEND, // needed because of special operations that can't be handled easily with the normal combobox
                           // widget
-    WIDGET_VIDEO_BACKEND  // same as above
+    WIDGET_VIDEO_BACKEND, // same as above
+    WIDGET_CUSTOM         // drawn entirely by widgetCallback (for sections shared with the menu bar)
 } WidgetType;
 
 typedef enum {
@@ -254,6 +255,8 @@ extern std::unordered_map<Ship::WindowBackend, const char*> availableWindowBacke
 extern Ship::WindowBackend configWindowBackend;
 extern void UpdateWindowBackendObjects();
 extern void DrawWindowBackendButtons();
+extern void DrawLanguageOptions();
+extern void DrawModsOptions();
 
 std::vector<MainMenuEntry> menuEntries;
 static ImGuiTextFilter menuSearch;
@@ -763,6 +766,15 @@ void AddSettings() {
                     });
                 } },
           } } });
+
+    settingsSidebar.push_back(
+        { "Idioma", 1, { { { "Idioma do texto do jogo", "", "", WIDGET_CUSTOM, {}, [](widgetInfo& info) {
+                                DrawLanguageOptions();
+                            } } } } });
+    settingsSidebar.push_back(
+        { "Mods", 1, { { { "Mods e pacotes de texturas", "", "", WIDGET_CUSTOM, {}, [](widgetInfo& info) {
+                              DrawModsOptions();
+                          } } } } });
 
     if (CVarGetInteger("gSettings.SidebarSearch", 0)) {
         settingsSidebar.insert(settingsSidebar.begin() + searchSidebarIndex, searchSidebarEntry);
@@ -1802,6 +1814,11 @@ void SearchMenuGetItem(widgetInfo& widget) {
             case WIDGET_VIDEO_BACKEND: {
                 DrawWindowBackendButtons();
             } break;
+            case WIDGET_CUSTOM:
+                if (widget.widgetCallback != nullptr) {
+                    widget.widgetCallback(widget);
+                }
+                break;
             case WIDGET_SEPARATOR:
                 ImGui::Separator();
                 break;

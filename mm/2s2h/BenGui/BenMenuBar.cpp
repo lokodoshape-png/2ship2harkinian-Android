@@ -227,6 +227,28 @@ void DrawBenMenu() {
 
 extern std::shared_ptr<BenInputEditorWindow> mBenInputEditorWindow;
 
+// Language choice and translation pack picker, shared by the menu bar and the full-screen menu.
+void DrawLanguageOptions() {
+    static int32_t sGameLanguage = GameLanguage::GetSaved(appShortName);
+    static const std::string sPackFolder =
+        GameLanguage::GetPackFolder(GameLanguage::LANGUAGE_PORTUGUESE_BR, appShortName);
+    if (UIWidgets::Combobox("Idioma do texto do jogo (precisa reabrir)", &sGameLanguage, gameLanguageOptions)) {
+        GameLanguage::Save(static_cast<GameLanguage::Language>(sGameLanguage), appShortName);
+    }
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
+    ImGui::TextWrapped("Vale na próxima vez que o app abrir. Para português, coloque o pacote de tradução "
+                       "(.o2r, .zip ou .otr) na pasta:");
+    ImGui::TextWrapped("%s", sPackFolder.c_str());
+    ImGui::TextWrapped("Sem pacote nessa pasta, o texto do jogo continua em inglês.");
+#ifdef __ANDROID__
+    if (UIWidgets::Button("Escolher arquivo de tradução...")) {
+        // The app saves Portuguese as the language once a pack is copied; it applies on the next launch.
+        GameLanguage::OpenPackPicker();
+    }
+#endif
+    ImGui::PopTextWrapPos();
+}
+
 void DrawSettingsMenu() {
     if (UIWidgets::BeginMenu("Configurações")) {
         if (UIWidgets::BeginMenu("Áudio")) {
@@ -379,25 +401,7 @@ void DrawSettingsMenu() {
         }
 
         if (UIWidgets::BeginMenu("Idioma")) {
-            static int32_t sGameLanguage = GameLanguage::GetSaved(appShortName);
-            static const std::string sPackFolder =
-                GameLanguage::GetPackFolder(GameLanguage::LANGUAGE_PORTUGUESE_BR, appShortName);
-            if (UIWidgets::Combobox("Idioma do texto do jogo (precisa reabrir)", &sGameLanguage, gameLanguageOptions)) {
-                GameLanguage::Save(static_cast<GameLanguage::Language>(sGameLanguage), appShortName);
-            }
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
-            ImGui::TextWrapped("Vale na próxima vez que o app abrir. Para português, coloque o pacote de tradução "
-                               "(.o2r, .zip ou .otr) na pasta:");
-            ImGui::TextWrapped("%s", sPackFolder.c_str());
-            ImGui::TextWrapped("Sem pacote nessa pasta, o texto do jogo continua em inglês.");
-#ifdef __ANDROID__
-            if (UIWidgets::Button("Escolher arquivo de tradução...")) {
-                // The app saves Portuguese as the language once a pack is copied; it applies on the next launch.
-                GameLanguage::OpenPackPicker();
-            }
-#endif
-            ImGui::PopTextWrapPos();
-
+            DrawLanguageOptions();
             ImGui::EndMenu();
         }
         // #region 2S2H [Todo] None of this works yet
@@ -947,50 +951,55 @@ void DrawEnhancementsMenu() {
     }
 }
 
-void DrawModsMenu() {
-    if (UIWidgets::BeginMenu("Mods")) {
-        static std::vector<ModInstaller::ModFile> sMods;
-        static std::string sMessage;
-        static bool sChanged = false;
-        static double sNextScan = 0.0;
-        // Rescan now and then, so a file the app copied in (Android picker) shows up without reopening the menu.
-        if (ImGui::GetTime() >= sNextScan) {
-            sMods = ModInstaller::List(appShortName);
-            sNextScan = ImGui::GetTime() + 1.0;
-        }
+// Installed mods, the "add mod" picker and the alternate assets toggle, shared by the menu bar and the
+// full-screen menu.
+void DrawModsOptions() {
+    static std::vector<ModInstaller::ModFile> sMods;
+    static std::string sMessage;
+    static bool sChanged = false;
+    static double sNextScan = 0.0;
+    // Rescan now and then, so a file the app copied in (Android picker) shows up without reopening the menu.
+    if (ImGui::GetTime() >= sNextScan) {
+        sMods = ModInstaller::List(appShortName);
+        sNextScan = ImGui::GetTime() + 1.0;
+    }
 
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
-        if (UIWidgets::Button("Adicionar mod...")) {
-            sMessage = ModInstaller::OpenPicker(appShortName);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
+    if (UIWidgets::Button("Adicionar mod...")) {
+        sMessage = ModInstaller::OpenPicker(appShortName);
+        sNextScan = 0.0;
+    }
+    ImGui::TextWrapped("Aceita mods do 2Ship em .o2r, .otr ou .zip. Se o .zip tiver arquivos .o2r/.otr dentro, "
+                       "eles são extraídos. Os mods ficam na pasta:");
+    ImGui::TextWrapped("%s", ModInstaller::GetModsFolder(appShortName).c_str());
+    if (!sMessage.empty()) {
+        ImGui::TextWrapped("%s", sMessage.c_str());
+    }
+
+    ImGui::SeparatorText("Mods instalados");
+    if (sMods.empty()) {
+        ImGui::TextWrapped("Nenhum mod instalado.");
+    }
+    for (ModInstaller::ModFile& mod : sMods) {
+        bool enabled = mod.enabled;
+        if (ImGui::Checkbox(mod.name.c_str(), &enabled) && ModInstaller::SetEnabled(mod, enabled)) {
+            sChanged = true;
             sNextScan = 0.0;
         }
-        ImGui::TextWrapped("Aceita mods do 2Ship em .o2r, .otr ou .zip. Se o .zip tiver arquivos .o2r/.otr dentro, "
-                           "eles são extraídos. Os mods ficam na pasta:");
-        ImGui::TextWrapped("%s", ModInstaller::GetModsFolder(appShortName).c_str());
-        if (!sMessage.empty()) {
-            ImGui::TextWrapped("%s", sMessage.c_str());
-        }
+    }
+    if (sChanged) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Feche e abra o jogo para aplicar.");
+    }
 
-        ImGui::SeparatorText("Mods instalados");
-        if (sMods.empty()) {
-            ImGui::TextWrapped("Nenhum mod instalado.");
-        }
-        for (ModInstaller::ModFile& mod : sMods) {
-            bool enabled = mod.enabled;
-            if (ImGui::Checkbox(mod.name.c_str(), &enabled) && ModInstaller::SetEnabled(mod, enabled)) {
-                sChanged = true;
-                sNextScan = 0.0;
-            }
-        }
-        if (sChanged) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Feche e abra o jogo para aplicar.");
-        }
+    ImGui::SeparatorText("Texturas");
+    UIWidgets::CVarCheckbox("Usar assets alternativos", "gEnhancements.Mods.AlternateAssets",
+                            { .tooltip = "Pacotes de texturas HD costumam precisar desta opção ligada." });
+    ImGui::PopTextWrapPos();
+}
 
-        ImGui::SeparatorText("Texturas");
-        UIWidgets::CVarCheckbox("Usar assets alternativos", "gEnhancements.Mods.AlternateAssets",
-                                { .tooltip = "Pacotes de texturas HD costumam precisar desta opção ligada." });
-        ImGui::PopTextWrapPos();
-
+void DrawModsMenu() {
+    if (UIWidgets::BeginMenu("Mods")) {
+        DrawModsOptions();
         ImGui::EndMenu();
     }
 }
