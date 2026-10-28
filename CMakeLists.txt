@@ -166,6 +166,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Android")
         $<$<COMPILE_LANGUAGE:C>:-Wno-error=implicit-int>
         $<$<COMPILE_LANGUAGE:C>:-Wno-error=int-conversion>
         $<$<COMPILE_LANGUAGE:C>:-Wno-error=incompatible-function-pointer-types>
+        # ZAPD switches on 32-bit ROM CRCs through an int.
+        $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++11-narrowing>
     )
     include(CMake/android-deps.cmake)
 endif()

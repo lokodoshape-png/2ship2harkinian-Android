@@ -1,4 +1,6 @@
 #include "Rando/Rando.h"
+
+#include <sstream>
 #include "Rando/Spoiler/Spoiler.h"
 #include "2s2h/BenGui/UIWidgets.hpp"
 #include "Rando/CheckTracker/CheckTracker.h"
