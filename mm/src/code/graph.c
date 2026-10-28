@@ -241,11 +241,15 @@ retry:
     Sched_SendEntryMsg(&gSchedContext);
 }
 
+// 2S2H [Enhancement] Set while running the extra, undisplayed logic frames of a fast-forwarded cutscene.
+static bool sFastForwardFrame = false;
+s32 FastForwardCutscenes_GetExtraFrames(GameState* gameState);
+
 void Graph_UpdateGame(GameState* gameState) {
     GameState_GetInput(gameState);
     GameState_IncrementFrameCount(gameState);
     // BENTODO
-    if (SREG(20) < 3) {
+    if (SREG(20) < 3 && !sFastForwardFrame) {
         Audio_Update();
     }
 }
@@ -328,7 +332,9 @@ void Graph_ExecuteAndDraw(GraphicsContext* gfxCtx, GameState* gameState) {
         if (GfxDebuggerIsDebuggingRequested()) {
             GfxDebuggerDebugDisplayList(&gGfxMasterDL->taskStart[0]);
         }
-        Graph_ProcessGfxCommands(&gGfxMasterDL->taskStart[0]);
+        if (!sFastForwardFrame) {
+            Graph_ProcessGfxCommands(&gGfxMasterDL->taskStart[0]);
+        }
     }
 
     {
@@ -405,6 +411,19 @@ void RunFrame() {
             Graph_StartFrame();
 
             PadMgr_ThreadEntry(&gPadMgr);
+
+            // 2S2H [Enhancement] Fast-forward cutscenes: run extra logic frames without drawing them first,
+            // then the normal frame, which is the one shown.
+            for (s32 extra = FastForwardCutscenes_GetExtraFrames(runFrameContext.gameState);
+                 extra > 0 && GameState_IsRunning(runFrameContext.gameState); extra--) {
+                sFastForwardFrame = true;
+                Graph_Update(&runFrameContext.gfxCtx, runFrameContext.gameState);
+                sFastForwardFrame = false;
+            }
+            if (!GameState_IsRunning(runFrameContext.gameState)) {
+                runFrameContext.state = 1;
+                return;
+            }
 
             Graph_Update(&runFrameContext.gfxCtx, runFrameContext.gameState);
             // ticksB = GetPerfCounter();

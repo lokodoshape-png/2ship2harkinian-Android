@@ -1421,6 +1421,16 @@ void BenMenu::AddEnhancements() {
         .Options(ComboboxOptions()
                      .Tooltip("Note: This only works in Randomizer currently.")
                      .ComboVec(&skipGetItemCutscenesOptions));
+    AddWidget(path, "Hold B to Fast Forward Cutscenes", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Cutscenes.HoldBToFastForward")
+        .Options(CheckboxOptions().Tooltip(
+            "During a cutscene, hold B for half a second to play it much faster. The whole cutscene still runs, only "
+            "sped up, so nothing in the game is skipped. Holding B also advances dialogue (except questions, which "
+            "still wait for A)."));
+    AddWidget(path, "Fast Forward Speed: %dx", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Cutscenes.FastForwardSpeed")
+        .Options(IntSliderOptions().Min(2).Max(8).DefaultValue(5).Tooltip(
+            "How many times faster a cutscene plays while B is held."));
 
     // Dialogue Enhancements
     path.column = SECTION_COLUMN_2;
@@ -1790,6 +1800,50 @@ void BenMenu::AddEnhancements() {
                      .Min(1)
                      .Max(5)
                      .DefaultValue(5));
+
+    // Majora's Mask 3D
+    path = { "Enhancements", "Majora's Mask 3D", SECTION_COLUMN_1 };
+    AddSidebarEntry("Enhancements", "Majora's Mask 3D", 2);
+    AddWidget(path, "Gameplay", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Bombers' Notebook from the Start", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.EarlyBombersNotebook")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, get the Bombers' Notebook on the first visit "
+                                           "to Clock Town, without the Bombers' hide-and-seek game."));
+    AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
+        .Options(CheckboxOptions()
+                     .Tooltip("Like in Majora's Mask 3D, the Song of Time on the Quest Status page also shows the "
+                              "Inverted Song of Time, the Song of Double Time and the Scarecrow's Song. With the "
+                              "cursor on the Song of Time, press L or C-Down to switch and A to hear the notes.")
+                     .DefaultValue(true));
+    AddWidget(path, "Bombers' Notebook Guide with the Notebook", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.BombersNotebookGuide")
+        .Options(CheckboxOptions().Tooltip(
+            "When the Bombers' Notebook opens, a guide opens too, with each person's reward, the right day and "
+            "time, the place and the mask or condition needed. The person selected in the notebook is highlighted."));
+    AddWidget(path, "Open Bombers' Notebook Guide", WIDGET_WINDOW_BUTTON)
+        .CVar("gWindows.BombersNotebookGuide")
+        .WindowName("Bombers Notebook Guide")
+        .Options(ButtonOptions().Tooltip("Opens the Bombers' Notebook guide in a window.").Size(Sizes::Inline));
+
+    path.column = SECTION_COLUMN_2;
+    AddWidget(path, "3DS-Style Lighting", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "3DS-Style Lighting", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.Lighting.Enabled")
+        .Options(CheckboxOptions().Tooltip("Makes scenes brighter and with much less fog, close to the look of "
+                                           "Majora's Mask 3D. Day and night lighting changes still work."));
+    AddWidget(path, "Fog Reduction: %d%%", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.MM3D.Lighting.FogReduction")
+        .Options(IntSliderOptions().Min(0).Max(100).DefaultValue(50).Tooltip(
+            "How much farther the fog starts. 0 = same as N64, 100 = almost no fog."));
+    AddWidget(path, "Extra Ambient Light: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.MM3D.Lighting.AmbientBoost")
+        .Options(
+            IntSliderOptions().Min(0).Max(100).DefaultValue(20).Tooltip("Brightens shadowed areas. 0 = same as N64."));
+    AddWidget(path, "Direct Light Strength: %d%%", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.MM3D.Lighting.DirectionalScale")
+        .Options(IntSliderOptions().Min(50).Max(200).DefaultValue(110).Tooltip(
+            "Strength of the sun, moon and lamp light on characters. 100 = same as N64."));
 
     // HUD Editor
     path = { "Enhancements", "HUD Editor", SECTION_COLUMN_1 };

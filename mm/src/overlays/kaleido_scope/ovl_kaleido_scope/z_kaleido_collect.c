@@ -5,6 +5,7 @@
  */
 
 #include "z_kaleido_scope.h"
+#include "2s2h/Enhancements/MM3D/MM3D.h"
 #include "interface/parameter_static/parameter_static.h"
 #include "archives/icon_item_static/icon_item_static_yar.h"
 
@@ -785,7 +786,9 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
                             cursor = QUEST_BOMB_BAG;
                         }
 
-                        pauseCtx->ocarinaSongIndex = gOcarinaSongItemMap[cursor - QUEST_SONG_SONATA];
+                        // 2S2H [Enhancement] MM3D-style Song of Time variants
+            pauseCtx->ocarinaSongIndex =
+                TimeSongVariantsInPause_GetSongIndex(gOcarinaSongItemMap[cursor - QUEST_SONG_SONATA], cursor);
                         sQuestSongPlaybackDelayTimer = 10;
 
                         for (i = 0; i < 8; i++) {
@@ -972,7 +975,9 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
 
             AudioOcarina_SetInstrument(OCARINA_INSTRUMENT_DEFAULT);
             AudioOcarina_SetInstrument(OCARINA_INSTRUMENT_DEFAULT);
-            pauseCtx->ocarinaSongIndex = gOcarinaSongItemMap[cursor - QUEST_SONG_SONATA];
+            // 2S2H [Enhancement] MM3D-style Song of Time variants
+            pauseCtx->ocarinaSongIndex =
+                TimeSongVariantsInPause_GetSongIndex(gOcarinaSongItemMap[cursor - QUEST_SONG_SONATA], cursor);
             AudioOcarina_SetPlaybackSong(pauseCtx->ocarinaSongIndex + 1, 1);
             pauseCtx->mainState = PAUSE_MAIN_STATE_SONG_PLAYBACK;
             pauseCtx->ocarinaStaff = AudioOcarina_GetPlaybackStaff();

@@ -288,6 +288,12 @@ void Message_ResetOcarinaButtonState(PlayState* play) {
     sOcarinaButtonCEnvB = 10;
 }
 
+// 2S2H [Enhancement] Holding B advances text with fast text, or with the hold-B cutscene fast-forward
+static bool Message_HoldBAdvanceEnabled(void) {
+    return CVarGetInteger("gEnhancements.Dialogue.FastText", 0) ||
+           CVarGetInteger("gEnhancements.Cutscenes.HoldBToFastForward", 0);
+}
+
 bool Message_ShouldAdvance(PlayState* play) {
     MessageContext* msgCtx = &play->msgCtx;
     Input* controller = CONTROLLER1(&play->state);
@@ -306,7 +312,7 @@ bool Message_ShouldAdvance(PlayState* play) {
         return CHECK_BTN_ALL(controller->press.button, BTN_A) || CHECK_BTN_ALL(controller->press.button, BTN_B) ||
                // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was just
                // pressed
-               (CVarGetInteger("gEnhancements.Dialogue.FastText", 0) && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
+               (Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
                CHECK_BTN_ALL(controller->press.button, BTN_CUP);
     }
 }
@@ -322,7 +328,7 @@ bool Message_ShouldAdvanceSilent(PlayState* play) {
         return CHECK_BTN_ALL(controller->press.button, BTN_A) || CHECK_BTN_ALL(controller->press.button, BTN_B) ||
                // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was just
                // pressed
-               (CVarGetInteger("gEnhancements.Dialogue.FastText", 0) && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
+               (Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
                CHECK_BTN_ALL(controller->press.button, BTN_CUP);
     }
 }
@@ -5701,8 +5707,7 @@ void Message_Update(PlayState* play) {
                     // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was
                     // just pressed. Has an additional check that the textbox hasnt been skipped already to prevent the
                     // message from failing to continue.
-                } else if ((CVarGetInteger("gEnhancements.Dialogue.FastText", 0) &&
-                            CHECK_BTN_ALL(input->cur.button, BTN_B)) &&
+                } else if ((Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(input->cur.button, BTN_B)) &&
                            !msgCtx->textUnskippable && !msgCtx->textboxSkipped) {
                     msgCtx->textboxSkipped = true;
                     msgCtx->textDrawPos = msgCtx->decodedTextLen;

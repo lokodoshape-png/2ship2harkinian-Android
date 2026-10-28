@@ -965,6 +965,50 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Start typing to see results.", "Comece a digitar para ver resultados." },
     { "Clear", "Limpar" },
     { "Search", "Busca" },
+    { "Hold B to Fast Forward Cutscenes", "Segurar B para acelerar cenas" },
+    { "During a cutscene, hold B for half a second to play it much faster. The whole cutscene still runs, only sped "
+      "up, so nothing in the game is skipped. Holding B also advances dialogue (except questions, which still wait for "
+      "A).",
+      "Durante uma cena, segure B por meio segundo para ela rodar bem mais rápido. A cena inteira continua "
+      "acontecendo, só que acelerada, então nada do jogo é pulado. Segurar B também avança os diálogos (menos "
+      "perguntas, que ainda esperam o A)." },
+    { "Fast Forward Speed: %dx", "Velocidade de aceleração: %dx" },
+    { "How many times faster a cutscene plays while B is held.",
+      "Quantas vezes mais rápido a cena roda enquanto B está pressionado." },
+    { "Majora's Mask 3D", "Majora's Mask 3D" },
+    { "Bombers' Notebook from the Start", "Caderno dos Bombers desde o início" },
+    { "Like in Majora's Mask 3D, get the Bombers' Notebook on the first visit to Clock Town, without the Bombers' "
+      "hide-and-seek game.",
+      "Como no Majora's Mask 3D, recebe o Caderno dos Bombers na primeira visita a Clock Town, sem o esconde-esconde "
+      "dos Bombers." },
+    { "Song of Time Variants in the Pause Menu", "Variações da Song of Time no menu de pausa" },
+    { "Like in Majora's Mask 3D, the Song of Time on the Quest Status page also shows the Inverted Song of Time, the "
+      "Song of Double Time and the Scarecrow's Song. With the cursor on the Song of Time, press L or C-Down to switch "
+      "and A to hear the notes.",
+      "Como no Majora's Mask 3D, a Song of Time na página de Status da Missão também mostra a Inverted Song of Time, a "
+      "Song of Double Time e a Scarecrow's Song. Com o cursor na Song of Time, aperte L ou C-Baixo para trocar e A "
+      "para ouvir as notas." },
+    { "Bombers' Notebook Guide with the Notebook", "Guia do Caderno dos Bombers junto com o caderno" },
+    { "When the Bombers' Notebook opens, a guide opens too, with each person's reward, the right day and time, the "
+      "place and the mask or condition needed. The person selected in the notebook is highlighted.",
+      "Quando o Caderno dos Bombers abre, um guia abre junto, com a recompensa de cada pessoa, o dia e a hora certos, "
+      "o lugar e a máscara ou condição necessária. A pessoa selecionada no caderno fica destacada." },
+    { "Open Bombers' Notebook Guide", "Abrir guia do Caderno dos Bombers" },
+    { "Opens the Bombers' Notebook guide in a window.", "Abre o guia do Caderno dos Bombers em uma janela." },
+    { "3DS-Style Lighting", "Iluminação estilo 3DS" },
+    { "Makes scenes brighter and with much less fog, close to the look of Majora's Mask 3D. Day and night lighting "
+      "changes still work.",
+      "Deixa as cenas mais claras e com bem menos neblina, perto do visual do Majora's Mask 3D. A mudança de luz entre "
+      "dia e noite continua funcionando." },
+    { "Fog Reduction: %d%%", "Redução de neblina: %d%%" },
+    { "How much farther the fog starts. 0 = same as N64, 100 = almost no fog.",
+      "Quanto mais longe a neblina começa. 0 = igual ao N64, 100 = quase sem neblina." },
+    { "Extra Ambient Light: %d", "Luz ambiente extra: %d" },
+    { "Brightens shadowed areas. 0 = same as N64.", "Clareia as áreas de sombra. 0 = igual ao N64." },
+    { "Direct Light Strength: %d%%", "Força da luz direta: %d%%" },
+    { "Strength of the sun, moon and lamp light on characters. 100 = same as N64.",
+      "Força da luz do sol, da lua e das lâmpadas nos personagens. 100 = igual ao N64." },
+    { "Bombers Notebook Guide", "Guia do Caderno dos Bombers" },
 };
 
 const char* Tr(const char* text) {
