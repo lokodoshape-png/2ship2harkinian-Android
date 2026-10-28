@@ -64,6 +64,11 @@ void InitEnhancements() {
     RegisterPauseOwlWarp();
     RegisterZoraEggCount();
     RegisterSkipScarecrowSong();
+    RegisterDoubleTimeHourSelect();
+
+    // MM3D
+    RegisterEarlyBombersNotebook();
+    RegisterTimeSongVariantsInPause();
 
     // Restorations
     RegisterPowerCrouchStab();

@@ -74,9 +74,9 @@ void BenMenu::InitElement() {
     AddEnhancements();
     AddDevTools();
 
-    menuEntries = { { "Settings", settingsSidebar, "gSettings.Menu.SettingsSidebarIndex" },
-                    { "Enhancements", enhancementsSidebar, "gSettings.Menu.EnhancementsSidebarIndex" },
-                    { "Developer Tools", devToolsSidebar, "gSettings.Menu.DevToolsSidebarIndex" } };
+    menuEntries = { { "Configurações", settingsSidebar, "gSettings.Menu.SettingsSidebarIndex" },
+                    { "Melhorias", enhancementsSidebar, "gSettings.Menu.EnhancementsSidebarIndex" },
+                    { "Ferramentas de Dev", devToolsSidebar, "gSettings.Menu.DevToolsSidebarIndex" } };
 
     UpdateWindowBackendObjects();
 }
@@ -222,9 +222,9 @@ void BenMenu::DrawElement() {
         }
     }
 #ifdef __ANDROID__
-    ImVec2 menuSize = {windowWidth,windowHeight};
+    ImVec2 menuSize = { windowWidth, windowHeight };
 #else
-    ImVec2 menuSize = {std::fminf(1280, windowWidth), std::fminf(800, windowHeight) };
+    ImVec2 menuSize = { std::fminf(1280, windowWidth), std::fminf(800, windowHeight) };
 #endif
     pos += window->WorkRect.GetSize() / 2 - menuSize / 2;
     ImGui::SetNextWindowPos(pos);
@@ -240,7 +240,7 @@ void BenMenu::DrawElement() {
         headerHeight += style.ScrollbarSize;
         scrollbar = true;
     }
-    if (UIWidgets::Button(ICON_FA_TIMES_CIRCLE, { .size = UIWidgets::Sizes::Inline, .tooltip = "Close Menu (Esc)" })) {
+    if (UIWidgets::Button(ICON_FA_TIMES_CIRCLE, { .size = UIWidgets::Sizes::Inline, .tooltip = "Fechar Menu (Esc)" })) {
         ToggleVisibility();
 
         // Update gamepad navigation after close based on if other menus are still visible
@@ -309,7 +309,7 @@ void BenMenu::DrawElement() {
 #else
             ImGui::SameLine(headerWidth - 200.0f + style.ItemSpacing.x);
 #endif
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), "Search...");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), "Buscar...");
         }
         ImGui::PopStyleColor();
     }
@@ -317,7 +317,7 @@ void BenMenu::DrawElement() {
     ImGui::SameLine(menuSize.x - (buttonSize.x * 2) - style.ItemSpacing.x);
     if (UIWidgets::Button(ICON_FA_UNDO, { .color = UIWidgets::Colors::Red,
                                           .size = UIWidgets::Sizes::Inline,
-                                          .tooltip = "Reset"
+                                          .tooltip = "Reiniciar"
 #ifdef __APPLE__
                                                      " (Command-R)"
 #elif !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__ANDROID__)
@@ -333,7 +333,7 @@ void BenMenu::DrawElement() {
     ImGui::SameLine();
     if (UIWidgets::Button(
             ICON_FA_POWER_OFF,
-            { .color = UIWidgets::Colors::Red, .size = UIWidgets::Sizes::Inline, .tooltip = "Quit 2S2H" })) {
+            { .color = UIWidgets::Colors::Red, .size = UIWidgets::Sizes::Inline, .tooltip = "Sair do 2S2H" })) {
         if (!popped) {
             ToggleVisibility();
         }
@@ -406,7 +406,7 @@ void BenMenu::DrawElement() {
         columns = 1;
     }
 #ifdef __ANDROID__
-    columns=1;
+    columns = 1;
 #endif
     float columnWidth = (sectionWidth - style.ItemSpacing.x * columns) / columns;
     bool useColumns = columns > 1;

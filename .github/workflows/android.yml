@@ -1,0 +1,136 @@
+name: Build Android APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # The app copies 2ship.o2r (the port's own ROM-free resources) out of its APK assets on first run,
+  # so it is built here on the host the same way main.yml does for the desktop packages.
+  port-archive:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat .github/workflows/apt-deps.txt) libzip-dev zipcmp zipmerge ziptool
+      - name: Install SDL2 and tinyxml2
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-2.28.5.tar.gz
+          tar -xzf SDL2-2.28.5.tar.gz
+          (cd SDL2-2.28.5 && ./configure --enable-hidapi-libusb > /dev/null && make -j4 > /dev/null && sudo make install > /dev/null)
+          sudo cp -a /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+          sudo apt-get remove -y libtinyxml2-dev
+          wget -q https://github.com/leethomason/tinyxml2/archive/refs/tags/10.0.0.tar.gz
+          tar -xzf 10.0.0.tar.gz
+          cmake -S tinyxml2-10.0.0 -B tinyxml2-10.0.0/build > /dev/null
+          cmake --build tinyxml2-10.0.0/build -j4 > /dev/null
+          sudo cmake --install tinyxml2-10.0.0/build > /dev/null
+      - name: Generate 2ship.o2r
+        run: |
+          cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release
+          cmake --build build-cmake --config Release --target Generate2ShipOtr -j4
+          ls -la 2ship.o2r
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: 2ship.o2r
+          retention-days: 3
+
+  apk:
+    needs: port-archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.0.10792818" "platforms;android-33" "build-tools;34.0.0"
+
+      - name: Use the runner's CMake and build arm64 only
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > Android/local.properties
+          echo "cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")" >> Android/local.properties
+          sed -i '/version "3.28.3"/d' Android/app/build.gradle
+          sed -i "s/abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'/abiFilters 'arm64-v8a'/" Android/app/build.gradle
+          # Renderer patches (the GLES renderer lives in the submodule): brightness/saturation for "Iluminação
+          # estilo MM3D", and clearing the game framebuffer each frame (garbage below cutscene letterboxes).
+          git -C libultraship apply ../Android/libultraship-android-fixes.patch
+          # Standalone install: own data folder, matching MainActivity.DATA_FOLDER.
+          sed -i 's|"/storage/emulated/0/2S2H"|"/storage/emulated/0/2S2H-MM3D"|g' libultraship/src/Context.cpp
+          test "$(grep -c '"/storage/emulated/0/2S2H-MM3D"' libultraship/src/Context.cpp)" -eq 2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: Android/app/src/main/assets
+
+      - name: Build debug APK
+        working-directory: Android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          # The native code must be an optimized build even in the debug APK (see app/build.gradle).
+          grep -h "^CMAKE_BUILD_TYPE" app/.cxx/*/*/arm64-v8a/CMakeCache.txt | tee /dev/stderr | grep -q "=Release"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2ship2harkinian-android-debug
+          path: Android/app/build/outputs/apk/debug/*.apk
+
+      # Publishes the APK on the fork's Releases page for pushes to the main branches. The release
+      # holds only the app; the game data (mm.o2r) is generated on the phone from the user's own ROM.
+      - name: Publish release
+        if: github.event_name == 'push' && (github.ref_name == 'android' || github.ref_name == 'ci/android-apk')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          short_sha="${GITHUB_SHA::7}"
+          tag="build-${GITHUB_RUN_NUMBER}"
+          apk="2ship2harkinian-mm3d-${short_sha}.apk"
+          cp Android/app/build/outputs/apk/debug/*.apk "$apk"
+          cat > notes.md <<NOTES
+          APK do 2Ship2Harkinian para Android (arm64) com as melhorias estilo Majora's Mask 3D e o menu em português.
+
+          **Como instalar**
+          1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular.
+          2. Na primeira vez, aponte para a sua ROM do Majora's Mask (N64). O app gera o \`mm.o2r\` no próprio celular.
+
+          Este app se chama **2Ship MM3D** e instala separado do 2Ship original: os dois podem ficar no celular. Ele começa do zero na própria pasta \`2S2H-MM3D\` e não mexe nos arquivos do original. Na primeira vez, permita o acesso a todos os arquivos e escolha a sua ROM do Majora's Mask (N64).
+
+          **PC:** os arquivos \`2ship-mm3d-windows-*.zip\` e \`2ship-mm3d-linux-*.zip\` aparecem aqui uns minutos depois. No Windows, extraia o zip numa pasta nova e abra o \`2ship.exe\`. Na primeira vez, ele pede a sua ROM. As opções de cel shading e cor usam o OpenGL, que já vem como padrão.
+
+          A ROM e os arquivos do jogo não fazem parte deste download.
+
+          Commit: ${GITHUB_SHA} (branch ${GITHUB_REF_NAME})
+          NOTES
+          sed -i 's/^          //' notes.md
+          # Release creation sometimes gets a transient HTTP 403 from the API, so it is retried a few times.
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+              --title "2Ship MM3D Android - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+              --notes-file notes.md --latest; then
+              exit 0
+            fi
+            echo "Release creation failed (attempt $attempt), retrying in 60s"
+            sleep 60
+          done
+          exit 1

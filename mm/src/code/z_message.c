@@ -7,6 +7,7 @@
 #include "overlays/kaleido_scope/ovl_kaleido_scope/z_kaleido_scope.h"
 #include "BenPort.h"
 #include "2s2h/GameInteractor/GameInteractor.h"
+#include "2s2h/Enhancements/Songs/Songs.h"
 #include "assets/archives/schedule_dma_static/schedule_dma_static_yar.h"
 #include "assets/archives/icon_item_static/icon_item_static_yar.h"
 #include "assets/archives/icon_item_24_static/icon_item_24_static_yar.h"
@@ -287,6 +288,12 @@ void Message_ResetOcarinaButtonState(PlayState* play) {
     sOcarinaButtonCEnvB = 10;
 }
 
+// 2S2H [Enhancement] Holding B advances text with fast text, or with the hold-B cutscene fast-forward
+static s32 Message_HoldBAdvanceEnabled(void) {
+    return CVarGetInteger("gEnhancements.Dialogue.FastText", 0) ||
+           CVarGetInteger("gEnhancements.Cutscenes.HoldBToFastForward", 0);
+}
+
 s32 Message_ShouldAdvance(PlayState* play) {
     MessageContext* msgCtx = &play->msgCtx;
     Input* controller = CONTROLLER1(&play->state);
@@ -304,7 +311,7 @@ s32 Message_ShouldAdvance(PlayState* play) {
         return CHECK_BTN_ALL(controller->press.button, BTN_A) || CHECK_BTN_ALL(controller->press.button, BTN_B) ||
                // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was just
                // pressed
-               (CVarGetInteger("gEnhancements.Dialogue.FastText", 0) && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
+               (Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
                CHECK_BTN_ALL(controller->press.button, BTN_CUP);
     }
 }
@@ -319,7 +326,7 @@ s32 Message_ShouldAdvanceSilent(PlayState* play) {
         return CHECK_BTN_ALL(controller->press.button, BTN_A) || CHECK_BTN_ALL(controller->press.button, BTN_B) ||
                // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was just
                // pressed
-               (CVarGetInteger("gEnhancements.Dialogue.FastText", 0) && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
+               (Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(controller->cur.button, BTN_B)) ||
                CHECK_BTN_ALL(controller->press.button, BTN_CUP);
     }
 }
@@ -5660,8 +5667,7 @@ void Message_Update(PlayState* play) {
                     // 2S2H [Enhancement] When fast text is on, we want to check if B is held instead of only if it was
                     // just pressed. Has an additional check that the textbox hasnt been skipped already to prevent the
                     // message from failing to continue.
-                } else if ((CVarGetInteger("gEnhancements.Dialogue.FastText", 0) &&
-                            CHECK_BTN_ALL(input->cur.button, BTN_B)) &&
+                } else if ((Message_HoldBAdvanceEnabled() && CHECK_BTN_ALL(input->cur.button, BTN_B)) &&
                            !msgCtx->textUnskippable && !msgCtx->textboxSkipped) {
                     msgCtx->textboxSkipped = true;
                     msgCtx->textDrawPos = msgCtx->decodedTextLen;
@@ -5821,6 +5827,8 @@ void Message_Update(PlayState* play) {
                     }
                 } else if ((msgCtx->textboxEndType == TEXTBOX_ENDTYPE_10) &&
                            (play->msgCtx.ocarinaMode == OCARINA_MODE_PROCESS_DOUBLE_TIME)) {
+                    // 2S2H [Enhancement] Pick the target hour, like in MM3D
+                    DoubleTimeHourSelect_Update(input);
                     if (Message_ShouldAdvance(play)) {
                         if (msgCtx->choiceIndex == 0) {
                             Audio_PlaySfx_MessageDecide();
@@ -5829,10 +5837,12 @@ void Message_Update(PlayState* play) {
                             } else {
                                 gSaveContext.save.time = CLOCK_TIME(18, 0);
                             }
+                            DoubleTimeHourSelect_Apply();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_APPLY_DOUBLE_SOT;
                             gSaveContext.timerStates[TIMER_ID_MOON_CRASH] = TIMER_STATE_OFF;
                         } else {
                             Audio_PlaySfx_MessageCancel();
+                            DoubleTimeHourSelect_Cancel();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_END;
                         }
                         Message_CloseTextbox(play);
@@ -6033,6 +6043,7 @@ void Message_Update(PlayState* play) {
                             } else {
                                 Message_StartTextbox(play, D_801D045C[CURRENT_DAY - 1], NULL);
                             }
+                            DoubleTimeHourSelect_Init();
                             play->msgCtx.ocarinaMode = OCARINA_MODE_PROCESS_DOUBLE_TIME;
                         } else {
                             Message_StartTextbox(play, 0x1B94, NULL);

@@ -15,7 +15,7 @@ android {
     compileSdkVersion 33
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "com.dishii.mm"
+            applicationId "com.dishii.mm.mm3d"
             namespace("com.dishii.mm")
         }
         minSdkVersion 24
@@ -35,6 +35,15 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // The CI publishes the debug APK, so its native code must still be optimized: at -O0 the
+            // on-device ROM extraction (ZAPD) and the game itself run many times slower.
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=Release"
+                }
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

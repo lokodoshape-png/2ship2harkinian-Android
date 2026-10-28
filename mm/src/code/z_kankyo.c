@@ -24,6 +24,7 @@ typedef struct {
 #include "global.h"
 #include "sys_cfb.h"
 #include "BenPort.h"
+#include "2s2h/Enhancements/MM3D/MM3D.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "objects/gameplay_field_keep/gameplay_field_keep.h"
 #include "overlays/kaleido_scope/ovl_kaleido_scope/z_kaleido_scope.h"
@@ -1577,6 +1578,9 @@ void Environment_UpdateLights(PlayState* play, EnvironmentContext* envCtx, Light
     } else {
         lightCtx->zFar = ENV_ZFAR_MAX;
     }
+
+    // 2S2H [Enhancement] MM3D-style lighting: less fog and brighter scenes
+    MM3DLighting_Apply(envCtx, lightCtx);
 
     if ((envCtx->dirLight1.params.dir.x == 0) && (envCtx->dirLight1.params.dir.y == 0) &&
         (envCtx->dirLight1.params.dir.z == 0)) {

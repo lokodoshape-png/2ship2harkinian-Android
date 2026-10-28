@@ -10,6 +10,7 @@
 #include "Fixes/Fixes.h"
 #include "Graphics/Graphics.h"
 #include "Masks/Masks.h"
+#include "MM3D/MM3D.h"
 #include "Minigames/Minigames.h"
 #include "Modes/Modes.h"
 #include "Player/Player.h"

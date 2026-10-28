@@ -23,6 +23,7 @@
 
 #include "Enhancements/Trackers/ItemTracker.h"
 #include "Enhancements/Trackers/ItemTrackerSettings.h"
+#include "Enhancements/MM3D/BombersNotebookGuide.h"
 
 namespace BenGui {
 // MARK: - Delegates
@@ -43,6 +44,7 @@ std::shared_ptr<BenInputEditorWindow> mBenInputEditorWindow;
 std::shared_ptr<Notification::Window> mNotificationWindow;
 std::shared_ptr<ItemTrackerWindow> mItemTrackerWindow;
 std::shared_ptr<ItemTrackerSettingsWindow> mItemTrackerSettingsWindow;
+std::shared_ptr<BombersNotebookGuideWindow> mBombersNotebookGuideWindow;
 
 void SetupGuiElements() {
     auto gui = Ship::Context::GetInstance()->GetWindow()->GetGui();
@@ -57,9 +59,9 @@ void SetupGuiElements() {
 
     if (!gui->GetMenuBar() && !CVarGetInteger("gSettings.DisableMenuShortcutNotify", 0)) {
 #if defined(__SWITCH__) || defined(__WIIU__) || defined(__ANDROID__)
-        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Press - to access enhancements menu");
+        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Aperte - para abrir o menu de melhorias");
 #else
-        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Press F1 to access enhancements menu");
+        gui->GetGameOverlay()->TextDrawNotification(30.0f, true, "Aperte F1 para abrir o menu de melhorias");
 #endif
     }
 
@@ -106,6 +108,10 @@ void SetupGuiElements() {
     mItemTrackerSettingsWindow = std::make_shared<ItemTrackerSettingsWindow>("gWindows.ItemTrackerSettings",
                                                                              "Item Tracker Settings", ImVec2(800, 400));
     gui->AddGuiWindow(mItemTrackerSettingsWindow);
+
+    mBombersNotebookGuideWindow = std::make_shared<BombersNotebookGuideWindow>(
+        "gWindows.BombersNotebookGuide", "Bombers Notebook Guide", ImVec2(460, 520));
+    gui->AddGuiWindow(mBombersNotebookGuideWindow);
     gui->SetPadBtnTogglesMenu();
 
     mNotificationWindow = std::make_shared<Notification::Window>("gWindows.Notifications", "Notifications Window");
@@ -131,5 +137,6 @@ void Destroy() {
     mActorViewerWindow = nullptr;
     mItemTrackerWindow = nullptr;
     mItemTrackerSettingsWindow = nullptr;
+    mBombersNotebookGuideWindow = nullptr;
 }
 } // namespace BenGui
