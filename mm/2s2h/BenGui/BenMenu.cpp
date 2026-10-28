@@ -1,5 +1,6 @@
 #include "BenMenu.h"
 #include "UIWidgets.hpp"
+#include "Translation.h"
 #include "BenPort.h"
 #include "BenInputEditorWindow.h"
 #include "DeveloperTools/SaveEditor.h"
@@ -43,6 +44,11 @@ static const std::unordered_map<int32_t, const char*> menuThemeOptions = {
     { UIWidgets::Colors::Brown, "Brown" },
     { UIWidgets::Colors::Gray, "Gray" },
     { UIWidgets::Colors::DarkGray, "Dark Gray" },
+};
+
+static const std::vector<const char*> menuLanguageOptions = {
+    "Português (Brasil)", // MENU_LANGUAGE_PORTUGUESE_BR
+    "English",            // MENU_LANGUAGE_ENGLISH
 };
 
 static const std::vector<const char*> alwaysWinDoggyraceOptions = {
@@ -310,6 +316,12 @@ void BenMenu::AddSettings() {
     // General Settings
     AddSidebarEntry("Settings", "General", 2);
     WidgetPath path = { "Settings", "General", SECTION_COLUMN_1 };
+    AddWidget(path, "Menu Language / Idioma do menu", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_MENU_LANGUAGE)
+        .Options(ComboboxOptions()
+                     .Tooltip("Language of the 2Ship menus. / Idioma dos menus do 2Ship.")
+                     .ComboVec(&menuLanguageOptions)
+                     .DefaultIndex(BenGui::MENU_LANGUAGE_PORTUGUESE_BR));
     AddWidget(path, "Menu Theme", WIDGET_CVAR_COMBOBOX)
         .CVar("gSettings.Menu.Theme")
         .Options(ComboboxOptions()

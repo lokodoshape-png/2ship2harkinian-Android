@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <memory>
 #include "2s2h/ShipUtils.h"
+#include "Translation.h"
 #include "2s2h/ShipInit.hpp"
 #include "DeveloperTools/SaveEditor.h"
 #include <ship/window/gui/GuiWindow.h>
@@ -320,7 +321,7 @@ struct IntSliderOptions : WidgetOptions {
     Colors color = Colors::Gray;
     ImGuiSliderFlags flags = 0;
     ImVec2 size = { 0, 0 };
-    
+
     IntSliderOptions& ShowAdjustmentButtons(bool showAdjustmentButtons_) {
         showAdjustmentButtons = showAdjustmentButtons_;
         return *this;
@@ -678,6 +679,7 @@ float CalcComboWidth(const char* preview_value, ImGuiComboFlags flags);
 template <typename T>
 bool Combobox(const char* label, T* value, const std::unordered_map<T, const char*>* comboMap,
               const ComboboxOptions& options = {}) {
+    label = BenGui::Tr(label);
     bool dirty = false;
     std::string invisibleLabelStr = "##" + std::string(label);
     const char* invisibleLabel = invisibleLabelStr.c_str();
@@ -692,9 +694,9 @@ bool Combobox(const char* label, T* value, const std::unordered_map<T, const cha
     size_t length = 0;
     const auto& iterableComboMap = *comboMap;
     for (const auto& [index, string] : iterableComboMap) {
-        size_t len = strlen(string);
+        size_t len = strlen(BenGui::Tr(string));
         if (len > length) {
-            longest = string;
+            longest = BenGui::Tr(string);
             length = len;
         }
     }
@@ -718,11 +720,11 @@ bool Combobox(const char* label, T* value, const std::unordered_map<T, const cha
         }
     }
     ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::BeginCombo(invisibleLabel, comboMap->at(*value), options.flags)) {
+    if (ImGui::BeginCombo(invisibleLabel, BenGui::Tr(comboMap->at(*value)), options.flags)) {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
         for (const auto& pair : *comboMap) {
             if (strlen(pair.second) > 1) {
-                if (ImGui::Selectable(pair.second, pair.first == *value)) {
+                if (ImGui::Selectable(BenGui::Tr(pair.second), pair.first == *value)) {
                     *value = pair.first;
                     dirty = true;
                 }
@@ -748,9 +750,9 @@ bool Combobox(const char* label, T* value, const std::unordered_map<T, const cha
     ImGui::EndGroup();
     if (options.disabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !Ship_IsCStringEmpty(options.disabledTooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.disabledTooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.disabledTooltip)).c_str());
     } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && !Ship_IsCStringEmpty(options.tooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.tooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.tooltip)).c_str());
     }
     ImGui::PopID();
     return dirty;
@@ -759,6 +761,7 @@ bool Combobox(const char* label, T* value, const std::unordered_map<T, const cha
 template <typename T = size_t>
 bool Combobox(const char* label, T* value, const std::vector<const char*>& comboVector,
               const ComboboxOptions& options = {}) {
+    label = BenGui::Tr(label);
     bool dirty = false;
     size_t currentValueIndex = static_cast<size_t>(*value);
     std::string invisibleLabelStr = "##" + std::string(label);
@@ -771,9 +774,9 @@ bool Combobox(const char* label, T* value, const std::vector<const char*>& combo
     const char* longest;
     size_t length = 0;
     for (auto& string : comboVector) {
-        size_t len = strlen(string);
+        size_t len = strlen(BenGui::Tr(string));
         if (len > length) {
-            longest = string;
+            longest = BenGui::Tr(string);
             length = len;
         }
     }
@@ -799,12 +802,12 @@ bool Combobox(const char* label, T* value, const std::vector<const char*>& combo
     }
 
     ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::BeginCombo(invisibleLabel, comboVector.at(currentValueIndex), options.flags)) {
+    if (ImGui::BeginCombo(invisibleLabel, BenGui::Tr(comboVector.at(currentValueIndex)), options.flags)) {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
         for (size_t i = 0; i < comboVector.size(); ++i) {
             auto newValue = static_cast<T>(i);
             if (strlen(comboVector.at(i)) > 1) {
-                if (ImGui::Selectable(comboVector.at(i), newValue == *value)) {
+                if (ImGui::Selectable(BenGui::Tr(comboVector.at(i)), newValue == *value)) {
                     *value = newValue;
                     dirty = true;
                 }
@@ -832,9 +835,9 @@ bool Combobox(const char* label, T* value, const std::vector<const char*>& combo
     ImGui::EndGroup();
     if (options.disabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !Ship_IsCStringEmpty(options.disabledTooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.disabledTooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.disabledTooltip)).c_str());
     } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && !Ship_IsCStringEmpty(options.tooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.tooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.tooltip)).c_str());
     }
     ImGui::PopID();
     return dirty;
@@ -843,6 +846,7 @@ bool Combobox(const char* label, T* value, const std::vector<const char*>& combo
 template <typename T = size_t>
 bool Combobox(const char* label, T* value, const std::vector<std::string>& comboVector,
               const ComboboxOptions& options = {}) {
+    label = BenGui::Tr(label);
     bool dirty = false;
     size_t currentValueIndex = static_cast<size_t>(*value);
     std::string invisibleLabelStr = "##" + std::string(label);
@@ -883,12 +887,12 @@ bool Combobox(const char* label, T* value, const std::vector<std::string>& combo
     }
 
     ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::BeginCombo(invisibleLabel, comboVector.at(currentValueIndex).c_str(), options.flags)) {
+    if (ImGui::BeginCombo(invisibleLabel, BenGui::Tr(comboVector.at(currentValueIndex).c_str()), options.flags)) {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
         for (size_t i = 0; i < comboVector.size(); ++i) {
             auto newValue = static_cast<T>(i);
             if (comboVector.at(i).length() > 1) {
-                if (ImGui::Selectable(comboVector.at(i).c_str(), newValue == *value)) {
+                if (ImGui::Selectable(BenGui::Tr(comboVector.at(i).c_str()), newValue == *value)) {
                     *value = newValue;
                     dirty = true;
                 }
@@ -917,9 +921,9 @@ bool Combobox(const char* label, T* value, const std::vector<std::string>& combo
     ImGui::EndGroup();
     if (options.disabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !Ship_IsCStringEmpty(options.disabledTooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.disabledTooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.disabledTooltip)).c_str());
     } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && !Ship_IsCStringEmpty(options.tooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.tooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.tooltip)).c_str());
     }
     ImGui::PopID();
     return dirty;
@@ -927,6 +931,7 @@ bool Combobox(const char* label, T* value, const std::vector<std::string>& combo
 
 template <typename T = size_t, size_t N>
 bool Combobox(const char* label, T* value, const char* (&comboArray)[N], const ComboboxOptions& options = {}) {
+    label = BenGui::Tr(label);
     bool dirty = false;
     size_t currentValueIndex = static_cast<size_t>(*value);
     if (currentValueIndex >= N) {
@@ -942,9 +947,9 @@ bool Combobox(const char* label, T* value, const char* (&comboArray)[N], const C
     const char* longest;
     size_t length = 0;
     for (size_t i = 0; i < N; i++) {
-        size_t len = strlen(comboArray[i]);
+        size_t len = strlen(BenGui::Tr(comboArray[i]));
         if (len > length) {
-            longest = comboArray[i];
+            longest = BenGui::Tr(comboArray[i]);
             length = len;
         }
     }
@@ -1003,9 +1008,9 @@ bool Combobox(const char* label, T* value, const char* (&comboArray)[N], const C
     ImGui::EndGroup();
     if (options.disabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !Ship_IsCStringEmpty(options.disabledTooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.disabledTooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.disabledTooltip)).c_str());
     } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && !Ship_IsCStringEmpty(options.tooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.tooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.tooltip)).c_str());
     }
     ImGui::PopID();
     return dirty;
@@ -1066,19 +1071,19 @@ bool ComboboxWithSearch(const char* label, T* value, const std::unordered_map<T,
     ImGui::BeginGroup();
     ImGui::BeginDisabled(options.disabled);
     PushStyleCombobox(options.color);
-    
+
     const char* longest;
     size_t length = 0;
     const auto& iterableComboMap = *comboMap;
     for (const auto& [index, string] : iterableComboMap) {
-        size_t len = strlen(string);
+        size_t len = strlen(BenGui::Tr(string));
         if (len > length) {
-            longest = string;
+            longest = BenGui::Tr(string);
             length = len;
         }
     }
     float comboWidth = CalcComboWidth(longest, options.flags);
-    
+
     ImGui::AlignTextToFramePadding();
     if (options.labelPosition != LabelPosition::None) {
         if (options.alignment == ComponentAlignment::Right) {
@@ -1097,40 +1102,40 @@ bool ComboboxWithSearch(const char* label, T* value, const std::unordered_map<T,
             }
         }
     }
-    
+
     ImGui::SetNextItemWidth(options.width.value_or(comboWidth));
-    if (ImGui::BeginCombo(invisibleLabel, comboMap->at(*value), options.flags)) {
+    if (ImGui::BeginCombo(invisibleLabel, BenGui::Tr(comboMap->at(*value)), options.flags)) {
         // Use static map to maintain filter state per combobox instance
         static std::unordered_map<ImGuiID, ImGuiTextFilter> filters;
         ImGuiID filterId = ImGui::GetID("##search");
         ImGuiTextFilter& filter = filters[filterId];
-        
+
         // Focus search input when dropdown first opens
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetKeyboardFocusHere();
         }
-        
+
         ImGui::SetNextItemWidth(-FLT_MIN);
         filter.Draw("##search", -FLT_MIN);
-        
+
         ImGui::Separator();
-        
+
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
         for (const auto& [itemId, itemName] : *comboMap) {
             if (!filter.PassFilter(itemName)) {
                 continue;
             }
-            
+
             if (ImGui::Selectable(itemName, itemId == *value)) {
                 *value = itemId;
                 dirty = true;
             }
         }
         ImGui::PopStyleVar();
-        
+
         ImGui::EndCombo();
     }
-    
+
     if (options.labelPosition != LabelPosition::None) {
         if (options.alignment == ComponentAlignment::Left) {
             if (options.labelPosition == LabelPosition::Near) {
@@ -1148,9 +1153,9 @@ bool ComboboxWithSearch(const char* label, T* value, const std::unordered_map<T,
     ImGui::EndGroup();
     if (options.disabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !Ship_IsCStringEmpty(options.disabledTooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.disabledTooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.disabledTooltip)).c_str());
     } else if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && !Ship_IsCStringEmpty(options.tooltip)) {
-        ImGui::SetTooltip("%s", WrappedText(options.tooltip).c_str());
+        ImGui::SetTooltip("%s", WrappedText(BenGui::Tr(options.tooltip)).c_str());
     }
     ImGui::PopID();
     return dirty;

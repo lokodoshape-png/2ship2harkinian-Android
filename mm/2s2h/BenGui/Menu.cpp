@@ -1,5 +1,6 @@
 #include "Menu.h"
 #include "UIWidgets.hpp"
+#include "Translation.h"
 #include "BenPort.h"
 #include "BenInputEditorWindow.h"
 #include <ship/window/gui/GuiElement.h>
@@ -25,6 +26,8 @@ namespace BenGui {
 extern std::shared_ptr<BenModalWindow> mModalWindow;
 }
 std::vector<SearchWidget> extraSearchWidgets = {};
+
+using BenGui::Tr;
 
 namespace Ship {
 std::string disabledTempTooltip;
@@ -142,7 +145,8 @@ bool ModernMenuSidebarEntry(std::string label) {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec2 pos = window->DC.CursorPos;
     const ImGuiID sidebarId = window->GetID(std::string(label + "##Sidebar").c_str());
-    ImVec2 labelSize = ImGui::CalcTextSize(label.c_str(), ImGui::FindRenderedTextEnd(label.c_str()), true);
+    const char* displayLabel = Tr(label.c_str());
+    ImVec2 labelSize = ImGui::CalcTextSize(displayLabel, ImGui::FindRenderedTextEnd(displayLabel), true);
     pos.y += style.FramePadding.y;
     pos.x = window->WorkRect.GetCenter().x - labelSize.x / 2;
     ImRect bb = { pos - style.FramePadding, pos + labelSize + style.FramePadding };
@@ -158,7 +162,7 @@ bool ModernMenuSidebarEntry(std::string label) {
                                                        : hovered         ? ImGuiCol_ButtonHovered
                                                                          : ImGuiCol_Button),
                                     3.0f);
-    UIWidgets::RenderText(pos, label.c_str(), ImGui::FindRenderedTextEnd(label.c_str()), true);
+    UIWidgets::RenderText(pos, displayLabel, ImGui::FindRenderedTextEnd(displayLabel), true);
     return pressed;
 }
 
@@ -168,7 +172,8 @@ bool ModernMenuHeaderEntry(std::string label) {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec2 pos = window->DC.CursorPos;
     const ImGuiID headerId = window->GetID(std::string(label + "##Header").c_str());
-    ImVec2 labelSize = ImGui::CalcTextSize(label.c_str(), ImGui::FindRenderedTextEnd(label.c_str()), true);
+    const char* displayLabel = Tr(label.c_str());
+    ImVec2 labelSize = ImGui::CalcTextSize(displayLabel, ImGui::FindRenderedTextEnd(displayLabel), true);
     ImRect bb = { pos, pos + labelSize + style.FramePadding * 2 };
     ImGui::ItemSize(bb, style.FramePadding.y);
     ImGui::ItemAdd(bb, headerId);
@@ -180,7 +185,7 @@ bool ModernMenuHeaderEntry(std::string label) {
                                                                          : ImGuiCol_Button),
                                     3.0f);
     pos += style.FramePadding;
-    UIWidgets::RenderText(pos, label.c_str(), ImGui::FindRenderedTextEnd(label.c_str()), true);
+    UIWidgets::RenderText(pos, displayLabel, ImGui::FindRenderedTextEnd(displayLabel), true);
     return pressed;
 }
 
@@ -200,7 +205,9 @@ uint32_t Menu::DrawSearchResults(std::string& menuSearchText) {
                         continue;
                     }
                     const char* tooltip = info.options->tooltip;
-                    std::string widgetStr = std::string(info.name) + std::string(tooltip != nullptr ? tooltip : "");
+                    // English and translated text both match, so either language finds the option.
+                    std::string widgetStr = std::string(info.name) + std::string(tooltip != nullptr ? tooltip : "") +
+                                            Tr(info.name) + std::string(tooltip != nullptr ? Tr(tooltip) : "");
                     std::transform(menuSearchText.begin(), menuSearchText.end(), menuSearchText.begin(), ::tolower);
                     menuSearchText.erase(std::remove(menuSearchText.begin(), menuSearchText.end(), ' '),
                                          menuSearchText.end());
@@ -209,7 +216,8 @@ uint32_t Menu::DrawSearchResults(std::string& menuSearchText) {
                     if (widgetStr.find(menuSearchText) != std::string::npos) {
                         MenuDrawItem(info, 90 / sidebar.columnCount, menuThemeIndex);
                         ImGui::PushStyleColor(ImGuiCol_Text, UIWidgets::ColorValues.at(UIWidgets::Colors::Gray));
-                        std::string origin = fmt::format("  ({} -> {}, Col {})", menuEntry.label, sidebarLabel, i + 1);
+                        std::string origin =
+                            fmt::format("  ({} -> {}, Col {})", Tr(menuEntry.label), Tr(sidebarLabel), i + 1);
                         ImGui::Text("%s", origin.c_str());
                         ImGui::PopStyleColor();
                         searchCount++;
@@ -223,13 +231,15 @@ uint32_t Menu::DrawSearchResults(std::string& menuSearchText) {
             entry.info.type == WIDGET_SEPARATOR_TEXT || entry.info.isHidden || entry.info.hideInSearch) {
             continue;
         }
-        std::string widgetStr = entry.info.name + entry.info.options->tooltip + entry.extraTerms + entry.sidebarName;
+        std::string widgetStr = entry.info.name + entry.info.options->tooltip + entry.extraTerms + entry.sidebarName +
+                                Tr(entry.info.name) + Tr(entry.info.options->tooltip) + Tr(entry.sidebarName);
         std::transform(widgetStr.begin(), widgetStr.end(), widgetStr.begin(), ::tolower);
         widgetStr.erase(std::remove(widgetStr.begin(), widgetStr.end(), ' '), widgetStr.end());
         if (widgetStr.find(menuSearchText) != std::string::npos) {
             MenuDrawItem(entry.info, 400, menuThemeIndex);
             ImGui::PushStyleColor(ImGuiCol_Text, UIWidgets::ColorValues.at(UIWidgets::Colors::Gray));
-            std::string origin = fmt::format("  ({} -> {}, {})", entry.menuName, entry.sidebarName, entry.location);
+            std::string origin =
+                fmt::format("  ({} -> {}, {})", Tr(entry.menuName), Tr(entry.sidebarName), Tr(entry.location));
             ImGui::Text("%s", origin.c_str());
             ImGui::PopStyleColor();
             searchCount++;
@@ -286,7 +296,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
                 }
                 auto options = std::static_pointer_cast<UIWidgets::CheckboxOptions>(widget.options);
                 options->color = menuThemeIndex;
-                if (UIWidgets::Checkbox(UIWidgets::WrappedText(widget.name.c_str(), width).c_str(), pointer,
+                if (UIWidgets::Checkbox(UIWidgets::WrappedText(Tr(widget.name.c_str()), width).c_str(), pointer,
                                         *options)) {
                     if (widget.callback != nullptr) {
                         widget.callback(widget);
@@ -296,7 +306,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
             case WIDGET_CVAR_CHECKBOX: {
                 auto options = std::static_pointer_cast<UIWidgets::CheckboxOptions>(widget.options);
                 options->color = menuThemeIndex;
-                if (UIWidgets::CVarCheckbox(UIWidgets::WrappedText(widget.name.c_str(), width).c_str(), widget.cVar,
+                if (UIWidgets::CVarCheckbox(UIWidgets::WrappedText(Tr(widget.name.c_str()), width).c_str(), widget.cVar,
                                             *options)) {
                     if (widget.callback != nullptr) {
                         widget.callback(widget);
@@ -337,7 +347,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
                 if (widget.options->color != UIWidgets::Colors::NoColor) {
                     ImGui::PushStyleColor(ImGuiCol_Text, UIWidgets::ColorValues.at(widget.options->color));
                 }
-                ImGui::SeparatorText(widget.name.c_str());
+                ImGui::SeparatorText(Tr(widget.name.c_str()));
                 if (widget.options->color != UIWidgets::Colors::NoColor) {
                     ImGui::PopStyleColor();
                 }
@@ -347,7 +357,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
                     ImGui::PushStyleColor(ImGuiCol_Text, UIWidgets::ColorValues.at(widget.options->color));
                 }
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextWrapped("%s", widget.name.c_str());
+                ImGui::TextWrapped("%s", Tr(widget.name.c_str()));
                 if (widget.options->color != UIWidgets::Colors::NoColor) {
                     ImGui::PopStyleColor();
                 }
@@ -487,7 +497,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
             } break;
             case WIDGET_SEARCH: {
                 UIWidgets::PushStyleButton(menuThemeIndex);
-                if (ImGui::Button("Clear")) {
+                if (ImGui::Button(Tr("Clear"))) {
                     menuSearch.Clear();
                 }
                 ImGui::SameLine();
@@ -505,7 +515,7 @@ void Menu::MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors me
                 std::string menuSearchText(menuSearch.InputBuf);
 
                 if (menuSearchText == "") {
-                    ImGui::Text("Start typing to see results.");
+                    ImGui::Text("%s", Tr("Start typing to see results."));
                     return;
                 }
                 DrawSearchResults(menuSearchText);
@@ -609,7 +619,7 @@ void Menu::DrawElement() {
         headerWidth += 200.0f + style.ItemSpacing.x + style.FramePadding.x;
     }
     for (auto& label : menuOrder) {
-        ImVec2 size = ImGui::CalcTextSize(label.c_str());
+        ImVec2 size = ImGui::CalcTextSize(Tr(label.c_str()));
         headerSizes.push_back(size);
         headerWidth += size.x + style.FramePadding.x * 2;
         if (label == headerIndex) {
@@ -696,7 +706,7 @@ void Menu::DrawElement() {
         menuSearchText.erase(std::remove(menuSearchText.begin(), menuSearchText.end(), ' '), menuSearchText.end());
         if (menuSearchText.length() < 1) {
             ImGui::SameLine(headerWidth - 200.0f + style.ItemSpacing.x);
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), "Search...");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), Tr("Search..."));
         }
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
@@ -826,9 +836,9 @@ void Menu::DrawElement() {
     if (headerSearch && menuSearchText.length() > 0) {
         uint32_t searchCount = DrawSearchResults(menuSearchText);
         if (searchCount == 0) {
-            ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("No results found").x) / 2);
+            ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(Tr("No results found")).x) / 2);
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), "No results found");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), Tr("No results found"));
         }
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Clear Search").x) / 2 - 10.0f);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
