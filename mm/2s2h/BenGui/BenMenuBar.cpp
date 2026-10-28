@@ -733,7 +733,7 @@ void DrawEnhancementsMenu() {
                              "sombra, as cores ficam mais vivas e tudo ganha contorno preto. As texturas e o HUD "
                              "continuam iguais. Vale na hora." });
             if (CVarGetInteger("gEnhancements.Graphics.CelShading", 0)) {
-                UIWidgets::CVarSliderInt("Tons de sombra: %d", "gEnhancements.Graphics.CelShadingBands", 2, 6, 3);
+                UIWidgets::CVarSliderInt("Tons de sombra: %d", "gEnhancements.Graphics.CelShadingBands", 2, 6, 2);
                 UIWidgets::Tooltip("2 = luz e sombra bem marcadas, como no Budokai; mais tons = mais suave.");
                 UIWidgets::CVarCheckbox(
                     "Contorno preto", "gEnhancements.Graphics.CelOutline",

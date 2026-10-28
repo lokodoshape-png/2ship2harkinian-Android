@@ -37,7 +37,7 @@ index 4783ca2..2020652 100644
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
 diff --git a/src/graphic/Fast3D/gfx_direct3d11.cpp b/src/graphic/Fast3D/gfx_direct3d11.cpp
-index bc96472..d134a8b 100644
+index bc96472..a0d4f6c 100644
 --- a/src/graphic/Fast3D/gfx_direct3d11.cpp
 +++ b/src/graphic/Fast3D/gfx_direct3d11.cpp
 @@ -29,6 +29,7 @@
@@ -60,7 +60,87 @@ index bc96472..d134a8b 100644
  };
  
  struct PerDrawCB {
-@@ -414,7 +418,7 @@ static struct ShaderProgram* gfx_d3d11_create_and_load_new_shader(uint64_t shade
+@@ -71,6 +75,7 @@ struct Framebuffer {
+     ComPtr<ID3D11RenderTargetView> render_target_view;
+     ComPtr<ID3D11DepthStencilView> depth_stencil_view;
+     ComPtr<ID3D11ShaderResourceView> depth_stencil_srv;
++    ComPtr<ID3D11ShaderResourceView> stencil_srv; // cel shading outlines read the world/HUD mask through this
+     uint32_t texture_id;
+     bool has_depth_buffer;
+     uint32_t msaa_level;
+@@ -144,6 +149,15 @@ static struct {
+     int8_t depth_mask;
+     int8_t zmode_decal;
+ 
++    // Cel shading outlines: a fullscreen pass over the finished game frame.
++    bool outline_enabled;
++    float outline_thickness;
++    ComPtr<ID3D11VertexShader> outline_vs;
++    ComPtr<ID3D11PixelShader> outline_ps;
++    ComPtr<ID3D11BlendState> outline_blend_state;
++    ComPtr<ID3D11Buffer> outline_cb;
++    bool outline_init_failed;
++
+     // Previous states (to prevent setting states needlessly)
+ 
+     struct ShaderProgramD3D11* last_shader_program = nullptr;
+@@ -154,6 +168,7 @@ static struct {
+     int8_t last_depth_test = -1;
+     int8_t last_depth_mask = -1;
+     int8_t last_zmode_decal = -1;
++    int8_t last_outline_enabled = -1;
+     bool srgb_mode = false;
+     D3D_PRIMITIVE_TOPOLOGY last_primitive_topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+ } d3d;
+@@ -163,14 +178,15 @@ static LARGE_INTEGER last_time, accumulated_time, frequency;
+ int gfx_d3d11_create_framebuffer(void);
+ 
+ static void create_depth_stencil_objects(uint32_t width, uint32_t height, uint32_t msaa_count,
+-                                         ID3D11DepthStencilView** view, ID3D11ShaderResourceView** srv) {
++                                         ID3D11DepthStencilView** view, ID3D11ShaderResourceView** srv,
++                                         ID3D11ShaderResourceView** stencil_srv = nullptr) {
+     D3D11_TEXTURE2D_DESC texture_desc;
+     texture_desc.Width = width;
+     texture_desc.Height = height;
+     texture_desc.MipLevels = 1;
+     texture_desc.ArraySize = 1;
+     texture_desc.Format =
+-        d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R24G8_TYPELESS;
++        d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_R32G8X24_TYPELESS : DXGI_FORMAT_R24G8_TYPELESS;
+     texture_desc.SampleDesc.Count = msaa_count;
+     texture_desc.SampleDesc.Quality = 0;
+     texture_desc.Usage = D3D11_USAGE_DEFAULT;
+@@ -183,7 +199,7 @@ static void create_depth_stencil_objects(uint32_t width, uint32_t height, uint32
+ 
+     D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
+     view_desc.Format =
+-        d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_D32_FLOAT : DXGI_FORMAT_D24_UNORM_S8_UINT;
++        d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_D32_FLOAT_S8X24_UINT : DXGI_FORMAT_D24_UNORM_S8_UINT;
+     view_desc.Flags = 0;
+     if (msaa_count > 1) {
+         view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+@@ -197,13 +213,18 @@ static void create_depth_stencil_objects(uint32_t width, uint32_t height, uint32
+ 
+     if (srv != nullptr) {
+         D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+-        srv_desc.Format =
+-            d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
++        srv_desc.Format = d3d.feature_level >= D3D_FEATURE_LEVEL_10_0 ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
++                                                                      : DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+         srv_desc.ViewDimension = msaa_count > 1 ? D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
+         srv_desc.Texture2D.MostDetailedMip = 0;
+         srv_desc.Texture2D.MipLevels = -1;
+ 
+         ThrowIfFailed(d3d.device->CreateShaderResourceView(texture.Get(), &srv_desc, srv));
++
++        if (stencil_srv != nullptr && msaa_count <= 1 && d3d.feature_level >= D3D_FEATURE_LEVEL_10_0) {
++            srv_desc.Format = DXGI_FORMAT_X32_TYPELESS_G8X24_UINT;
++            ThrowIfFailed(d3d.device->CreateShaderResourceView(texture.Get(), &srv_desc, stencil_srv));
++        }
+     }
+ }
+ 
+@@ -414,7 +435,7 @@ static struct ShaderProgram* gfx_d3d11_create_and_load_new_shader(uint64_t shade
      CCFeatures cc_features;
      gfx_cc_get_features(shader_id0, shader_id1, &cc_features);
  
@@ -69,7 +149,46 @@ index bc96472..d134a8b 100644
      size_t len, num_floats;
  
      gfx_direct3d_common_build_shader(buf, len, num_floats, cc_features, false,
-@@ -824,6 +828,22 @@ static void gfx_d3d11_start_frame(void) {
+@@ -678,9 +699,11 @@ static void gfx_d3d11_set_use_alpha(bool use_alpha) {
+ 
+ static void gfx_d3d11_draw_triangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) {
+ 
+-    if (d3d.last_depth_test != d3d.depth_test || d3d.last_depth_mask != d3d.depth_mask) {
++    if (d3d.last_depth_test != d3d.depth_test || d3d.last_depth_mask != d3d.depth_mask ||
++        d3d.last_outline_enabled != (int8_t)d3d.outline_enabled) {
+         d3d.last_depth_test = d3d.depth_test;
+         d3d.last_depth_mask = d3d.depth_mask;
++        d3d.last_outline_enabled = d3d.outline_enabled;
+ 
+         d3d.depth_stencil_state.Reset();
+ 
+@@ -692,10 +715,23 @@ static void gfx_d3d11_draw_triangles(float buf_vbo[], size_t buf_vbo_len, size_t
+         depth_stencil_desc.DepthFunc = d3d.depth_test
+                                            ? (d3d.zmode_decal ? D3D11_COMPARISON_LESS_EQUAL : D3D11_COMPARISON_LESS)
+                                            : D3D11_COMPARISON_ALWAYS;
+-        depth_stencil_desc.StencilEnable = false;
++        // With cel shading outlines on, every drawn pixel records in the stencil whether it was depth tested (3D
++        // world = 1) or not (HUD = 0), so the outline pass can leave the HUD alone.
++        depth_stencil_desc.StencilEnable = d3d.outline_enabled;
++        depth_stencil_desc.StencilReadMask = 0xFF;
++        depth_stencil_desc.StencilWriteMask = 0xFF;
++        depth_stencil_desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
++        depth_stencil_desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
++        depth_stencil_desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
++        depth_stencil_desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
++        depth_stencil_desc.BackFace = depth_stencil_desc.FrontFace;
++        if (d3d.outline_enabled) {
++            // The stencil is written even where depth testing is off, so the depth unit has to stay on.
++            depth_stencil_desc.DepthEnable = true;
++        }
+ 
+         ThrowIfFailed(d3d.device->CreateDepthStencilState(&depth_stencil_desc, d3d.depth_stencil_state.GetAddressOf()));
+-        d3d.context->OMSetDepthStencilState(d3d.depth_stencil_state.Get(), 0);
++        d3d.context->OMSetDepthStencilState(d3d.depth_stencil_state.Get(), d3d.depth_test ? 1 : 0);
+     }
+ 
+     if (d3d.last_zmode_decal != d3d.zmode_decal) {
+@@ -824,6 +860,170 @@ static void gfx_d3d11_start_frame(void) {
          // No high values, as noise starts to look ugly
          d3d.per_frame_cb_data.noise_frame = 0;
      }
@@ -77,23 +196,213 @@ index bc96472..d134a8b 100644
 +    // Same colour options as the OpenGL renderer (2Ship MM3D lighting and cel shading); uploaded with the rest of
 +    // the per-frame data when drawing to a framebuffer starts.
 +    if (CVarGetInteger("gEnhancements.MM3D.Lighting.Enabled", 0)) {
-+        d3d.per_frame_cb_data.color_brightness =
-+            CVarGetInteger("gEnhancements.MM3D.Lighting.Brightness", 115) / 100.0f;
-+        d3d.per_frame_cb_data.color_saturation =
-+            CVarGetInteger("gEnhancements.MM3D.Lighting.Saturation", 115) / 100.0f;
++        d3d.per_frame_cb_data.color_brightness = CVarGetInteger("gEnhancements.MM3D.Lighting.Brightness", 115) / 100.0f;
++        d3d.per_frame_cb_data.color_saturation = CVarGetInteger("gEnhancements.MM3D.Lighting.Saturation", 115) / 100.0f;
 +    } else {
 +        d3d.per_frame_cb_data.color_brightness = 1.0f;
 +        d3d.per_frame_cb_data.color_saturation = 1.0f;
 +    }
-+    d3d.per_frame_cb_data.color_cel_bands =
-+        CVarGetInteger("gEnhancements.Graphics.CelShading", 0)
-+            ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 3)
-+            : 0.0f;
++    d3d.per_frame_cb_data.color_cel_bands = CVarGetInteger("gEnhancements.Graphics.CelShading", 0)
++                                                ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 2)
++                                                : 0.0f;
++    d3d.outline_enabled = gfx_d3d11_outlines_wanted() && d3d.feature_level >= D3D_FEATURE_LEVEL_10_0;
++    d3d.outline_thickness = (float)CVarGetInteger("gEnhancements.Graphics.CelOutlineThickness", 2);
++}
++
++bool gfx_d3d11_outlines_wanted(void) {
++    return CVarGetInteger("gEnhancements.Graphics.CelShading", 0) &&
++           CVarGetInteger("gEnhancements.Graphics.CelOutline", 1);
++}
++
++static bool gfx_d3d11_init_outlines(void) {
++    // Same detection as the OpenGL renderer: depth stored as 1 - d is proportional to 1/z, so flat surfaces vary
++    // linearly across the screen. A pixel with a clearly farther neighbour on either side (a dip in the second
++    // difference) is on the near side of a silhouette and gets painted black. The HUD (stencil 0) is skipped.
++    static const char* source = R"(
++Texture2D<float> depthTex : register(t0);
++Texture2D<uint2> stencilTex : register(t1);
++cbuffer OutlineCB : register(b2) {
++    int2 outlineStep;
++    int2 outlineSize;
++}
++float4 VSMain(uint id : SV_VertexID) : SV_Position {
++    float2 p = float2((id << 1) & 2, id & 2);
++    return float4(p * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
++}
++float w(int2 p) {
++    p = clamp(p, int2(0, 0), outlineSize - 1);
++    return 1.0 - depthTex.Load(int3(p, 0));
++}
++float4 PSMain(float4 pos : SV_Position) : SV_Target {
++    int2 p = int2(pos.xy);
++    if (stencilTex.Load(int3(p, 0)).g != 1) discard;
++    float c = w(p);
++    if (c <= 0.0) discard;
++    float l = w(p - int2(outlineStep.x, 0));
++    float r = w(p + int2(outlineStep.x, 0));
++    float d = w(p - int2(0, outlineStep.y));
++    float u = w(p + int2(0, outlineStep.y));
++    float dl = w(p + int2(-outlineStep.x, -outlineStep.y));
++    float ur = w(p + int2(outlineStep.x, outlineStep.y));
++    float dr = w(p + int2(outlineStep.x, -outlineStep.y));
++    float ul = w(p + int2(-outlineStep.x, outlineStep.y));
++    float dip = max(max(2.0 * c - l - r, 2.0 * c - d - u), 0.75 * max(2.0 * c - dl - ur, 2.0 * c - dr - ul)) / c;
++    // Wide smoothstep: lines fade in and out instead of popping, which keeps diagonals from looking jagged.
++    float edge = smoothstep(0.02, 0.10, dip);
++    if (edge <= 0.0) discard;
++    return float4(0.0, 0.0, 0.0, edge * 0.9);
++}
++)";
++    ComPtr<ID3DBlob> vs, ps, error_blob;
++    if (FAILED(d3d.D3DCompile(source, strlen(source), nullptr, nullptr, nullptr, "VSMain", "vs_4_0",
++                              D3DCOMPILE_OPTIMIZATION_LEVEL2, 0, vs.GetAddressOf(), error_blob.GetAddressOf())) ||
++        FAILED(d3d.D3DCompile(source, strlen(source), nullptr, nullptr, nullptr, "PSMain", "ps_4_0",
++                              D3DCOMPILE_OPTIMIZATION_LEVEL2, 0, ps.GetAddressOf(),
++                              error_blob.ReleaseAndGetAddressOf()))) {
++        if (error_blob != nullptr) {
++            fprintf(stderr, "Outline shader compilation failed: %s\n", (char*)error_blob->GetBufferPointer());
++        }
++        return false;
++    }
++    if (FAILED(d3d.device->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), nullptr,
++                                              d3d.outline_vs.GetAddressOf())) ||
++        FAILED(d3d.device->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), nullptr,
++                                             d3d.outline_ps.GetAddressOf()))) {
++        return false;
++    }
++
++    D3D11_BLEND_DESC blend_desc;
++    ZeroMemory(&blend_desc, sizeof(blend_desc));
++    blend_desc.RenderTarget[0].BlendEnable = true;
++    blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
++    blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
++    blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
++    blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
++    blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
++    blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
++    blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
++    if (FAILED(d3d.device->CreateBlendState(&blend_desc, d3d.outline_blend_state.GetAddressOf()))) {
++        return false;
++    }
++
++    D3D11_BUFFER_DESC cb_desc;
++    ZeroMemory(&cb_desc, sizeof(cb_desc));
++    cb_desc.Usage = D3D11_USAGE_DYNAMIC;
++    cb_desc.ByteWidth = 16;
++    cb_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
++    cb_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
++    return SUCCEEDED(d3d.device->CreateBuffer(&cb_desc, nullptr, d3d.outline_cb.GetAddressOf()));
++}
++
++// Draws the cel shading outlines over a finished game frame (single-sample framebuffer with a readable depth
++// buffer). Pipeline state it changes is either restored or marked dirty so the next draw sets it again.
++void gfx_d3d11_draw_outlines(int fb_id) {
++    if (!d3d.outline_enabled || d3d.outline_init_failed || fb_id <= 0 || (size_t)fb_id >= d3d.framebuffers.size()) {
++        return;
++    }
++    Framebuffer& fb = d3d.framebuffers[fb_id];
++    if (fb.msaa_level > 1 || !fb.has_depth_buffer || fb.depth_stencil_srv.Get() == nullptr ||
++        fb.stencil_srv.Get() == nullptr || fb.render_target_view.Get() == nullptr) {
++        return;
++    }
++    if (d3d.outline_vs.Get() == nullptr && !gfx_d3d11_init_outlines()) {
++        d3d.outline_init_failed = true;
++        return;
++    }
++    const TextureData& tex = d3d.textures[fb.texture_id];
++
++    // Keep the lines about the same width on screen at any internal resolution (thickness is per 480 rows).
++    int px = (int)fmaxf(1.0f, roundf(d3d.outline_thickness * (float)tex.height / 480.0f));
++    int32_t cb_data[4] = { px, px, (int32_t)tex.width, (int32_t)tex.height };
++    D3D11_MAPPED_SUBRESOURCE ms;
++    ZeroMemory(&ms, sizeof(ms));
++    d3d.context->Map(d3d.outline_cb.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
++    memcpy(ms.pData, cb_data, sizeof(cb_data));
++    d3d.context->Unmap(d3d.outline_cb.Get(), 0);
++
++    UINT num_viewports = 1, num_scissors = 1;
++    D3D11_VIEWPORT prev_viewport;
++    D3D11_RECT prev_scissor;
++    d3d.context->RSGetViewports(&num_viewports, &prev_viewport);
++    d3d.context->RSGetScissorRects(&num_scissors, &prev_scissor);
++
++    // The depth buffer is read as a texture, so it can't stay bound for writing during the pass.
++    d3d.context->OMSetRenderTargets(1, fb.render_target_view.GetAddressOf(), nullptr);
++    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)tex.width, (float)tex.height, 0.0f, 1.0f };
++    D3D11_RECT scissor = { 0, 0, (LONG)tex.width, (LONG)tex.height };
++    d3d.context->RSSetViewports(1, &viewport);
++    d3d.context->RSSetScissorRects(1, &scissor);
++
++    d3d.context->IASetInputLayout(nullptr);
++    d3d.context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
++    d3d.context->VSSetShader(d3d.outline_vs.Get(), nullptr, 0);
++    d3d.context->PSSetShader(d3d.outline_ps.Get(), nullptr, 0);
++    d3d.context->PSSetConstantBuffers(2, 1, d3d.outline_cb.GetAddressOf());
++    ID3D11ShaderResourceView* srvs[2] = { fb.depth_stencil_srv.Get(), fb.stencil_srv.Get() };
++    d3d.context->PSSetShaderResources(0, 2, srvs);
++    d3d.context->OMSetBlendState(d3d.outline_blend_state.Get(), nullptr, 0xFFFFFFFF);
++    d3d.context->Draw(3, 0);
++
++    ID3D11ShaderResourceView* null_srvs[2] = { nullptr, nullptr };
++    d3d.context->PSSetShaderResources(0, 2, null_srvs);
++    d3d.context->RSSetViewports(1, &prev_viewport);
++    d3d.context->RSSetScissorRects(1, &prev_scissor);
++    d3d.context->OMSetRenderTargets(1, fb.render_target_view.GetAddressOf(), fb.depth_stencil_view.Get());
++
++    // Force the next game draw to bind its own shader, input layout, blend state, textures and topology again.
++    d3d.last_shader_program = nullptr;
++    d3d.last_blend_state = nullptr;
++    d3d.last_primitive_topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
++    for (int i = 0; i < SHADER_MAX_TEXTURES; i++) {
++        d3d.last_resource_views[i] = nullptr;
++    }
  }
  
  static void gfx_d3d11_end_frame(void) {
+@@ -914,12 +1114,15 @@ static void gfx_d3d11_update_framebuffer_parameters(int fb_id, uint32_t width, u
+     if (has_depth_buffer &&
+         (diff || !fb.has_depth_buffer || (fb.depth_stencil_srv.Get() != nullptr) != can_extract_depth)) {
+         fb.depth_stencil_srv.Reset();
++        fb.stencil_srv.Reset();
+         create_depth_stencil_objects(width, height, msaa_level, fb.depth_stencil_view.ReleaseAndGetAddressOf(),
+-                                     can_extract_depth ? fb.depth_stencil_srv.GetAddressOf() : nullptr);
++                                     can_extract_depth ? fb.depth_stencil_srv.GetAddressOf() : nullptr,
++                                     can_extract_depth ? fb.stencil_srv.GetAddressOf() : nullptr);
+     }
+     if (!has_depth_buffer) {
+         fb.depth_stencil_view.Reset();
+         fb.depth_stencil_srv.Reset();
++        fb.stencil_srv.Reset();
+     }
+ 
+     fb.has_depth_buffer = has_depth_buffer;
+@@ -949,7 +1152,8 @@ void gfx_d3d11_start_draw_to_framebuffer(int fb_id, float noise_scale) {
+ void gfx_d3d11_clear_framebuffer(void) {
+     Framebuffer& fb = d3d.framebuffers[d3d.current_framebuffer];
+     if (fb.has_depth_buffer) {
+-        d3d.context->ClearDepthStencilView(fb.depth_stencil_view.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
++        d3d.context->ClearDepthStencilView(fb.depth_stencil_view.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
++                                           0);
+     }
+ }
+ 
+diff --git a/src/graphic/Fast3D/gfx_direct3d11.h b/src/graphic/Fast3D/gfx_direct3d11.h
+index d1eea89..7422eb4 100644
+--- a/src/graphic/Fast3D/gfx_direct3d11.h
++++ b/src/graphic/Fast3D/gfx_direct3d11.h
+@@ -12,6 +12,10 @@
+ extern struct GfxRenderingAPI gfx_direct3d11_api;
+ ImTextureID gfx_d3d11_get_texture_by_id(int id);
+ 
++// Cel shading outlines (2Ship MM3D port): whether they are on, and the pass drawing them over a finished frame.
++bool gfx_d3d11_outlines_wanted(void);
++void gfx_d3d11_draw_outlines(int fb_id);
++
+ #endif
+ 
+ #endif
 diff --git a/src/graphic/Fast3D/gfx_direct3d_common.cpp b/src/graphic/Fast3D/gfx_direct3d_common.cpp
-index 8d543aa..128cd03 100644
+index 8d543aa..7e0ada2 100644
 --- a/src/graphic/Fast3D/gfx_direct3d_common.cpp
 +++ b/src/graphic/Fast3D/gfx_direct3d_common.cpp
 @@ -20,6 +20,9 @@ static void append_line(char* buf, size_t* len, const char* str) {
@@ -170,7 +479,7 @@ index 8d543aa..128cd03 100644
      append_line(buf, &len, "}");
  
      append_line(buf, &len, "float random(in float3 value) {");
-@@ -417,6 +439,20 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
+@@ -417,6 +439,19 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
          }
      }
  
@@ -182,8 +491,7 @@ index 8d543aa..128cd03 100644
 +        append_line(buf, &len, "        float celLight = max(celShade.r, max(celShade.g, celShade.b));");
 +        append_line(buf, &len, "        float celX = celLight * color_cel_bands;");
 +        append_line(buf, &len, "        float celW = max(fwidth(celX) * 1.5, 0.15);");
-+        append_line(buf, &len,
-+                    "        float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;");
++        append_line(buf, &len, "        float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;");
 +        append_line(buf, &len, "        float celTone = min(celStep / color_cel_bands, 1.0);");
 +        append_line(buf, &len, "        if (celLight > 0.001) celShade.rgb *= celTone / celLight;");
 +        append_line(buf, &len, "    }");
@@ -191,25 +499,39 @@ index 8d543aa..128cd03 100644
      append_str(buf, &len, cc_features.opt_alpha ? "    float4 texel;" : "    float3 texel;");
      for (int c = 0; c < (cc_features.opt_2cyc ? 2 : 1); c++) {
          if (c == 1) {
-@@ -457,8 +493,16 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
+@@ -457,6 +492,30 @@ void gfx_direct3d_common_build_shader(char buf[8192], size_t& len, size_t& num_f
  
      append_str(buf, &len, "texel = WRAP(texel, -0.51, 1.51);");
      append_str(buf, &len, "texel = clamp(texel, 0.0, 1.0);");
++    if (cc_features.opt_world && cel_shade_input == 0) {
++        // World draws without vertex lighting (pre-lit or flat-coloured objects) get the toon tones on their final
++        // colour instead, at partial strength so their textures keep some detail.
++        append_line(buf, &len, "    if (color_cel_bands > 0.5) {");
++        append_line(buf, &len, "        float celLight = max(texel.r, max(texel.g, texel.b));");
++        append_line(buf, &len, "        float celX = celLight * color_cel_bands;");
++        append_line(buf, &len, "        float celW = max(fwidth(celX) * 1.5, 0.15);");
++        append_line(buf, &len, "        float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;");
++        append_line(buf, &len, "        float celTone = min(celStep / color_cel_bands, 1.0);");
++        append_line(buf, &len,
++                    "        if (celLight > 0.001) texel.rgb = saturate(texel.rgb * lerp(1.0, celTone / celLight, "
++                    "0.6));");
++        append_line(buf, &len, "    }");
++    }
 +    // MM3D-style colour options: brightness and saturation for everything the game draws.
 +    append_line(buf, &len,
 +                "    texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, 0.114)).xxx, texel.rgb, "
 +                "color_saturation) * color_brightness);");
-     // TODO discard if alpha is 0?
-     if (cc_features.opt_fog) {
-+        // Cel shading gives the 3D world (fogged draws) more vivid, cartoon-like colours.
++    if (cc_features.opt_world) {
++        // Cel shading gives the 3D world more vivid, cartoon-like colours.
 +        append_line(buf, &len,
 +                    "    if (color_cel_bands > 0.5) texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, "
 +                    "0.114)).xxx, texel.rgb, 1.25));");
++    }
+     // TODO discard if alpha is 0?
+     if (cc_features.opt_fog) {
          if (cc_features.opt_alpha) {
-             append_line(buf, &len, "    texel = float4(lerp(texel.rgb, input.fog.rgb, input.fog.a), texel.a);");
-         } else {
 diff --git a/src/graphic/Fast3D/gfx_opengl.cpp b/src/graphic/Fast3D/gfx_opengl.cpp
-index f13b37f..fa6ec29 100644
+index f13b37f..bf1d878 100644
 --- a/src/graphic/Fast3D/gfx_opengl.cpp
 +++ b/src/graphic/Fast3D/gfx_opengl.cpp
 @@ -58,6 +58,9 @@ struct ShaderProgram {
@@ -345,25 +667,40 @@ index f13b37f..fa6ec29 100644
      append_line(fs_buf, &fs_len, cc_features.opt_alpha ? "vec4 texel;" : "vec3 texel;");
      for (int c = 0; c < (cc_features.opt_2cyc ? 2 : 1); c++) {
          if (c == 1) {
-@@ -585,8 +645,17 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
+@@ -585,6 +645,32 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
  
      append_str(fs_buf, &fs_len, "texel = WRAP(texel, -0.51, 1.51);");
      append_str(fs_buf, &fs_len, "texel = clamp(texel, 0.0, 1.0);");
++    if (cc_features.opt_world && cel_shade_input == 0) {
++        // World draws without vertex lighting (pre-lit or flat-coloured objects) get the toon tones on their final
++        // colour instead, at partial strength so their textures keep some detail.
++        append_line(fs_buf, &fs_len, "if (color_cel_bands > 0.5) {");
++        append_line(fs_buf, &fs_len, "    float celLight = max(texel.r, max(texel.g, texel.b));");
++        append_line(fs_buf, &fs_len, "    float celX = celLight * color_cel_bands;");
++        append_line(fs_buf, &fs_len, "    float celW = max(fwidth(celX) * 1.5, 0.15);");
++        append_line(fs_buf, &fs_len,
++                    "    float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, fract(celX)) + 1.0;");
++        append_line(fs_buf, &fs_len, "    float celTone = min(celStep / color_cel_bands, 1.0);");
++        append_line(fs_buf, &fs_len,
++                    "    if (celLight > 0.001) texel.rgb = clamp(texel.rgb * mix(1.0, celTone / celLight, 0.6), 0.0, "
++                    "1.0);");
++        append_line(fs_buf, &fs_len, "}");
++    }
 +    append_line(fs_buf, &fs_len,
 +                "texel.rgb = clamp(mix(vec3(dot(texel.rgb, vec3(0.299, 0.587, 0.114))), texel.rgb, "
 +                "color_saturation) * color_brightness, 0.0, 1.0);");
-     // TODO discard if alpha is 0?
-     if (cc_features.opt_fog) {
-+        // Cel shading gives the 3D world (fogged draws) more vivid, cartoon-like colours.
++    if (cc_features.opt_world) {
++        // Cel shading gives the 3D world more vivid, cartoon-like colours.
 +        append_line(fs_buf, &fs_len, "if (color_cel_bands > 0.5) {");
 +        append_line(fs_buf, &fs_len,
 +                    "    texel.rgb = clamp(mix(vec3(dot(texel.rgb, vec3(0.299, 0.587, 0.114))), texel.rgb, 1.25), "
 +                    "0.0, 1.0);");
 +        append_line(fs_buf, &fs_len, "}");
++    }
+     // TODO discard if alpha is 0?
+     if (cc_features.opt_fog) {
          if (cc_features.opt_alpha) {
-             append_line(fs_buf, &fs_len, "texel = vec4(mix(texel.rgb, vFog.rgb, vFog.a), texel.a);");
-         } else {
-@@ -745,6 +814,9 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
+@@ -745,6 +831,9 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
  
      prg->frame_count_location = glGetUniformLocation(shader_program, "frame_count");
      prg->noise_scale_location = glGetUniformLocation(shader_program, "noise_scale");
@@ -373,7 +710,7 @@ index f13b37f..fa6ec29 100644
  
      gfx_opengl_load_shader(prg);
  
-@@ -836,6 +908,9 @@ static void gfx_opengl_set_sampler_parameters(int tile, bool linear_filter, uint
+@@ -836,6 +925,9 @@ static void gfx_opengl_set_sampler_parameters(int tile, bool linear_filter, uint
  static void gfx_opengl_set_depth_test_and_mask(bool depth_test, bool z_upd) {
      current_depth_test = depth_test;
      current_depth_mask = z_upd;
@@ -383,7 +720,7 @@ index f13b37f..fa6ec29 100644
  }
  
  static void gfx_opengl_set_zmode_decal(bool zmode_decal) {
-@@ -952,8 +1027,189 @@ static void gfx_opengl_init(void) {
+@@ -952,8 +1044,193 @@ static void gfx_opengl_init(void) {
  static void gfx_opengl_on_resize(void) {
  }
  
@@ -400,7 +737,7 @@ index f13b37f..fa6ec29 100644
 +        current_saturation = 1.0f;
 +    }
 +    bool cel_shading = CVarGetInteger("gEnhancements.Graphics.CelShading", 0) != 0;
-+    current_cel_bands = cel_shading ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 3) : 0.0f;
++    current_cel_bands = cel_shading ? (float)CVarGetInteger("gEnhancements.Graphics.CelShadingBands", 2) : 0.0f;
 +    outline_enabled = gfx_opengl_outlines_wanted();
 +    outline_thickness = (float)CVarGetInteger("gEnhancements.Graphics.CelOutlineThickness", 2);
 +    // Depth-tested draws mark the stencil with 1 and the HUD (no depth test) with 0, so outlines skip the HUD.
@@ -443,34 +780,38 @@ index f13b37f..fa6ec29 100644
 +#else
 +#define OUTLINE_GLSL_HEADER "#version 130\n"
 +#endif
-+    static const char* vs_src = OUTLINE_GLSL_HEADER
-+        "out vec2 uv;\n"
-+        "void main() {\n"
-+        "    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n"
-+        "    uv = p;\n"
-+        "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
-+        "}\n";
++    static const char* vs_src =
++        OUTLINE_GLSL_HEADER "out vec2 uv;\n"
++                            "void main() {\n"
++                            "    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n"
++                            "    uv = p;\n"
++                            "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
++                            "}\n";
 +    // Depth is stored as 1 - d, which is proportional to 1/z, so flat surfaces vary linearly across the screen.
 +    // A pixel whose neighbour on either side is clearly farther (a dip in the second difference) sits on the near
 +    // side of a silhouette and gets painted black. Floors seen at a low angle stay clean because they are flat.
-+    static const char* fs_src = OUTLINE_GLSL_HEADER
-+        "in vec2 uv;\n"
-+        "out vec4 fragColor;\n"
-+        "uniform sampler2D uDepth;\n"
-+        "uniform vec2 uStep;\n"
-+        "float w(vec2 o) { return 1.0 - texture(uDepth, uv + o).r; }\n"
-+        "void main() {\n"
-+        "    float c = w(vec2(0.0));\n"
-+        "    if (c <= 0.0) discard;\n"
-+        "    float l = w(vec2(-uStep.x, 0.0));\n"
-+        "    float r = w(vec2(uStep.x, 0.0));\n"
-+        "    float d = w(vec2(0.0, -uStep.y));\n"
-+        "    float u = w(vec2(0.0, uStep.y));\n"
-+        "    float dip = max(2.0 * c - l - r, 2.0 * c - d - u) / c;\n"
-+        "    float edge = smoothstep(0.03, 0.09, dip);\n"
-+        "    if (edge <= 0.0) discard;\n"
-+        "    fragColor = vec4(0.0, 0.0, 0.0, edge * 0.9);\n"
-+        "}\n";
++    static const char* fs_src = OUTLINE_GLSL_HEADER "in vec2 uv;\n"
++                                                    "out vec4 fragColor;\n"
++                                                    "uniform sampler2D uDepth;\n"
++                                                    "uniform vec2 uStep;\n"
++                                                    "float w(vec2 o) { return 1.0 - texture(uDepth, uv + o).r; }\n"
++                                                    "void main() {\n"
++                                                    "    float c = w(vec2(0.0));\n"
++                                                    "    if (c <= 0.0) discard;\n"
++                                                    "    float l = w(vec2(-uStep.x, 0.0));\n"
++                                                    "    float r = w(vec2(uStep.x, 0.0));\n"
++                                                    "    float d = w(vec2(0.0, -uStep.y));\n"
++                                                    "    float u = w(vec2(0.0, uStep.y));\n"
++                                                    "    float dl = w(-uStep);\n"
++                                                    "    float ur = w(uStep);\n"
++                                                    "    float dr = w(vec2(uStep.x, -uStep.y));\n"
++                                                    "    float ul = w(vec2(-uStep.x, uStep.y));\n"
++                                                    "    float dip = max(max(2.0 * c - l - r, 2.0 * c - d - u), 0.75 * "
++                                                    "max(2.0 * c - dl - ur, 2.0 * c - dr - ul)) / c;\n"
++                                                    "    float edge = smoothstep(0.02, 0.10, dip);\n"
++                                                    "    if (edge <= 0.0) discard;\n"
++                                                    "    fragColor = vec4(0.0, 0.0, 0.0, edge * 0.9);\n"
++                                                    "}\n";
 +#undef OUTLINE_GLSL_HEADER
 +
 +    GLuint vs = gfx_opengl_compile_outline_shader(GL_VERTEX_SHADER, vs_src);
@@ -573,7 +914,7 @@ index f13b37f..fa6ec29 100644
  }
  
  static void gfx_opengl_end_frame(void) {
-@@ -1059,7 +1315,13 @@ void gfx_opengl_start_draw_to_framebuffer(int fb_id, float noise_scale) {
+@@ -1059,7 +1336,13 @@ void gfx_opengl_start_draw_to_framebuffer(int fb_id, float noise_scale) {
  void gfx_opengl_clear_framebuffer() {
      glDisable(GL_SCISSOR_TEST);
      glDepthMask(GL_TRUE);
@@ -602,20 +943,23 @@ index 95be897..912c04e 100644
 +
  #endif
 diff --git a/src/graphic/Fast3D/gfx_pc.cpp b/src/graphic/Fast3D/gfx_pc.cpp
-index fccd6fc..befb4cb 100644
+index fccd6fc..044012c 100644
 --- a/src/graphic/Fast3D/gfx_pc.cpp
 +++ b/src/graphic/Fast3D/gfx_pc.cpp
-@@ -30,6 +30,9 @@
+@@ -30,6 +30,12 @@
  #include "gfx_window_manager_api.h"
  #include "gfx_rendering_api.h"
  #include "gfx_screen_config.h"
 +#ifdef ENABLE_OPENGL
 +#include "gfx_opengl.h"
 +#endif
++#ifdef ENABLE_DX11
++#include "gfx_direct3d11.h"
++#endif
  
  #include "log/luslog.h"
  #include "window/gui/Gui.h"
-@@ -450,6 +453,12 @@ static void gfx_generate_cc(struct ColorCombiner* comb, const ColorCombinerKey&
+@@ -450,6 +456,12 @@ static void gfx_generate_cc(struct ColorCombiner* comb, const ColorCombinerKey&
              }
          }
      }
@@ -628,7 +972,7 @@ index fccd6fc..befb4cb 100644
      comb->shader_id0 = shader_id0;
      comb->shader_id1 = shader_id1;
      comb->used_textures[0] = used_textures[0];
-@@ -1512,6 +1521,9 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
+@@ -1512,6 +1524,9 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
      if (use_grayscale) {
          cc_options |= SHADER_OPT(GRAYSCALE);
      }
@@ -638,25 +982,36 @@ index fccd6fc..befb4cb 100644
      if (g_rdp.loaded_texture[0].masked) {
          cc_options |= SHADER_OPT(TEXEL0_MASK);
      }
-@@ -4100,6 +4112,11 @@ void gfx_start_frame(void) {
+@@ -4100,6 +4115,17 @@ void gfx_start_frame(void) {
  
      bool different_size = gfx_current_dimensions.width != gfx_current_game_window_viewport.width ||
                            gfx_current_dimensions.height != gfx_current_game_window_viewport.height;
++    // Cel shading outlines are drawn over the game's own framebuffer, so render offscreen when they are on.
 +#ifdef ENABLE_OPENGL
 +    if (gfx_rapi == &gfx_opengl_api && gfx_msaa_level <= 1 && gfx_opengl_outlines_wanted()) {
++        different_size = true;
++    }
++#endif
++#ifdef ENABLE_DX11
++    if (gfx_rapi == &gfx_direct3d11_api && gfx_msaa_level <= 1 && gfx_d3d11_outlines_wanted()) {
 +        different_size = true;
 +    }
 +#endif
      if (different_size || gfx_msaa_level > 1) {
          game_renders_to_framebuffer = true;
          if (different_size) {
-@@ -4182,6 +4199,11 @@ void gfx_run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_replacemen
+@@ -4182,6 +4208,16 @@ void gfx_run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_replacemen
      currentDir = std::stack<std::string>();
  
      if (game_renders_to_framebuffer) {
 +#ifdef ENABLE_OPENGL
 +        if (gfx_rapi == &gfx_opengl_api) {
 +            gfx_opengl_draw_outlines(game_framebuffer);
++        }
++#endif
++#ifdef ENABLE_DX11
++        if (gfx_rapi == &gfx_direct3d11_api) {
++            gfx_d3d11_draw_outlines(game_framebuffer);
 +        }
 +#endif
          gfx_rapi->start_draw_to_framebuffer(0, 1);

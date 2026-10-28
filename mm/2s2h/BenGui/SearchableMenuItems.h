@@ -1234,7 +1234,7 @@ void AddEnhancements() {
                 "gEnhancements.Graphics.CelShadingBands",
                 "2 = luz e sombra bem marcadas, como no Budokai; mais tons = mais suave.",
                 WIDGET_CVAR_SLIDER_INT,
-                { 2, 6, 3 } },
+                { 2, 6, 2 } },
               { "Espessura do Contorno: %d",
                 "gEnhancements.Graphics.CelOutlineThickness",
                 "Largura das linhas pretas do cel shading.",
