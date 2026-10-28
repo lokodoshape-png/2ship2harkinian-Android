@@ -1,20 +1,153 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 87c052a1..c851cf40 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -26,6 +26,11 @@ set(ADDITIONAL_LIB_INCLUDES "")
+ # ========= Configuration Options =========
+ option(INCLUDE_MPQ_SUPPORT "Enable StormLib and MPQ archive support" OFF)
+ option(GBI_UCODE "Specify the GBI ucode version" F3DEX_GBI_2)
++if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
++    option(LUS_ENABLE_VULKAN "Build the Vulkan renderer backend" ON)
++else()
++    option(LUS_ENABLE_VULKAN "Build the Vulkan renderer backend" OFF)
++endif()
+ 
+ # =========== Dependencies =============
+ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+@@ -54,6 +59,10 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+     include(cmake/dependencies/windows.cmake)
+ endif()
+ 
++if (LUS_ENABLE_VULKAN)
++    include(cmake/dependencies/vulkan.cmake)
++endif()
++
+ # === Platform Specific Configuration ===
+ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+     include(cmake/ios-toolchain-populate.cmake)
+diff --git a/cmake/dependencies/vulkan.cmake b/cmake/dependencies/vulkan.cmake
+new file mode 100644
+index 00000000..4f6a7204
+--- /dev/null
++++ b/cmake/dependencies/vulkan.cmake
+@@ -0,0 +1,80 @@
++#=================== Vulkan (optional renderer) ===================
++# Headers + volk (runtime loader, no SDK needed at build time), glslang (HLSL -> SPIR-V at runtime)
++# and VulkanMemoryAllocator are fetched so CI does not need a Vulkan SDK.
++include(FetchContent)
++
++FetchContent_Declare(
++    VulkanHeaders
++    GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
++    GIT_TAG vulkan-sdk-1.4.304.0
++    GIT_SHALLOW TRUE
++)
++FetchContent_MakeAvailable(VulkanHeaders)
++
++set(VOLK_PULL_IN_VULKAN OFF CACHE BOOL "" FORCE)
++set(VOLK_INSTALL OFF CACHE BOOL "" FORCE)
++FetchContent_Declare(
++    volk
++    GIT_REPOSITORY https://github.com/zeux/volk.git
++    GIT_TAG vulkan-sdk-1.4.304.0
++    GIT_SHALLOW TRUE
++)
++FetchContent_MakeAvailable(volk)
++target_link_libraries(volk PUBLIC Vulkan::Headers)
++
++# SPIRV-Tools legalizes the SPIR-V that glslang's HLSL frontend produces (textures passed to functions).
++FetchContent_Declare(
++    SPIRV-Headers
++    GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Headers.git
++    GIT_TAG vulkan-sdk-1.4.304.0
++    GIT_SHALLOW TRUE
++)
++set(SPIRV_HEADERS_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
++set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)
++FetchContent_MakeAvailable(SPIRV-Headers)
++
++set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
++set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
++set(SPIRV_WERROR OFF CACHE BOOL "" FORCE)
++set(SPIRV_TOOLS_BUILD_STATIC ON CACHE BOOL "" FORCE)
++set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)
++set(SPIRV-Headers_SOURCE_DIR ${spirv-headers_SOURCE_DIR})
++FetchContent_Declare(
++    SPIRV-Tools
++    GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Tools.git
++    GIT_TAG vulkan-sdk-1.4.304.0
++    GIT_SHALLOW TRUE
++)
++FetchContent_MakeAvailable(SPIRV-Tools)
++
++set(ENABLE_OPT ON CACHE BOOL "" FORCE)
++set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
++set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
++set(ENABLE_GLSLANG_JS OFF CACHE BOOL "" FORCE)
++set(ENABLE_HLSL ON CACHE BOOL "" FORCE)
++set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
++set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
++set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
++set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
++FetchContent_Declare(
++    glslang
++    GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
++    GIT_TAG vulkan-sdk-1.4.304.0
++    GIT_SHALLOW TRUE
++)
++FetchContent_MakeAvailable(glslang)
++
++set(VMA_BUILD_DOCUMENTATION OFF CACHE BOOL "" FORCE)
++set(VMA_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
++FetchContent_Declare(
++    VulkanMemoryAllocator
++    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
++    GIT_TAG v3.2.1
++    GIT_SHALLOW TRUE
++)
++FetchContent_Populate(VulkanMemoryAllocator)
++list(APPEND ADDITIONAL_LIB_INCLUDES ${vulkanmemoryallocator_SOURCE_DIR}/include)
++
++target_sources(ImGui PRIVATE ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp)
++target_compile_definitions(ImGui PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
++target_link_libraries(ImGui PUBLIC volk)
 diff --git a/include/fast/backends/gfx_direct3d_common.h b/include/fast/backends/gfx_direct3d_common.h
-index bfe5f960..f5215249 100644
+index bfe5f960..9ea73a30 100644
 --- a/include/fast/backends/gfx_direct3d_common.h
 +++ b/include/fast/backends/gfx_direct3d_common.h
-@@ -15,7 +15,10 @@ namespace Fast {
- struct PerFrameCB {
-     uint32_t noise_frame;
-     float noise_scale;
--    uint32_t padding[2]; // constant buffers must be multiples of 16 bytes in size
-+    float color_brightness;
-+    float color_saturation;
-+    float color_cel_bands;
-+    uint32_t padding[3]; // constant buffers must be multiples of 16 bytes in size
- };
+@@ -7,30 +7,12 @@
+ #include <cstdint>
+ #include <string>
+ #include "gfx_rendering_api.h"
++#include "gfx_hlsl_shader.h"
+ #include "d3d11.h"
+ #include "d3dcompiler.h"
  
- struct PerDrawCB {
-@@ -44,6 +47,7 @@ struct FramebufferDX11 {
+ namespace Fast {
+ 
+-struct PerFrameCB {
+-    uint32_t noise_frame;
+-    float noise_scale;
+-    uint32_t padding[2]; // constant buffers must be multiples of 16 bytes in size
+-};
+-
+-struct PerDrawCB {
+-    struct Texture {
+-        uint32_t width;
+-        uint32_t height;
+-        uint32_t linear_filtering;
+-        uint32_t padding;
+-    } mTextures[SHADER_MAX_TEXTURES];
+-};
+-
+-struct Coord {
+-    int x, y;
+-};
+-
+ struct TextureData {
+     Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> resource_view;
+@@ -44,6 +26,7 @@ struct FramebufferDX11 {
      Microsoft::WRL::ComPtr<ID3D11RenderTargetView> render_target_view;
      Microsoft::WRL::ComPtr<ID3D11DepthStencilView> depth_stencil_view;
      Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> depth_stencil_srv;
@@ -22,7 +155,7 @@ index bfe5f960..f5215249 100644
      uint32_t texture_id;
      bool has_depth_buffer;
      uint32_t msaa_level;
-@@ -111,6 +115,8 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
+@@ -111,6 +94,8 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
      FilteringMode GetTextureFilter() override;
      void SetSrgbMode() override;
      ImTextureID GetTextureById(int id) override;
@@ -31,7 +164,7 @@ index bfe5f960..f5215249 100644
  
      PFN_D3D11_CREATE_DEVICE mDX11CreateDevice;
      Microsoft::WRL::ComPtr<ID3D11DeviceContext> mContext;
-@@ -120,7 +126,8 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
+@@ -120,7 +105,8 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
  
    private:
      void CreateDepthStencilObjects(uint32_t width, uint32_t height, uint32_t msaa_count, ID3D11DepthStencilView** view,
@@ -41,7 +174,7 @@ index bfe5f960..f5215249 100644
  
      HMODULE mDX11Module;
  
-@@ -177,6 +184,16 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
+@@ -177,10 +163,18 @@ class GfxRenderingAPIDX11 final : public GfxRenderingAPI {
      Microsoft::WRL::ComPtr<ID3D11SamplerState> mLastSamplerStates[SHADER_MAX_TEXTURES] = { nullptr, nullptr };
  
      D3D_PRIMITIVE_TOPOLOGY mLastPrimitaveTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
@@ -57,7 +190,59 @@ index bfe5f960..f5215249 100644
 +    Microsoft::WRL::ComPtr<ID3D11Buffer> mOutlineCb;
  };
  
- std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures& cc_features,
+-std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures& cc_features,
+-                                             bool include_root_signature, bool three_point_filtering, bool use_srgb);
+ } // namespace Fast
+ #endif
+ #endif
+diff --git a/include/fast/backends/gfx_hlsl_shader.h b/include/fast/backends/gfx_hlsl_shader.h
+new file mode 100644
+index 00000000..38d0e994
+--- /dev/null
++++ b/include/fast/backends/gfx_hlsl_shader.h
+@@ -0,0 +1,42 @@
++#pragma once
++
++#if defined(ENABLE_DX11) || defined(ENABLE_DX12) || defined(ENABLE_VULKAN)
++
++#ifdef __cplusplus
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include "fast/interpreter.h"
++
++namespace Fast {
++
++// Constant buffer layouts of shaders/directx/default.shader.hlsl (register b0 and b1).
++struct PerFrameCB {
++    uint32_t noise_frame;
++    float noise_scale;
++    float color_brightness;
++    float color_saturation;
++    float color_cel_bands;
++    uint32_t padding[3]; // constant buffers must be multiples of 16 bytes in size
++};
++
++struct PerDrawCB {
++    struct Texture {
++        uint32_t width;
++        uint32_t height;
++        uint32_t linear_filtering;
++        uint32_t padding;
++    } mTextures[SHADER_MAX_TEXTURES];
++};
++
++struct Coord {
++    int x, y;
++};
++
++// Builds the HLSL source for a color combiner from the default shader template. numFloats receives the vertex size.
++std::string gfx_hlsl_build_shader(size_t& numFloats, const CCFeatures& cc_features, bool include_root_signature,
++                                  bool three_point_filtering, bool use_srgb);
++
++} // namespace Fast
++#endif
++#endif
 diff --git a/include/fast/backends/gfx_opengl.h b/include/fast/backends/gfx_opengl.h
 index d5fd9002..a5e41230 100644
 --- a/include/fast/backends/gfx_opengl.h
@@ -128,6 +313,122 @@ index d95bcc0d..0658b370 100644
      virtual ~GfxRenderingAPI() = default;
      virtual const char* GetName() = 0;
      virtual int GetMaxTextureSize() = 0;
+diff --git a/include/fast/backends/gfx_sdl.h b/include/fast/backends/gfx_sdl.h
+index 1f03cb63..b4a12007 100644
+--- a/include/fast/backends/gfx_sdl.h
++++ b/include/fast/backends/gfx_sdl.h
+@@ -38,8 +38,12 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
+     bool IsRunning() override;
+     void Destroy() override;
+     bool IsFullscreen() override;
++    SDL_Window* GetSdlWindow() const {
++        return mWnd;
++    }
+ 
+   private:
++    void GetDrawableSize(int* width, int* height) const;
+     void SetFullscreenImpl(bool on, bool call_callback);
+     void HandleSingleEvent(SDL_Event& event);
+     int TranslateScancode(int scancode) const;
+@@ -52,8 +56,9 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
+ 
+     SDL_Window* mWnd;
+     SDL_Rect mCursorClip;
+-    SDL_GLContext mCtx;
+-    SDL_Renderer* mRenderer;
++    SDL_GLContext mCtx = nullptr;
++    SDL_Renderer* mRenderer = nullptr;
++    bool mUseVulkan = false; // the Vulkan renderer owns presentation, there is no GL context
+     int mSdlToLusTable[512];
+     float mMouseWheelX = 0.0f;
+     float mMouseWheelY = 0.0f;
+diff --git a/include/fast/backends/gfx_vulkan.h b/include/fast/backends/gfx_vulkan.h
+new file mode 100644
+index 00000000..4d370188
+--- /dev/null
++++ b/include/fast/backends/gfx_vulkan.h
+@@ -0,0 +1,81 @@
++#pragma once
++
++#ifdef ENABLE_VULKAN
++
++#include <memory>
++#include "gfx_rendering_api.h"
++
++struct ImDrawData;
++
++namespace Fast {
++
++class GfxWindowBackendSDL2;
++struct VulkanRenderer;
++
++// Vulkan renderer. It draws exactly like the Direct3D 11 renderer: the same HLSL shaders (compiled to SPIR-V at
++// runtime by glslang), the same clip space conventions (y up through a flipped viewport, depth 0..1) and the same
++// MM3D colour grading, cel shading and outline pass.
++class GfxRenderingAPIVulkan final : public GfxRenderingAPI {
++  public:
++    explicit GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend);
++    ~GfxRenderingAPIVulkan() override;
++
++    // Whether a Vulkan 1.1 loader and a device that can draw are present (checked before the window is created).
++    static bool IsSupported();
++
++    const char* GetName() override;
++    int GetMaxTextureSize() override;
++    GfxClipParameters GetClipParameters() override;
++    void UnloadShader(struct ShaderProgram* oldPrg) override;
++    void LoadShader(struct ShaderProgram* newPrg) override;
++    struct ShaderProgram* CreateAndLoadNewShader(uint64_t shaderId0, uint32_t shaderId1) override;
++    struct ShaderProgram* LookupShader(uint64_t shaderId0, uint32_t shaderId1) override;
++    void ShaderGetInfo(struct ShaderProgram* prg, uint8_t* numInputs, bool usedTextures[2]) override;
++    uint32_t NewTexture() override;
++    void SelectTexture(int tile, uint32_t textureId) override;
++    void UploadTexture(const uint8_t* rgba32Buf, uint32_t width, uint32_t height) override;
++    void SetSamplerParameters(int sampler, bool linear_filter, uint32_t cms, uint32_t cmt) override;
++    void SetDepthTestAndMask(bool depth_test, bool z_upd) override;
++    void SetZmodeDecal(bool decal) override;
++    void SetViewport(int x, int y, int width, int height) override;
++    void SetScissor(int x, int y, int width, int height) override;
++    void SetUseAlpha(bool useAlpha) override;
++    void DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) override;
++    void Init() override;
++    void OnResize() override;
++    void StartFrame() override;
++    void EndFrame() override;
++    void FinishRender() override;
++    int CreateFramebuffer() override;
++    void UpdateFramebufferParameters(int fb_id, uint32_t width, uint32_t height, uint32_t msaa_level,
++                                     bool opengl_invertY, bool render_target, bool has_depth_buffer,
++                                     bool can_extract_depth) override;
++    void StartDrawToFramebuffer(int fbId, float noiseScale) override;
++    void CopyFramebuffer(int fbDstId, int fbSrcId, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0,
++                         int dstX1, int dstY1) override;
++    void ClearFramebuffer(bool color, bool depth) override;
++    void ReadFramebufferToCPU(int fbId, uint32_t width, uint32_t height, uint16_t* rgba16Buf) override;
++    void ResolveMSAAColorBuffer(int fbIdTarger, int fbIdSrc) override;
++    std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff>
++    GetPixelDepth(int fb_id, const std::set<std::pair<float, float>>& coordinates) override;
++    void* GetFramebufferTextureId(int fbId) override;
++    void SelectTextureFb(int fbId) override;
++    void DeleteTexture(uint32_t texId) override;
++    void SetTextureFilter(FilteringMode mode) override;
++    FilteringMode GetTextureFilter() override;
++    void SetSrgbMode() override;
++    ImTextureID GetTextureById(int id) override;
++    bool OutlinesWanted() override;
++    void DrawOutlines(int fbId) override;
++
++    // ImGui hooks, called by Ship::Gui in place of the ImGui renderer backend calls.
++    void ImGuiNewFrame();
++    void ImGuiRenderDrawData(ImDrawData* drawData);
++
++  private:
++    std::unique_ptr<VulkanRenderer> mImpl;
++};
++
++} // namespace Fast
++
++#endif
 diff --git a/include/fast/interpreter.h b/include/fast/interpreter.h
 index ee526729..81d20685 100644
 --- a/include/fast/interpreter.h
@@ -188,11 +489,80 @@ index de38dd2f..b0871f74 100644
 +#endif
  };
  }; // namespace Ship
+diff --git a/include/ship/window/Window.h b/include/ship/window/Window.h
+index b7dca53e..6998b9fe 100644
+--- a/include/ship/window/Window.h
++++ b/include/ship/window/Window.h
+@@ -10,7 +10,13 @@
+ #include "ship/controller/controldevice/controller/mapping/keyboard/KeyboardScancodes.h"
+ 
+ namespace Ship {
+-enum class WindowBackend { FAST3D_DXGI_DX11, FAST3D_SDL_OPENGL, FAST3D_SDL_METAL, WINDOW_BACKEND_COUNT };
++enum class WindowBackend {
++    FAST3D_DXGI_DX11,
++    FAST3D_SDL_OPENGL,
++    FAST3D_SDL_METAL,
++    FAST3D_SDL_VULKAN,
++    WINDOW_BACKEND_COUNT
++};
+ 
+ struct Coords {
+     int32_t x;
+diff --git a/include/ship/window/gui/Gui.h b/include/ship/window/gui/Gui.h
+index b315ba45..67b5a492 100644
+--- a/include/ship/window/gui/Gui.h
++++ b/include/ship/window/gui/Gui.h
+@@ -43,6 +43,9 @@ typedef struct {
+             void* Window;
+             SDL_Renderer* Renderer;
+         } Metal;
++        struct {
++            void* Window;
++        } Vulkan;
+         struct {
+             uint32_t Width;
+             uint32_t Height;
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 2be60501..7f7f2da8 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -59,6 +59,11 @@ target_link_libraries(libultraship
+ 
+ target_link_libraries(libultraship PRIVATE stb)
+ 
++if (LUS_ENABLE_VULKAN)
++    target_compile_definitions(libultraship PRIVATE ENABLE_VULKAN)
++    target_link_libraries(libultraship PRIVATE volk glslang glslang-default-resource-limits SPIRV)
++endif()
++
+ if (GFX_DEBUG_DISASSEMBLER)
+     target_link_libraries(libultraship PRIVATE libgfxd)
+ endif()
 diff --git a/src/fast/Fast3dWindow.cpp b/src/fast/Fast3dWindow.cpp
-index 9943170d..5f5f64bf 100644
+index 9943170d..06a9ea9e 100644
 --- a/src/fast/Fast3dWindow.cpp
 +++ b/src/fast/Fast3dWindow.cpp
-@@ -53,7 +53,7 @@ Fast3dWindow::~Fast3dWindow() {
+@@ -11,6 +11,7 @@
+ #include "fast/backends/gfx_metal.h"
+ #include "fast/backends/gfx_direct3d_common.h"
+ #include "fast/backends/gfx_direct3d11.h"
++#include "fast/backends/gfx_vulkan.h"
+ #include "fast/backends/gfx_window_manager_api.h"
+ 
+ #include <fstream>
+@@ -34,6 +35,11 @@ Fast3dWindow::Fast3dWindow(std::shared_ptr<Ship::Gui> gui) : Ship::Window(gui) {
+     }
+ #endif
+     AddAvailableWindowBackend(Ship::WindowBackend::FAST3D_SDL_OPENGL);
++#ifdef ENABLE_VULKAN
++    if (GfxRenderingAPIVulkan::IsSupported()) {
++        AddAvailableWindowBackend(Ship::WindowBackend::FAST3D_SDL_VULKAN);
++    }
++#endif
+ }
+ 
+ Fast3dWindow::Fast3dWindow(std::vector<std::shared_ptr<Ship::GuiWindow>> guiWindows)
+@@ -53,7 +59,7 @@ Fast3dWindow::~Fast3dWindow() {
  void Fast3dWindow::Init() {
      bool gameMode = false;
  
@@ -201,8 +571,33 @@ index 9943170d..5f5f64bf 100644
      std::ifstream osReleaseFile("/etc/os-release");
      if (osReleaseFile.is_open()) {
          std::string line;
+@@ -143,6 +149,14 @@ void Fast3dWindow::InitWindowManager() {
+             mRenderingApi = new GfxRenderingAPIMetal();
+             mWindowManagerApi = new GfxWindowBackendSDL2();
+             break;
++#endif
++#ifdef ENABLE_VULKAN
++        case Ship::WindowBackend::FAST3D_SDL_VULKAN: {
++            auto* sdl = new GfxWindowBackendSDL2();
++            mWindowManagerApi = sdl;
++            mRenderingApi = new GfxRenderingAPIVulkan(sdl);
++            break;
++        }
+ #endif
+         default:
+             SPDLOG_ERROR("Could not load the correct rendering backend");
+@@ -290,7 +304,8 @@ bool Fast3dWindow::SupportsWindowedFullscreen() {
+     return false;
+ #endif
+ 
+-    if (GetWindowBackend() == Ship::WindowBackend::FAST3D_SDL_OPENGL) {
++    if (GetWindowBackend() == Ship::WindowBackend::FAST3D_SDL_OPENGL ||
++        GetWindowBackend() == Ship::WindowBackend::FAST3D_SDL_VULKAN) {
+         return true;
+     }
+ 
 diff --git a/src/fast/backends/gfx_direct3d11.cpp b/src/fast/backends/gfx_direct3d11.cpp
-index 1077d2a4..14defbee 100644
+index 1077d2a4..e49fb0e4 100644
 --- a/src/fast/backends/gfx_direct3d11.cpp
 +++ b/src/fast/backends/gfx_direct3d11.cpp
 @@ -3,6 +3,7 @@
@@ -262,6 +657,17 @@ index 1077d2a4..14defbee 100644
      }
  }
  static bool CreateDeviceFunc(class GfxRenderingAPIDX11* self, IDXGIAdapter1* adapter, bool test_only) {
+@@ -309,8 +317,8 @@ struct ShaderProgram* GfxRenderingAPIDX11::CreateAndLoadNewShader(uint64_t shade
+     char* buf;
+     size_t len, numFloats;
+ 
+-    auto shader = gfx_direct3d_common_build_shader(numFloats, cc_features, false,
+-                                                   mCurrentFilterMode == FILTER_THREE_POINT, mSrgbMode);
++    auto shader = gfx_hlsl_build_shader(numFloats, cc_features, false,
++                                        mCurrentFilterMode == FILTER_THREE_POINT, mSrgbMode);
+ 
+     buf = shader.data();
+     len = shader.size();
 @@ -573,9 +581,11 @@ void GfxRenderingAPIDX11::SetUseAlpha(bool use_alpha) {
  
  void GfxRenderingAPIDX11::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) {
@@ -490,79 +896,496 @@ index 1077d2a4..14defbee 100644
      }
  }
  
-@@ -1129,6 +1311,9 @@ void GfxRenderingAPIDX11::SetSrgbMode() {
+@@ -1127,223 +1309,5 @@ void GfxRenderingAPIDX11::SetSrgbMode() {
+     mSrgbMode = true;
+ }
  
- #define RAND_NOISE "((random(float3(floor(screenSpace.xy * noise_scale), noise_frame)) + 1.0) / 2.0)"
- 
+-#define RAND_NOISE "((random(float3(floor(screenSpace.xy * noise_scale), noise_frame)) + 1.0) / 2.0)"
+-
+-static const char* prism_shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha,
+-                                            bool first_cycle, bool hint_single_element) {
+-    if (!only_alpha) {
+-        switch (item) {
+-            default:
+-            case SHADER_0:
+-                return with_alpha ? "float4(0.0, 0.0, 0.0, 0.0)" : "float3(0.0, 0.0, 0.0)";
+-            case SHADER_1:
+-                return with_alpha ? "float4(1.0, 1.0, 1.0, 1.0)" : "float3(1.0, 1.0, 1.0)";
+-            case SHADER_INPUT_1:
+-                return with_alpha || !inputs_have_alpha ? "input.input1" : "input.input1.rgb";
+-            case SHADER_INPUT_2:
+-                return with_alpha || !inputs_have_alpha ? "input.input2" : "input.input2.rgb";
+-            case SHADER_INPUT_3:
+-                return with_alpha || !inputs_have_alpha ? "input.input3" : "input.input3.rgb";
+-            case SHADER_INPUT_4:
+-                return with_alpha || !inputs_have_alpha ? "input.input4" : "input.input4.rgb";
+-            case SHADER_TEXEL0:
+-                return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
+-                                   : (with_alpha ? "texVal1" : "texVal1.rgb");
+-            case SHADER_TEXEL0A:
+-                return first_cycle
+-                           ? (hint_single_element ? "texVal0.a"
+-                                                  : (with_alpha ? "float4(texVal0.a, texVal0.a, texVal0.a, texVal0.a)"
+-                                                                : "float3(texVal0.a, texVal0.a, texVal0.a)"))
+-                           : (hint_single_element ? "texVal1.a"
+-                                                  : (with_alpha ? "float4(texVal1.a, texVal1.a, texVal1.a, texVal1.a)"
+-                                                                : "float3(texVal1.a, texVal1.a, texVal1.a)"));
+-            case SHADER_TEXEL1A:
+-                return first_cycle
+-                           ? (hint_single_element ? "texVal1.a"
+-                                                  : (with_alpha ? "float4(texVal1.a, texVal1.a, texVal1.a, texVal1.a)"
+-                                                                : "float3(texVal1.a, texVal1.a, texVal1.a)"))
+-                           : (hint_single_element ? "texVal0.a"
+-                                                  : (with_alpha ? "float4(texVal0.a, texVal0.a, texVal0.a, texVal0.a)"
+-                                                                : "float3(texVal0.a, texVal0.a, texVal0.a)"));
+-            case SHADER_TEXEL1:
+-                return first_cycle ? (with_alpha ? "texVal1" : "texVal1.rgb")
+-                                   : (with_alpha ? "texVal0" : "texVal0.rgb");
+-            case SHADER_COMBINED:
+-                return with_alpha ? "texel" : "texel.rgb";
+-            case SHADER_NOISE:
+-                return with_alpha ? "float4(" RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ")"
+-                                  : "float3(" RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ")";
+-        }
+-    } else {
+-        switch (item) {
+-            default:
+-            case SHADER_0:
+-                return "0.0";
+-            case SHADER_1:
+-                return "1.0";
+-            case SHADER_INPUT_1:
+-                return "input.input1.a";
+-            case SHADER_INPUT_2:
+-                return "input.input2.a";
+-            case SHADER_INPUT_3:
+-                return "input.input3.a";
+-            case SHADER_INPUT_4:
+-                return "input.input4.a";
+-            case SHADER_TEXEL0:
+-                return first_cycle ? "texVal0.a" : "texVal1.a";
+-            case SHADER_TEXEL0A:
+-                return first_cycle ? "texVal0.a" : "texVal1.a";
+-            case SHADER_TEXEL1A:
+-                return first_cycle ? "texVal1.a" : "texVal0.a";
+-            case SHADER_TEXEL1:
+-                return first_cycle ? "texVal1.a" : "texVal0.a";
+-            case SHADER_COMBINED:
+-                return "texel.a";
+-            case SHADER_NOISE:
+-                return RAND_NOISE;
+-        }
+-    }
+-}
+-
+-bool prism_get_bool(prism::ContextTypes* value) {
+-    if (std::holds_alternative<int>(*value)) {
+-        return std::get<int>(*value) == 1;
+-    }
+-    return false;
+-}
+-
+-#undef RAND_NOISE
+-
+-prism::ContextTypes* prism_append_formula(prism::ContextTypes* _, prism::ContextTypes* a_arg,
+-                                          prism::ContextTypes* a_single, prism::ContextTypes* a_mult,
+-                                          prism::ContextTypes* a_mix, prism::ContextTypes* a_with_alpha,
+-                                          prism::ContextTypes* a_only_alpha, prism::ContextTypes* a_alpha,
+-                                          prism::ContextTypes* a_first_cycle) {
+-    auto c = std::get<prism::MTDArray<int>>(*a_arg);
+-    bool do_single = prism_get_bool(a_single);
+-    bool do_multiply = prism_get_bool(a_mult);
+-    bool do_mix = prism_get_bool(a_mix);
+-    bool with_alpha = prism_get_bool(a_with_alpha);
+-    bool only_alpha = prism_get_bool(a_only_alpha);
+-    bool opt_alpha = prism_get_bool(a_alpha);
+-    bool first_cycle = prism_get_bool(a_first_cycle);
+-    std::string out = "";
+-    if (do_single) {
+-        out += prism_shader_item_to_str(c.at(only_alpha, 3), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-    } else if (do_multiply) {
+-        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-        out += " * ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
+-    } else if (do_mix) {
+-        out += "lerp(";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 1), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-        out += ", ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-        out += ", ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
+-        out += ")";
+-    } else {
+-        out += "(";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-        out += " - ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 1), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-        out += ") * ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
+-        out += " + ";
+-        out += prism_shader_item_to_str(c.at(only_alpha, 3), with_alpha, only_alpha, opt_alpha, first_cycle, false);
+-    }
+-    return new prism::ContextTypes{ out };
+-}
+-
+-static size_t raw_numFloats = 0;
+-
+-prism::ContextTypes* update_raw_floats(prism::ContextTypes* _, prism::ContextTypes* num) {
+-    raw_numFloats += std::get<int>(*num);
+-    return nullptr;
+-}
+-
+-std::optional<std::string> dx_include_fs(const std::string& path) {
+-    auto init = std::make_shared<Ship::ResourceInitData>();
+-    init->Type = (uint32_t)Ship::ResourceType::Shader;
+-    init->ByteOrder = Ship::Endianness::Native;
+-    init->Format = RESOURCE_FORMAT_BINARY;
+-    auto res = static_pointer_cast<Ship::Shader>(
+-        Ship::Context::GetInstance()->GetResourceManager()->LoadResource(path, true, init));
+-    if (res == nullptr) {
+-        return std::nullopt;
+-    }
+-
+-    auto inc = static_cast<std::string*>(res->GetRawPointer());
+-    return *inc;
+-}
+-
+-std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures& cc_features,
+-                                             bool include_root_signature, bool three_point_filtering, bool use_srgb) {
+-    raw_numFloats = 4;
+-
+-    prism::Processor processor;
+-    prism::ContextItems mContext = {
+-        { "SHADER_0", SHADER_0 },
+-        { "SHADER_INPUT_1", SHADER_INPUT_1 },
+-        { "SHADER_INPUT_2", SHADER_INPUT_2 },
+-        { "SHADER_INPUT_3", SHADER_INPUT_3 },
+-        { "SHADER_INPUT_4", SHADER_INPUT_4 },
+-        { "SHADER_INPUT_5", SHADER_INPUT_5 },
+-        { "SHADER_INPUT_6", SHADER_INPUT_6 },
+-        { "SHADER_INPUT_7", SHADER_INPUT_7 },
+-        { "SHADER_TEXEL0", SHADER_TEXEL0 },
+-        { "SHADER_TEXEL0A", SHADER_TEXEL0A },
+-        { "SHADER_TEXEL1", SHADER_TEXEL1 },
+-        { "SHADER_TEXEL1A", SHADER_TEXEL1A },
+-        { "SHADER_1", SHADER_1 },
+-        { "SHADER_COMBINED", SHADER_COMBINED },
+-        { "SHADER_NOISE", SHADER_NOISE },
+-        { "o_c", M_ARRAY(cc_features.c, int, 2, 2, 4) },
+-        { "o_alpha", cc_features.opt_alpha },
+-        { "o_fog", cc_features.opt_fog },
+-        { "o_texture_edge", cc_features.opt_texture_edge },
+-        { "o_noise", cc_features.opt_noise },
+-        { "o_2cyc", cc_features.opt_2cyc },
+-        { "o_alpha_threshold", cc_features.opt_alpha_threshold },
+-        { "o_invisible", cc_features.opt_invisible },
+-        { "o_grayscale", cc_features.opt_grayscale },
+-        { "o_textures", M_ARRAY(cc_features.usedTextures, bool, 2) },
+-        { "o_masks", M_ARRAY(cc_features.used_masks, bool, 2) },
+-        { "o_blend", M_ARRAY(cc_features.used_blend, bool, 2) },
+-        { "o_clamp", M_ARRAY(cc_features.clamp, bool, 2, 2) },
+-        { "o_inputs", cc_features.numInputs },
+-        { "o_do_mix", M_ARRAY(cc_features.do_mix, bool, 2, 2) },
+-        { "o_do_single", M_ARRAY(cc_features.do_single, bool, 2, 2) },
+-        { "o_do_multiply", M_ARRAY(cc_features.do_multiply, bool, 2, 2) },
+-        { "o_color_alpha_same", M_ARRAY(cc_features.color_alpha_same, bool, 2) },
+-        { "o_root_signature", include_root_signature },
+-        { "o_three_point_filtering", three_point_filtering },
+-        { "srgb_mode", use_srgb },
+-        { "append_formula", (InvokeFunc)prism_append_formula },
+-        { "update_floats", (InvokeFunc)update_raw_floats },
+-    };
+-    processor.populate(mContext);
+-    auto init = std::make_shared<Ship::ResourceInitData>();
+-    init->Type = (uint32_t)Ship::ResourceType::Shader;
+-    init->ByteOrder = Ship::Endianness::Native;
+-    init->Format = RESOURCE_FORMAT_BINARY;
+-    auto res = static_pointer_cast<Ship::Shader>(Ship::Context::GetInstance()->GetResourceManager()->LoadResource(
+-        "shaders/directx/default.shader.hlsl", true, init));
+-
+-    if (res == nullptr) {
+-        SPDLOG_ERROR("Failed to load default directx shader, missing f3d.o2r?");
+-        abort();
+-    }
+-
+-    auto shader = static_cast<std::string*>(res->GetRawPointer());
+-    processor.load(*shader);
+-    processor.bind_include_loader(dx_include_fs);
+-    auto result = processor.process();
+-    numFloats = raw_numFloats;
+-    // SPDLOG_INFO("=========== DX11 SHADER ============");
+-    // SPDLOG_INFO(result);
+-    // SPDLOG_INFO("====================================");
+-    return result;
+-}
+ } // namespace Fast
+ #endif
+diff --git a/src/fast/backends/gfx_hlsl_shader.cpp b/src/fast/backends/gfx_hlsl_shader.cpp
+new file mode 100644
+index 00000000..0d89a3ca
+--- /dev/null
++++ b/src/fast/backends/gfx_hlsl_shader.cpp
+@@ -0,0 +1,260 @@
++#if defined(ENABLE_DX11) || defined(ENABLE_DX12) || defined(ENABLE_VULKAN)
++// HLSL shader generation shared by the Direct3D 11 renderer (compiled with D3DCompile) and the Vulkan renderer
++// (compiled to SPIR-V with glslang's HLSL frontend).
++
++#include <algorithm>
++#include <memory>
++#include <optional>
++#include <string>
++
++#include "fast/backends/gfx_hlsl_shader.h"
++#include "fast/interpreter.h"
++#include "ship/Context.h"
++#include <ship/resource/factory/ShaderFactory.h>
++#include <ship/resource/ResourceManager.h>
++#include <prism/processor.h>
++#include "spdlog/spdlog.h"
++
++namespace Fast {
++
++#define RAND_NOISE "((random(float3(floor(screenSpace.xy * noise_scale), noise_frame)) + 1.0) / 2.0)"
++
 +// Combiner input (1-4) read through celShade, the toon-quantised vertex shade, in the shader being built; 0 = none.
 +static int sCelShadeInput = 0;
 +
- static const char* prism_shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha,
-                                             bool first_cycle, bool hint_single_element) {
-     if (!only_alpha) {
-@@ -1139,12 +1324,24 @@ static const char* prism_shader_item_to_str(uint32_t item, bool with_alpha, bool
-             case SHADER_1:
-                 return with_alpha ? "float4(1.0, 1.0, 1.0, 1.0)" : "float3(1.0, 1.0, 1.0)";
-             case SHADER_INPUT_1:
++static const char* prism_shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha,
++                                            bool first_cycle, bool hint_single_element) {
++    if (!only_alpha) {
++        switch (item) {
++            default:
++            case SHADER_0:
++                return with_alpha ? "float4(0.0, 0.0, 0.0, 0.0)" : "float3(0.0, 0.0, 0.0)";
++            case SHADER_1:
++                return with_alpha ? "float4(1.0, 1.0, 1.0, 1.0)" : "float3(1.0, 1.0, 1.0)";
++            case SHADER_INPUT_1:
 +                if (sCelShadeInput == 1) {
 +                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
 +                }
-                 return with_alpha || !inputs_have_alpha ? "input.input1" : "input.input1.rgb";
-             case SHADER_INPUT_2:
++                return with_alpha || !inputs_have_alpha ? "input.input1" : "input.input1.rgb";
++            case SHADER_INPUT_2:
 +                if (sCelShadeInput == 2) {
 +                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
 +                }
-                 return with_alpha || !inputs_have_alpha ? "input.input2" : "input.input2.rgb";
-             case SHADER_INPUT_3:
++                return with_alpha || !inputs_have_alpha ? "input.input2" : "input.input2.rgb";
++            case SHADER_INPUT_3:
 +                if (sCelShadeInput == 3) {
 +                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
 +                }
-                 return with_alpha || !inputs_have_alpha ? "input.input3" : "input.input3.rgb";
-             case SHADER_INPUT_4:
++                return with_alpha || !inputs_have_alpha ? "input.input3" : "input.input3.rgb";
++            case SHADER_INPUT_4:
 +                if (sCelShadeInput == 4) {
 +                    return with_alpha || !inputs_have_alpha ? "celShade" : "celShade.rgb";
 +                }
-                 return with_alpha || !inputs_have_alpha ? "input.input4" : "input.input4.rgb";
-             case SHADER_TEXEL0:
-                 return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
-@@ -1182,13 +1379,13 @@ static const char* prism_shader_item_to_str(uint32_t item, bool with_alpha, bool
-             case SHADER_1:
-                 return "1.0";
-             case SHADER_INPUT_1:
--                return "input.input1.a";
++                return with_alpha || !inputs_have_alpha ? "input.input4" : "input.input4.rgb";
++            case SHADER_TEXEL0:
++                return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
++                                   : (with_alpha ? "texVal1" : "texVal1.rgb");
++            case SHADER_TEXEL0A:
++                return first_cycle
++                           ? (hint_single_element ? "texVal0.a"
++                                                  : (with_alpha ? "float4(texVal0.a, texVal0.a, texVal0.a, texVal0.a)"
++                                                                : "float3(texVal0.a, texVal0.a, texVal0.a)"))
++                           : (hint_single_element ? "texVal1.a"
++                                                  : (with_alpha ? "float4(texVal1.a, texVal1.a, texVal1.a, texVal1.a)"
++                                                                : "float3(texVal1.a, texVal1.a, texVal1.a)"));
++            case SHADER_TEXEL1A:
++                return first_cycle
++                           ? (hint_single_element ? "texVal1.a"
++                                                  : (with_alpha ? "float4(texVal1.a, texVal1.a, texVal1.a, texVal1.a)"
++                                                                : "float3(texVal1.a, texVal1.a, texVal1.a)"))
++                           : (hint_single_element ? "texVal0.a"
++                                                  : (with_alpha ? "float4(texVal0.a, texVal0.a, texVal0.a, texVal0.a)"
++                                                                : "float3(texVal0.a, texVal0.a, texVal0.a)"));
++            case SHADER_TEXEL1:
++                return first_cycle ? (with_alpha ? "texVal1" : "texVal1.rgb")
++                                   : (with_alpha ? "texVal0" : "texVal0.rgb");
++            case SHADER_COMBINED:
++                return with_alpha ? "texel" : "texel.rgb";
++            case SHADER_NOISE:
++                return with_alpha ? "float4(" RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ")"
++                                  : "float3(" RAND_NOISE ", " RAND_NOISE ", " RAND_NOISE ")";
++        }
++    } else {
++        switch (item) {
++            default:
++            case SHADER_0:
++                return "0.0";
++            case SHADER_1:
++                return "1.0";
++            case SHADER_INPUT_1:
 +                return sCelShadeInput == 1 ? "celShade.a" : "input.input1.a";
-             case SHADER_INPUT_2:
--                return "input.input2.a";
++            case SHADER_INPUT_2:
 +                return sCelShadeInput == 2 ? "celShade.a" : "input.input2.a";
-             case SHADER_INPUT_3:
--                return "input.input3.a";
++            case SHADER_INPUT_3:
 +                return sCelShadeInput == 3 ? "celShade.a" : "input.input3.a";
-             case SHADER_INPUT_4:
--                return "input.input4.a";
++            case SHADER_INPUT_4:
 +                return sCelShadeInput == 4 ? "celShade.a" : "input.input4.a";
-             case SHADER_TEXEL0:
-                 return first_cycle ? "texVal0.a" : "texVal1.a";
-             case SHADER_TEXEL0A:
-@@ -1280,6 +1477,9 @@ std::optional<std::string> dx_include_fs(const std::string& path) {
- std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures& cc_features,
-                                              bool include_root_signature, bool three_point_filtering, bool use_srgb) {
-     raw_numFloats = 4;
++            case SHADER_TEXEL0:
++                return first_cycle ? "texVal0.a" : "texVal1.a";
++            case SHADER_TEXEL0A:
++                return first_cycle ? "texVal0.a" : "texVal1.a";
++            case SHADER_TEXEL1A:
++                return first_cycle ? "texVal1.a" : "texVal0.a";
++            case SHADER_TEXEL1:
++                return first_cycle ? "texVal1.a" : "texVal0.a";
++            case SHADER_COMBINED:
++                return "texel.a";
++            case SHADER_NOISE:
++                return RAND_NOISE;
++        }
++    }
++}
++
++static bool prism_get_bool(prism::ContextTypes* value) {
++    if (std::holds_alternative<int>(*value)) {
++        return std::get<int>(*value) == 1;
++    }
++    return false;
++}
++
++#undef RAND_NOISE
++
++static prism::ContextTypes* prism_append_formula(prism::ContextTypes* _, prism::ContextTypes* a_arg,
++                                          prism::ContextTypes* a_single, prism::ContextTypes* a_mult,
++                                          prism::ContextTypes* a_mix, prism::ContextTypes* a_with_alpha,
++                                          prism::ContextTypes* a_only_alpha, prism::ContextTypes* a_alpha,
++                                          prism::ContextTypes* a_first_cycle) {
++    auto c = std::get<prism::MTDArray<int>>(*a_arg);
++    bool do_single = prism_get_bool(a_single);
++    bool do_multiply = prism_get_bool(a_mult);
++    bool do_mix = prism_get_bool(a_mix);
++    bool with_alpha = prism_get_bool(a_with_alpha);
++    bool only_alpha = prism_get_bool(a_only_alpha);
++    bool opt_alpha = prism_get_bool(a_alpha);
++    bool first_cycle = prism_get_bool(a_first_cycle);
++    std::string out = "";
++    if (do_single) {
++        out += prism_shader_item_to_str(c.at(only_alpha, 3), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++    } else if (do_multiply) {
++        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++        out += " * ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
++    } else if (do_mix) {
++        out += "lerp(";
++        out += prism_shader_item_to_str(c.at(only_alpha, 1), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++        out += ", ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++        out += ", ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
++        out += ")";
++    } else {
++        out += "(";
++        out += prism_shader_item_to_str(c.at(only_alpha, 0), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++        out += " - ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 1), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++        out += ") * ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 2), with_alpha, only_alpha, opt_alpha, first_cycle, true);
++        out += " + ";
++        out += prism_shader_item_to_str(c.at(only_alpha, 3), with_alpha, only_alpha, opt_alpha, first_cycle, false);
++    }
++    return new prism::ContextTypes{ out };
++}
++
++static size_t raw_numFloats = 0;
++
++static prism::ContextTypes* update_raw_floats(prism::ContextTypes* _, prism::ContextTypes* num) {
++    raw_numFloats += std::get<int>(*num);
++    return nullptr;
++}
++
++static std::optional<std::string> dx_include_fs(const std::string& path) {
++    auto init = std::make_shared<Ship::ResourceInitData>();
++    init->Type = (uint32_t)Ship::ResourceType::Shader;
++    init->ByteOrder = Ship::Endianness::Native;
++    init->Format = RESOURCE_FORMAT_BINARY;
++    auto res = static_pointer_cast<Ship::Shader>(
++        Ship::Context::GetInstance()->GetResourceManager()->LoadResource(path, true, init));
++    if (res == nullptr) {
++        return std::nullopt;
++    }
++
++    auto inc = static_cast<std::string*>(res->GetRawPointer());
++    return *inc;
++}
++
++std::string gfx_hlsl_build_shader(size_t& numFloats, const CCFeatures& cc_features,
++                                             bool include_root_signature, bool three_point_filtering, bool use_srgb) {
++    raw_numFloats = 4;
 +    sCelShadeInput = cc_features.opt_world && cc_features.shade_input <= std::min(cc_features.numInputs, 4)
 +                         ? cc_features.shade_input
 +                         : 0;
- 
-     prism::Processor processor;
-     prism::ContextItems mContext = {
-@@ -1318,6 +1518,9 @@ std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures
-         { "o_color_alpha_same", M_ARRAY(cc_features.color_alpha_same, bool, 2) },
-         { "o_root_signature", include_root_signature },
-         { "o_three_point_filtering", three_point_filtering },
++
++    prism::Processor processor;
++    prism::ContextItems mContext = {
++        { "SHADER_0", SHADER_0 },
++        { "SHADER_INPUT_1", SHADER_INPUT_1 },
++        { "SHADER_INPUT_2", SHADER_INPUT_2 },
++        { "SHADER_INPUT_3", SHADER_INPUT_3 },
++        { "SHADER_INPUT_4", SHADER_INPUT_4 },
++        { "SHADER_INPUT_5", SHADER_INPUT_5 },
++        { "SHADER_INPUT_6", SHADER_INPUT_6 },
++        { "SHADER_INPUT_7", SHADER_INPUT_7 },
++        { "SHADER_TEXEL0", SHADER_TEXEL0 },
++        { "SHADER_TEXEL0A", SHADER_TEXEL0A },
++        { "SHADER_TEXEL1", SHADER_TEXEL1 },
++        { "SHADER_TEXEL1A", SHADER_TEXEL1A },
++        { "SHADER_1", SHADER_1 },
++        { "SHADER_COMBINED", SHADER_COMBINED },
++        { "SHADER_NOISE", SHADER_NOISE },
++        { "o_c", M_ARRAY(cc_features.c, int, 2, 2, 4) },
++        { "o_alpha", cc_features.opt_alpha },
++        { "o_fog", cc_features.opt_fog },
++        { "o_texture_edge", cc_features.opt_texture_edge },
++        { "o_noise", cc_features.opt_noise },
++        { "o_2cyc", cc_features.opt_2cyc },
++        { "o_alpha_threshold", cc_features.opt_alpha_threshold },
++        { "o_invisible", cc_features.opt_invisible },
++        { "o_grayscale", cc_features.opt_grayscale },
++        { "o_textures", M_ARRAY(cc_features.usedTextures, bool, 2) },
++        { "o_masks", M_ARRAY(cc_features.used_masks, bool, 2) },
++        { "o_blend", M_ARRAY(cc_features.used_blend, bool, 2) },
++        { "o_clamp", M_ARRAY(cc_features.clamp, bool, 2, 2) },
++        { "o_inputs", cc_features.numInputs },
++        { "o_do_mix", M_ARRAY(cc_features.do_mix, bool, 2, 2) },
++        { "o_do_single", M_ARRAY(cc_features.do_single, bool, 2, 2) },
++        { "o_do_multiply", M_ARRAY(cc_features.do_multiply, bool, 2, 2) },
++        { "o_color_alpha_same", M_ARRAY(cc_features.color_alpha_same, bool, 2) },
++        { "o_root_signature", include_root_signature },
++        { "o_three_point_filtering", three_point_filtering },
 +        { "o_cel", sCelShadeInput != 0 },
 +        { "o_cel_input", sCelShadeInput },
 +        { "o_world", cc_features.opt_world },
-         { "srgb_mode", use_srgb },
-         { "append_formula", (InvokeFunc)prism_append_formula },
-         { "update_floats", (InvokeFunc)update_raw_floats },
++        { "srgb_mode", use_srgb },
++        { "append_formula", (InvokeFunc)prism_append_formula },
++        { "update_floats", (InvokeFunc)update_raw_floats },
++    };
++    processor.populate(mContext);
++    auto init = std::make_shared<Ship::ResourceInitData>();
++    init->Type = (uint32_t)Ship::ResourceType::Shader;
++    init->ByteOrder = Ship::Endianness::Native;
++    init->Format = RESOURCE_FORMAT_BINARY;
++    auto res = static_pointer_cast<Ship::Shader>(Ship::Context::GetInstance()->GetResourceManager()->LoadResource(
++        "shaders/directx/default.shader.hlsl", true, init));
++
++    if (res == nullptr) {
++        SPDLOG_ERROR("Failed to load default HLSL shader, missing f3d.o2r?");
++        abort();
++    }
++
++    auto shader = static_cast<std::string*>(res->GetRawPointer());
++    processor.load(*shader);
++    processor.bind_include_loader(dx_include_fs);
++    auto result = processor.process();
++    numFloats = raw_numFloats;
++    // SPDLOG_INFO("=========== DX11 SHADER ============");
++    // SPDLOG_INFO(result);
++    // SPDLOG_INFO("====================================");
++    return result;
++}
++} // namespace Fast
++#endif
 diff --git a/src/fast/backends/gfx_opengl.cpp b/src/fast/backends/gfx_opengl.cpp
 index 0b114667..cf1b17e8 100644
 --- a/src/fast/backends/gfx_opengl.cpp
@@ -860,6 +1683,2737 @@ index 0b114667..cf1b17e8 100644
      glDepthMask(mCurrentDepthMask ? GL_TRUE : GL_FALSE);
      glEnable(GL_SCISSOR_TEST);
  }
+diff --git a/src/fast/backends/gfx_sdl2.cpp b/src/fast/backends/gfx_sdl2.cpp
+index eb5df8b2..57aa4933 100644
+--- a/src/fast/backends/gfx_sdl2.cpp
++++ b/src/fast/backends/gfx_sdl2.cpp
+@@ -30,6 +30,9 @@
+ #endif
+ 
+ #include "ship/window/gui/Gui.h"
++#ifdef ENABLE_VULKAN
++#include <SDL2/SDL_vulkan.h>
++#endif
+ 
+ #ifdef _WIN32
+ #include <WTypesbase.h>
+@@ -325,6 +328,9 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
+ 
+ #if defined(__APPLE__)
+     bool use_opengl = strcmp(gfxApiName, "OpenGL") == 0;
++#elif defined(ENABLE_VULKAN)
++    mUseVulkan = strcmp(gfxApiName, "Vulkan") == 0;
++    bool use_opengl = !mUseVulkan;
+ #else
+     constexpr bool use_opengl = true;
+ #endif
+@@ -362,7 +368,11 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
+     Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+ #endif
+ 
+-    if (use_opengl) {
++    if (mUseVulkan) {
++#ifdef ENABLE_VULKAN
++        flags = flags | SDL_WINDOW_VULKAN;
++#endif
++    } else if (use_opengl) {
+         flags = flags | SDL_WINDOW_OPENGL;
+     } else {
+         flags = flags | SDL_WINDOW_METAL;
+@@ -387,7 +397,13 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
+         posY = 100;
+     }
+ 
+-    if (use_opengl) {
++    if (mUseVulkan) {
++        if (startFullScreen) {
++            SetFullscreenImpl(true, false);
++        }
++        GetDrawableSize(&mWindowWidth, &mWindowHeight);
++        window_impl.Vulkan = { mWnd };
++    } else if (use_opengl) {
+         SDL_GL_GetDrawableSize(mWnd, &mWindowWidth, &mWindowHeight);
+ 
+         if (startFullScreen) {
+@@ -504,11 +520,21 @@ void GfxWindowBackendSDL2::SetMouseCallbacks(bool (*onMouseButtonDown)(int btn),
+     mOnMouseButtonUp = onMouseButtonUp;
+ }
+ 
++void GfxWindowBackendSDL2::GetDrawableSize(int* width, int* height) const {
++#ifdef ENABLE_VULKAN
++    if (mUseVulkan) {
++        SDL_Vulkan_GetDrawableSize(mWnd, width, height);
++        return;
++    }
++#endif
++    SDL_GL_GetDrawableSize(mWnd, width, height);
++}
++
+ void GfxWindowBackendSDL2::GetDimensions(uint32_t* width, uint32_t* height, int32_t* posX, int32_t* posY) {
+ #ifdef __APPLE__
+     SDL_GetWindowSize(mWnd, static_cast<int*>((void*)width), static_cast<int*>((void*)height));
+ #else
+-    SDL_GL_GetDrawableSize(mWnd, static_cast<int*>((void*)width), static_cast<int*>((void*)height));
++    GetDrawableSize(static_cast<int*>((void*)width), static_cast<int*>((void*)height));
+ #endif
+     SDL_GetWindowPosition(mWnd, static_cast<int*>(posX), static_cast<int*>(posY));
+ }
+@@ -589,7 +615,7 @@ void GfxWindowBackendSDL2::HandleSingleEvent(SDL_Event& event) {
+ #ifdef __APPLE__
+                     SDL_GetWindowSize(mWnd, &mWindowWidth, &mWindowHeight);
+ #else
+-                    SDL_GL_GetDrawableSize(mWnd, &mWindowWidth, &mWindowHeight);
++                    GetDrawableSize(&mWindowWidth, &mWindowHeight);
+ #endif
+                     break;
+                 case SDL_WINDOWEVENT_CLOSE:
+@@ -686,6 +712,13 @@ void GfxWindowBackendSDL2::SyncFramerateWithTime() const {
+ void GfxWindowBackendSDL2::SwapBuffersBegin() {
+     bool nextVsyncEnabled = Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_VSYNC_ENABLED, 1);
+ 
++    if (mUseVulkan) {
++        // The Vulkan renderer presents (and switches vsync) itself.
++        mVsyncEnabled = nextVsyncEnabled;
++        SyncFramerateWithTime();
++        return;
++    }
++
+     if (mVsyncEnabled != nextVsyncEnabled) {
+         mVsyncEnabled = nextVsyncEnabled;
+         SDL_GL_SetSwapInterval(mVsyncEnabled ? 1 : 0);
+@@ -729,7 +762,9 @@ bool GfxWindowBackendSDL2::IsRunning() {
+ 
+ void GfxWindowBackendSDL2::Destroy() {
+     // TODO: destroy _any_ resources used by SDL
+-    SDL_GL_DeleteContext(mCtx);
++    if (!mUseVulkan) {
++        SDL_GL_DeleteContext(mCtx);
++    }
+     SDL_DestroyWindow(mWnd);
+     SDL_DestroyRenderer(mRenderer);
+     SDL_Quit();
+diff --git a/src/fast/backends/gfx_vulkan.cpp b/src/fast/backends/gfx_vulkan.cpp
+new file mode 100644
+index 00000000..111539c7
+--- /dev/null
++++ b/src/fast/backends/gfx_vulkan.cpp
+@@ -0,0 +1,2616 @@
++#ifdef ENABLE_VULKAN
++
++#include "fast/backends/gfx_vulkan.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstring>
++#include <functional>
++#include <map>
++#include <memory>
++#include <string>
++#include <unordered_map>
++#include <vector>
++
++#include <volk.h>
++
++#define VMA_STATIC_VULKAN_FUNCTIONS 0
++#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
++#define VMA_IMPLEMENTATION
++#include <vk_mem_alloc.h>
++
++#include <SDL2/SDL.h>
++#include <SDL2/SDL_vulkan.h>
++
++#include <glslang/Public/ShaderLang.h>
++#include <glslang/Public/ResourceLimits.h>
++#include <SPIRV/GlslangToSpv.h>
++
++#include <imgui.h>
++#include <imgui_impl_vulkan.h>
++
++#include "fast/backends/gfx_hlsl_shader.h"
++#include "fast/backends/gfx_sdl.h"
++#include "fast/interpreter.h"
++#include "ship/Context.h"
++#include "ship/config/ConsoleVariable.h"
++#include "spdlog/spdlog.h"
++
++namespace Fast {
++
++namespace {
++
++constexpr uint32_t kFramesInFlight = 2;
++constexpr VkFormat kColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
++
++// Descriptor bindings of the game shaders: HLSL registers t0-t5, s0-s1 and b0-b1 shifted by glslang.
++constexpr uint32_t kTextureBinding = 0;
++constexpr uint32_t kSamplerBinding = 6;
++constexpr uint32_t kUniformBinding = 8;
++
++// Outline pass, compiled with the same HLSL frontend. Same detection as the Direct3D 11 and OpenGL renderers.
++const char* sOutlineShader = R"(
++[[vk::binding(0)]] Texture2D<float> depthTex;
++[[vk::binding(1)]] Texture2D<uint> stencilTex;
++struct OutlineParams {
++    int2 outlineStep;
++    int2 outlineSize;
++};
++[[vk::push_constant]] ConstantBuffer<OutlineParams> pc;
++float4 VSMain(uint id : SV_VertexID) : SV_Position {
++    float2 p = float2((id << 1) & 2, id & 2);
++    return float4(p * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
++}
++float w(int2 p) {
++    p = clamp(p, int2(0, 0), pc.outlineSize - 1);
++    return 1.0 - depthTex.Load(int3(p, 0));
++}
++float4 PSMain(float4 pos : SV_Position) : SV_Target {
++    int2 p = int2(pos.xy);
++    if (stencilTex.Load(int3(p, 0)) != 1) discard;
++    float c = w(p);
++    if (c <= 0.0) discard;
++    int2 s = pc.outlineStep;
++    float l = w(p - int2(s.x, 0));
++    float r = w(p + int2(s.x, 0));
++    float d = w(p - int2(0, s.y));
++    float u = w(p + int2(0, s.y));
++    float dl = w(p + int2(-s.x, -s.y));
++    float ur = w(p + int2(s.x, s.y));
++    float dr = w(p + int2(s.x, -s.y));
++    float ul = w(p + int2(-s.x, s.y));
++    float dip = max(max(2.0 * c - l - r, 2.0 * c - d - u), 0.75 * max(2.0 * c - dl - ur, 2.0 * c - dr - ul)) / c;
++    float edge = smoothstep(0.02, 0.10, dip);
++    if (edge <= 0.0) discard;
++    return float4(0.0, 0.0, 0.0, edge * 0.9);
++}
++)";
++
++// Reads depth values for GetPixelDepth (the game's coordinate queries, e.g. lens flare occlusion).
++const char* sDepthReadShader = R"(
++#version 450
++layout(local_size_x = 1) in;
++layout(binding = 0) uniform sampler2D depthTex;
++layout(std430, binding = 1) readonly buffer Coords { ivec2 coords[]; };
++layout(std430, binding = 2) writeonly buffer Depths { float depths[]; };
++void main() {
++    uint i = gl_GlobalInvocationID.x;
++    depths[i] = texelFetch(depthTex, coords[i], 0).r;
++}
++)";
++
++const char* sDepthReadShaderMsaa = R"(
++#version 450
++layout(local_size_x = 1) in;
++layout(binding = 0) uniform sampler2DMS depthTex;
++layout(std430, binding = 1) readonly buffer Coords { ivec2 coords[]; };
++layout(std430, binding = 2) writeonly buffer Depths { float depths[]; };
++void main() {
++    uint i = gl_GlobalInvocationID.x;
++    depths[i] = texelFetch(depthTex, coords[i], 0).r;
++}
++)";
++
++bool CompileToSpirv(const std::string& source, EShLanguage stage, bool hlsl, const char* entry,
++                    std::vector<uint32_t>& spirv) {
++    glslang::TShader shader(stage);
++    const char* src = source.c_str();
++    shader.setStrings(&src, 1);
++    shader.setEntryPoint(entry);
++    shader.setSourceEntryPoint(entry);
++    shader.setEnvInput(hlsl ? glslang::EShSourceHlsl : glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
++    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
++    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
++    if (hlsl) {
++        shader.setShiftBinding(glslang::EResTexture, kTextureBinding);
++        shader.setShiftBinding(glslang::EResSampler, kSamplerBinding);
++        shader.setShiftBinding(glslang::EResUbo, kUniformBinding);
++        shader.setAutoMapLocations(true);
++    }
++    EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules |
++                                         (hlsl ? (EShMsgReadHlsl | EShMsgHlslOffsets) : EShMsgDefault));
++    if (!shader.parse(GetDefaultResources(), 100, false, messages)) {
++        SPDLOG_ERROR("Vulkan: shader compilation failed ({}): {}", entry, shader.getInfoLog());
++        return false;
++    }
++    glslang::TProgram program;
++    program.addShader(&shader);
++    if (!program.link(messages) || !program.mapIO()) {
++        SPDLOG_ERROR("Vulkan: shader link failed ({}): {}", entry, program.getInfoLog());
++        return false;
++    }
++    glslang::SpvOptions options;
++    options.disableOptimizer = false; // runs the HLSL legalization passes
++    options.optimizeSize = false;
++    spv::SpvBuildLogger logger;
++    glslang::GlslangToSpv(*program.getIntermediate(stage), spirv, &logger, &options);
++    if (spirv.empty()) {
++        SPDLOG_ERROR("Vulkan: SPIR-V generation failed ({}): {}", entry, logger.getAllMessages());
++        return false;
++    }
++    return true;
++}
++
++VkSamplerAddressMode GfxCmToVk(uint32_t val) {
++    if (val & G_TX_CLAMP) {
++        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
++    }
++    return (val & G_TX_MIRROR) ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT;
++}
++
++struct ImageVK {
++    VkImage image = VK_NULL_HANDLE;
++    VmaAllocation allocation = nullptr;
++    VkImageView view = VK_NULL_HANDLE;        // colour, or the depth aspect of a depth buffer
++    VkImageView stencilView = VK_NULL_HANDLE; // depth buffers only
++    VkFormat format = VK_FORMAT_UNDEFINED;
++    uint32_t width = 0;
++    uint32_t height = 0;
++    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
++    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
++    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
++    VkDescriptorSet imguiSet = VK_NULL_HANDLE;
++    bool ownsImage = true; // swapchain images belong to the swapchain
++};
++
++struct TextureVK {
++    std::shared_ptr<ImageVK> image;
++    uint32_t width = 0;
++    uint32_t height = 0;
++    bool linearFiltering = false;
++    VkSampler sampler = VK_NULL_HANDLE;
++};
++
++struct FramebufferVK {
++    uint32_t textureId = 0;
++    std::shared_ptr<ImageVK> depth;
++    uint32_t width = 0;
++    uint32_t height = 0;
++    uint32_t msaa = 1;
++    bool hasDepth = false;
++    bool created = false;
++    VkRenderPass renderPass = VK_NULL_HANDLE;
++    VkFramebuffer framebuffer = VK_NULL_HANDLE;
++    VkFramebuffer outlineFramebuffer = VK_NULL_HANDLE; // colour only, for the outline pass
++};
++
++struct ShaderProgramVK {
++    VkShaderModule vertexModule = VK_NULL_HANDLE;
++    VkShaderModule fragmentModule = VK_NULL_HANDLE;
++    uint8_t numInputs = 0;
++    uint8_t numFloats = 0;
++    bool usedTextures[SHADER_MAX_TEXTURES] = {};
++    bool alpha = false;
++    std::vector<VkVertexInputAttributeDescription> attributes;
++};
++
++struct HostBuffer {
++    VkBuffer buffer = VK_NULL_HANDLE;
++    VmaAllocation allocation = nullptr;
++    uint8_t* data = nullptr;
++    VkDeviceSize size = 0;
++    VkDeviceSize used = 0;
++};
++
++struct FrameSlot {
++    VkCommandPool commandPool = VK_NULL_HANDLE;
++    VkCommandBuffer drawCmd = VK_NULL_HANDLE;
++    VkCommandBuffer uploadCmd = VK_NULL_HANDLE;
++    VkFence fence = VK_NULL_HANDLE;
++    VkSemaphore imageAcquired = VK_NULL_HANDLE;
++    bool submitted = false;
++    std::vector<VkDescriptorPool> descriptorPools;
++    size_t descriptorPoolIndex = 0;
++    HostBuffer vertices;
++    HostBuffer uniforms;
++    HostBuffer staging;
++    std::vector<std::function<void()>> garbage;
++};
++
++struct PipelineKey {
++    ShaderProgramVK* program;
++    VkRenderPass renderPass;
++    uint32_t flags;
++    bool operator==(const PipelineKey& o) const {
++        return program == o.program && renderPass == o.renderPass && flags == o.flags;
++    }
++};
++
++struct PipelineKeyHash {
++    size_t operator()(const PipelineKey& k) const {
++        return std::hash<void*>()(k.program) ^ (std::hash<void*>()(k.renderPass) << 1) ^ (k.flags * 0x9E3779B9u);
++    }
++};
++
++enum PipelineFlags : uint32_t {
++    PIPE_DEPTH_TEST = 1 << 0,
++    PIPE_DEPTH_MASK = 1 << 1,
++    PIPE_DECAL = 1 << 2,
++    PIPE_OUTLINE_STENCIL = 1 << 3,
++};
++
++} // namespace
++
++struct VulkanRenderer {
++    GfxWindowBackendSDL2* windowBackend = nullptr;
++    SDL_Window* window = nullptr;
++
++    VkInstance instance = VK_NULL_HANDLE;
++    VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
++    VkSurfaceKHR surface = VK_NULL_HANDLE;
++    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
++    VkPhysicalDeviceProperties deviceProperties = {};
++    VkDevice device = VK_NULL_HANDLE;
++    uint32_t queueFamily = 0;
++    VkQueue queue = VK_NULL_HANDLE;
++    VmaAllocator allocator = nullptr;
++    VkPipelineCache pipelineCache = VK_NULL_HANDLE;
++    bool depthClampSupported = false;
++    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
++    bool depthSampleable = false;
++    VkSampleCountFlags supportedSampleCounts = VK_SAMPLE_COUNT_1_BIT;
++
++    // Swapchain (framebuffer 0)
++    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
++    VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_UNORM;
++    VkExtent2D swapchainExtent = { 0, 0 };
++    std::vector<std::shared_ptr<ImageVK>> swapchainImages;
++    std::vector<VkFramebuffer> swapchainFramebuffers;
++    std::vector<VkSemaphore> renderFinished; // one per swapchain image
++    std::shared_ptr<ImageVK> swapchainDepth;
++    bool swapchainDirty = false;
++    bool vsync = true;
++    uint32_t imageIndex = 0;
++    bool imageAcquired = false;
++    bool acquireWaitPending = false;
++    uint32_t desiredWidth = 1;
++    uint32_t desiredHeight = 1;
++
++    FrameSlot frames[kFramesInFlight];
++    uint32_t frameIndex = 0;
++    bool recording = false;
++    bool uploadUsed = false;
++
++    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
++    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
++    std::map<std::tuple<VkFormat, VkFormat, VkSampleCountFlagBits>, VkRenderPass> renderPasses;
++    std::unordered_map<PipelineKey, VkPipeline, PipelineKeyHash> pipelines;
++    std::map<std::tuple<bool, VkSamplerAddressMode, VkSamplerAddressMode>, VkSampler> samplers;
++    VkSampler imguiSampler = VK_NULL_HANDLE;
++    VkSampler nearestClampSampler = VK_NULL_HANDLE;
++    std::shared_ptr<ImageVK> dummyImage;
++
++    std::map<std::pair<uint64_t, uint32_t>, ShaderProgramVK> shaderPrograms;
++    std::vector<TextureVK> textures;
++    std::vector<FramebufferVK> framebuffers;
++    std::unordered_map<VkDescriptorSet, std::weak_ptr<ImageVK>> imguiImages;
++
++    // Current state
++    ShaderProgramVK* shaderProgram = nullptr;
++    int currentTile = 0;
++    uint32_t currentTextureIds[SHADER_MAX_TEXTURES] = {};
++    int currentFb = 0;
++    uint32_t renderTargetHeight = 1;
++    FilteringMode filterMode = FILTER_NONE;
++    bool srgbMode = false;
++    bool depthTest = false;
++    bool depthMask = false;
++    bool zmodeDecal = false;
++    VkRect2D viewportRect = { { 0, 0 }, { 1, 1 } };
++    VkRect2D scissorRect = { { 0, 0 }, { 1, 1 } };
++    int viewportX = 0, viewportY = 0, viewportW = 1, viewportH = 1;
++    int scissorX = 0, scissorY = 0, scissorW = 1, scissorH = 1;
++
++    // Command buffer state
++    bool passActive = false;
++    VkRenderPass activeRenderPass = VK_NULL_HANDLE;
++    VkPipeline boundPipeline = VK_NULL_HANDLE;
++    bool dynamicStateDirty = true;
++    float boundDepthBias = 0.0f;
++    VkDescriptorSet currentDescriptorSet = VK_NULL_HANDLE;
++    bool descriptorDirty = true;
++    VkImageView boundViews[SHADER_MAX_TEXTURES] = {};
++    VkSampler boundSamplers[2] = {};
++
++    PerFrameCB perFrameData = {};
++    PerDrawCB perDrawData = {};
++    uint32_t perFrameOffset = 0;
++    uint32_t perDrawOffset = 0;
++    bool perFrameDirty = true;
++    bool perDrawDirty = true;
++    VkDeviceSize uniformAlignment = 256;
++
++    // Outlines
++    bool outlineEnabled = false;
++    float outlineThickness = 2.0f;
++    bool outlineInitFailed = false;
++    VkDescriptorSetLayout outlineSetLayout = VK_NULL_HANDLE;
++    VkPipelineLayout outlinePipelineLayout = VK_NULL_HANDLE;
++    VkPipeline outlinePipeline = VK_NULL_HANDLE;
++
++    // GetPixelDepth
++    VkDescriptorSetLayout depthReadSetLayout = VK_NULL_HANDLE;
++    VkPipelineLayout depthReadPipelineLayout = VK_NULL_HANDLE;
++    VkPipeline depthReadPipelines[2] = {}; // single sample, multisample
++    HostBuffer coordBuffer;
++    HostBuffer depthOutBuffer;
++
++    bool imguiInitialized = false;
++
++    // ------------------------------------------------------------------ setup
++
++    static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
++                                                        VkDebugUtilsMessageTypeFlagsEXT,
++                                                        const VkDebugUtilsMessengerCallbackDataEXT* data, void*) {
++        if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
++            SPDLOG_ERROR("Vulkan validation: {}", data->pMessage);
++        } else {
++            SPDLOG_WARN("Vulkan validation: {}", data->pMessage);
++        }
++        return VK_FALSE;
++    }
++
++    static void Check(VkResult result, const char* what) {
++        if (result != VK_SUCCESS) {
++            SPDLOG_CRITICAL("Vulkan: {} failed ({})", what, (int)result);
++            throw std::runtime_error(std::string("Vulkan: ") + what + " failed");
++        }
++    }
++
++    void CreateInstance() {
++        unsigned int extCount = 0;
++        SDL_Vulkan_GetInstanceExtensions(window, &extCount, nullptr);
++        std::vector<const char*> extensions(extCount);
++        SDL_Vulkan_GetInstanceExtensions(window, &extCount, extensions.data());
++
++        std::vector<const char*> layers;
++        const char* validationEnv = std::getenv("LUS_VULKAN_VALIDATION");
++        bool validation = validationEnv != nullptr && validationEnv[0] == '1';
++        if (validation) {
++            uint32_t layerCount = 0;
++            vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
++            std::vector<VkLayerProperties> available(layerCount);
++            vkEnumerateInstanceLayerProperties(&layerCount, available.data());
++            for (auto& l : available) {
++                if (strcmp(l.layerName, "VK_LAYER_KHRONOS_validation") == 0) {
++                    layers.push_back("VK_LAYER_KHRONOS_validation");
++                    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
++                    break;
++                }
++            }
++        }
++
++        VkApplicationInfo app = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
++        app.pApplicationName = "libultraship";
++        app.apiVersion = VK_API_VERSION_1_1;
++        VkInstanceCreateInfo ci = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
++        ci.pApplicationInfo = &app;
++        ci.enabledExtensionCount = (uint32_t)extensions.size();
++        ci.ppEnabledExtensionNames = extensions.data();
++        ci.enabledLayerCount = (uint32_t)layers.size();
++        ci.ppEnabledLayerNames = layers.data();
++        Check(vkCreateInstance(&ci, nullptr, &instance), "vkCreateInstance");
++        volkLoadInstance(instance);
++
++        if (!layers.empty()) {
++            VkDebugUtilsMessengerCreateInfoEXT dci = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
++            dci.messageSeverity =
++                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
++            dci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
++                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
++                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
++            dci.pfnUserCallback = DebugCallback;
++            vkCreateDebugUtilsMessengerEXT(instance, &dci, nullptr, &debugMessenger);
++        }
++
++        if (!SDL_Vulkan_CreateSurface(window, instance, &surface)) {
++            SPDLOG_CRITICAL("Vulkan: SDL_Vulkan_CreateSurface failed: {}", SDL_GetError());
++            throw std::runtime_error("Vulkan: surface creation failed");
++        }
++    }
++
++    void PickDevice() {
++        uint32_t count = 0;
++        vkEnumeratePhysicalDevices(instance, &count, nullptr);
++        std::vector<VkPhysicalDevice> devices(count);
++        vkEnumeratePhysicalDevices(instance, &count, devices.data());
++
++        int bestScore = -1;
++        for (VkPhysicalDevice pd : devices) {
++            VkPhysicalDeviceProperties props;
++            vkGetPhysicalDeviceProperties(pd, &props);
++            if (props.apiVersion < VK_API_VERSION_1_1) {
++                continue;
++            }
++            uint32_t extCount = 0;
++            vkEnumerateDeviceExtensionProperties(pd, nullptr, &extCount, nullptr);
++            std::vector<VkExtensionProperties> exts(extCount);
++            vkEnumerateDeviceExtensionProperties(pd, nullptr, &extCount, exts.data());
++            bool hasSwapchain = std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
++                return strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
++            });
++            if (!hasSwapchain) {
++                continue;
++            }
++            uint32_t qfCount = 0;
++            vkGetPhysicalDeviceQueueFamilyProperties(pd, &qfCount, nullptr);
++            std::vector<VkQueueFamilyProperties> qfs(qfCount);
++            vkGetPhysicalDeviceQueueFamilyProperties(pd, &qfCount, qfs.data());
++            for (uint32_t i = 0; i < qfCount; i++) {
++                VkBool32 present = VK_FALSE;
++                vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &present);
++                if ((qfs[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && (qfs[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
++                    present) {
++                    int score = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU     ? 4
++                                : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 3
++                                : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU    ? 2
++                                                                                             : 1;
++                    if (score > bestScore) {
++                        bestScore = score;
++                        physicalDevice = pd;
++                        queueFamily = i;
++                    }
++                    break;
++                }
++            }
++        }
++        if (physicalDevice == VK_NULL_HANDLE) {
++            throw std::runtime_error("Vulkan: no usable GPU");
++        }
++        vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
++        SPDLOG_INFO("Vulkan: using {} (API {}.{}.{})", deviceProperties.deviceName,
++                    VK_API_VERSION_MAJOR(deviceProperties.apiVersion), VK_API_VERSION_MINOR(deviceProperties.apiVersion),
++                    VK_API_VERSION_PATCH(deviceProperties.apiVersion));
++        uniformAlignment = std::max<VkDeviceSize>(deviceProperties.limits.minUniformBufferOffsetAlignment, 16);
++        supportedSampleCounts = deviceProperties.limits.framebufferColorSampleCounts &
++                                deviceProperties.limits.framebufferDepthSampleCounts;
++
++        const VkFormat candidates[] = { VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
++        for (VkFormat f : candidates) {
++            VkFormatProperties fp;
++            vkGetPhysicalDeviceFormatProperties(physicalDevice, f, &fp);
++            bool attachment = fp.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
++            bool sampled = fp.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
++            if (attachment && (sampled || depthFormat == VK_FORMAT_UNDEFINED)) {
++                depthFormat = f;
++                depthSampleable = sampled;
++                if (sampled) {
++                    break;
++                }
++            }
++        }
++    }
++
++    void CreateDevice() {
++        VkPhysicalDeviceFeatures supported;
++        vkGetPhysicalDeviceFeatures(physicalDevice, &supported);
++        VkPhysicalDeviceFeatures features = {};
++        features.depthClamp = supported.depthClamp;
++        depthClampSupported = supported.depthClamp;
++
++        float priority = 1.0f;
++        VkDeviceQueueCreateInfo qci = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
++        qci.queueFamilyIndex = queueFamily;
++        qci.queueCount = 1;
++        qci.pQueuePriorities = &priority;
++        const char* extensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
++        VkDeviceCreateInfo ci = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
++        ci.queueCreateInfoCount = 1;
++        ci.pQueueCreateInfos = &qci;
++        ci.enabledExtensionCount = 1;
++        ci.ppEnabledExtensionNames = extensions;
++        ci.pEnabledFeatures = &features;
++        Check(vkCreateDevice(physicalDevice, &ci, nullptr, &device), "vkCreateDevice");
++        volkLoadDevice(device);
++        vkGetDeviceQueue(device, queueFamily, 0, &queue);
++
++        VmaVulkanFunctions fns = {};
++        fns.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
++        fns.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
++        VmaAllocatorCreateInfo aci = {};
++        aci.vulkanApiVersion = VK_API_VERSION_1_1;
++        aci.physicalDevice = physicalDevice;
++        aci.device = device;
++        aci.instance = instance;
++        aci.pVulkanFunctions = &fns;
++        Check(vmaCreateAllocator(&aci, &allocator), "vmaCreateAllocator");
++
++        VkPipelineCacheCreateInfo pcci = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
++        vkCreatePipelineCache(device, &pcci, nullptr, &pipelineCache);
++    }
++
++    void CreateFrameSlots() {
++        for (auto& f : frames) {
++            VkCommandPoolCreateInfo pci = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
++            pci.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
++            pci.queueFamilyIndex = queueFamily;
++            Check(vkCreateCommandPool(device, &pci, nullptr, &f.commandPool), "vkCreateCommandPool");
++            VkCommandBufferAllocateInfo ai = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
++            ai.commandPool = f.commandPool;
++            ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
++            ai.commandBufferCount = 1;
++            Check(vkAllocateCommandBuffers(device, &ai, &f.drawCmd), "vkAllocateCommandBuffers");
++            Check(vkAllocateCommandBuffers(device, &ai, &f.uploadCmd), "vkAllocateCommandBuffers");
++            VkFenceCreateInfo fci = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
++            Check(vkCreateFence(device, &fci, nullptr, &f.fence), "vkCreateFence");
++            VkSemaphoreCreateInfo sci = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
++            Check(vkCreateSemaphore(device, &sci, nullptr, &f.imageAcquired), "vkCreateSemaphore");
++            CreateHostBuffer(f.vertices, 4 << 20, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, false);
++            CreateHostBuffer(f.uniforms, 1 << 20, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, false);
++            CreateHostBuffer(f.staging, 8 << 20, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, false);
++        }
++    }
++
++    void CreateLayouts() {
++        VkDescriptorSetLayoutBinding bindings[10] = {};
++        for (uint32_t i = 0; i < SHADER_MAX_TEXTURES; i++) {
++            bindings[i] = { kTextureBinding + i, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
++                            nullptr };
++        }
++        for (uint32_t i = 0; i < 2; i++) {
++            bindings[6 + i] = { kSamplerBinding + i, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
++                                nullptr };
++            bindings[8 + i] = { kUniformBinding + i, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1,
++                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
++        }
++        VkDescriptorSetLayoutCreateInfo lci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
++        lci.bindingCount = 10;
++        lci.pBindings = bindings;
++        Check(vkCreateDescriptorSetLayout(device, &lci, nullptr, &descriptorSetLayout), "descriptor set layout");
++        VkPipelineLayoutCreateInfo plci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
++        plci.setLayoutCount = 1;
++        plci.pSetLayouts = &descriptorSetLayout;
++        Check(vkCreatePipelineLayout(device, &plci, nullptr, &pipelineLayout), "pipeline layout");
++
++        VkSamplerCreateInfo sci = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
++        sci.magFilter = sci.minFilter = VK_FILTER_LINEAR;
++        sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
++        sci.addressModeU = sci.addressModeV = sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
++        sci.maxLod = VK_LOD_CLAMP_NONE;
++        Check(vkCreateSampler(device, &sci, nullptr, &imguiSampler), "sampler");
++        sci.magFilter = sci.minFilter = VK_FILTER_NEAREST;
++        sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
++        Check(vkCreateSampler(device, &sci, nullptr, &nearestClampSampler), "sampler");
++    }
++
++    // ------------------------------------------------------------------ resources
++
++    void CreateHostBuffer(HostBuffer& b, VkDeviceSize size, VkBufferUsageFlags usage, bool readback) {
++        VkBufferCreateInfo bci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
++        bci.size = size;
++        bci.usage = usage;
++        VmaAllocationCreateInfo aci = {};
++        aci.usage = VMA_MEMORY_USAGE_AUTO;
++        aci.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | (readback ? VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
++                                                                 : VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
++        VmaAllocationInfo info;
++        Check(vmaCreateBuffer(allocator, &bci, &aci, &b.buffer, &b.allocation, &info), "vmaCreateBuffer");
++        b.data = (uint8_t*)info.pMappedData;
++        b.size = size;
++        b.used = 0;
++    }
++
++    void DestroyHostBufferLater(HostBuffer& b) {
++        if (b.buffer == VK_NULL_HANDLE) {
++            return;
++        }
++        VkBuffer buffer = b.buffer;
++        VmaAllocation allocation = b.allocation;
++        Retire([this, buffer, allocation]() { vmaDestroyBuffer(allocator, buffer, allocation); });
++        b = HostBuffer();
++    }
++
++    // Space in one of the current frame's host buffers. A full buffer is swapped for a bigger one; the old one lives
++    // until the GPU is done with this frame.
++    VkDeviceSize HostAlloc(HostBuffer& b, VkDeviceSize size, VkDeviceSize alignment, VkBufferUsageFlags usage,
++                           bool* replaced = nullptr) {
++        VkDeviceSize offset = (b.used + alignment - 1) / alignment * alignment;
++        if (offset + size > b.size) {
++            VkDeviceSize newSize = std::max(b.size * 2, size * 2);
++            DestroyHostBufferLater(b);
++            CreateHostBuffer(b, newSize, usage, false);
++            offset = 0;
++            if (replaced != nullptr) {
++                *replaced = true;
++            }
++        }
++        b.used = offset + size;
++        return offset;
++    }
++
++    void Retire(std::function<void()> fn) {
++        frames[frameIndex].garbage.push_back(std::move(fn));
++    }
++
++    std::shared_ptr<ImageVK> WrapImage(ImageVK* img) {
++        return std::shared_ptr<ImageVK>(img, [this](ImageVK* i) {
++            if (i->imguiSet != VK_NULL_HANDLE) {
++                imguiImages.erase(i->imguiSet);
++            }
++            VkDescriptorSet set = imguiInitialized ? i->imguiSet : VK_NULL_HANDLE;
++            VkImageView view = i->view, stencilView = i->stencilView;
++            VkImage image = i->ownsImage ? i->image : VK_NULL_HANDLE;
++            VmaAllocation allocation = i->allocation;
++            delete i;
++            if (device == VK_NULL_HANDLE) {
++                return;
++            }
++            Retire([this, set, view, stencilView, image, allocation]() {
++                if (set != VK_NULL_HANDLE && imguiInitialized) {
++                    ImGui_ImplVulkan_RemoveTexture(set);
++                }
++                if (view != VK_NULL_HANDLE) {
++                    vkDestroyImageView(device, view, nullptr);
++                }
++                if (stencilView != VK_NULL_HANDLE) {
++                    vkDestroyImageView(device, stencilView, nullptr);
++                }
++                if (image != VK_NULL_HANDLE) {
++                    vmaDestroyImage(allocator, image, allocation);
++                }
++            });
++        });
++    }
++
++    VkImageView CreateView(VkImage image, VkFormat format, VkImageAspectFlags aspect) {
++        VkImageViewCreateInfo vci = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
++        vci.image = image;
++        vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
++        vci.format = format;
++        vci.subresourceRange = { aspect, 0, 1, 0, 1 };
++        VkImageView view;
++        Check(vkCreateImageView(device, &vci, nullptr, &view), "vkCreateImageView");
++        return view;
++    }
++
++    std::shared_ptr<ImageVK> CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
++                                         VkSampleCountFlagBits samples, bool isDepth) {
++        ImageVK* img = new ImageVK();
++        img->format = format;
++        img->width = width;
++        img->height = height;
++        img->samples = samples;
++        img->aspect = isDepth ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT) : VK_IMAGE_ASPECT_COLOR_BIT;
++
++        VkImageCreateInfo ici = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
++        ici.imageType = VK_IMAGE_TYPE_2D;
++        ici.format = format;
++        ici.extent = { width, height, 1 };
++        ici.mipLevels = 1;
++        ici.arrayLayers = 1;
++        ici.samples = samples;
++        ici.tiling = VK_IMAGE_TILING_OPTIMAL;
++        ici.usage = usage;
++        ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++        VmaAllocationCreateInfo aci = {};
++        aci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
++        if (usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
++            aci.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
++        }
++        Check(vmaCreateImage(allocator, &ici, &aci, &img->image, &img->allocation, nullptr), "vmaCreateImage");
++        if (usage & (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
++                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
++            img->view =
++                CreateView(img->image, format, isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
++        }
++        if (isDepth && (usage & VK_IMAGE_USAGE_SAMPLED_BIT)) {
++            img->stencilView = CreateView(img->image, format, VK_IMAGE_ASPECT_STENCIL_BIT);
++        }
++        return WrapImage(img);
++    }
++
++    VkSampler GetSampler(bool linear, VkSamplerAddressMode u, VkSamplerAddressMode v) {
++        auto key = std::make_tuple(linear, u, v);
++        auto it = samplers.find(key);
++        if (it != samplers.end()) {
++            return it->second;
++        }
++        VkSamplerCreateInfo sci = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
++        sci.magFilter = sci.minFilter = linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
++        sci.mipmapMode = linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
++        sci.addressModeU = u;
++        sci.addressModeV = v;
++        sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
++        sci.maxLod = VK_LOD_CLAMP_NONE;
++        VkSampler sampler;
++        Check(vkCreateSampler(device, &sci, nullptr, &sampler), "vkCreateSampler");
++        samplers[key] = sampler;
++        return sampler;
++    }
++
++    VkRenderPass GetRenderPass(VkFormat color, VkFormat depth, VkSampleCountFlagBits samples) {
++        auto key = std::make_tuple(color, depth, samples);
++        auto it = renderPasses.find(key);
++        if (it != renderPasses.end()) {
++            return it->second;
++        }
++        // Attachments are loaded and stored; layouts are handled with explicit barriers outside the pass.
++        VkAttachmentDescription att[2] = {};
++        att[0].format = color;
++        att[0].samples = samples;
++        att[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
++        att[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
++        att[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
++        att[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
++        att[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
++        att[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
++        att[1] = att[0];
++        att[1].format = depth;
++        att[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
++        att[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
++        att[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
++        att[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
++        VkAttachmentReference colorRef = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
++        VkAttachmentReference depthRef = { 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
++        VkSubpassDescription sub = {};
++        sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
++        sub.colorAttachmentCount = 1;
++        sub.pColorAttachments = &colorRef;
++        sub.pDepthStencilAttachment = depth != VK_FORMAT_UNDEFINED ? &depthRef : nullptr;
++        VkSubpassDependency deps[2] = {};
++        const VkPipelineStageFlags attachmentStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
++                                                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
++                                                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
++        const VkAccessFlags attachmentAccess =
++            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
++            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
++        deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
++        deps[0].dstSubpass = 0;
++        deps[0].srcStageMask = attachmentStages;
++        deps[0].dstStageMask = attachmentStages;
++        deps[0].srcAccessMask = attachmentAccess;
++        deps[0].dstAccessMask = attachmentAccess;
++        deps[1].srcSubpass = 0;
++        deps[1].dstSubpass = VK_SUBPASS_EXTERNAL;
++        deps[1].srcStageMask = attachmentStages;
++        deps[1].dstStageMask = attachmentStages;
++        deps[1].srcAccessMask = attachmentAccess;
++        deps[1].dstAccessMask = attachmentAccess;
++        VkRenderPassCreateInfo rci = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
++        rci.attachmentCount = depth != VK_FORMAT_UNDEFINED ? 2 : 1;
++        rci.pAttachments = att;
++        rci.subpassCount = 1;
++        rci.pSubpasses = &sub;
++        rci.dependencyCount = 2;
++        rci.pDependencies = deps;
++        VkRenderPass rp;
++        Check(vkCreateRenderPass(device, &rci, nullptr, &rp), "vkCreateRenderPass");
++        renderPasses[key] = rp;
++        return rp;
++    }
++
++    VkFramebuffer CreateVkFramebuffer(VkRenderPass rp, VkImageView color, VkImageView depth, uint32_t w,
++                                      uint32_t h) {
++        VkImageView views[2] = { color, depth };
++        VkFramebufferCreateInfo fci = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
++        fci.renderPass = rp;
++        fci.attachmentCount = depth != VK_NULL_HANDLE ? 2 : 1;
++        fci.pAttachments = views;
++        fci.width = w;
++        fci.height = h;
++        fci.layers = 1;
++        VkFramebuffer fb;
++        Check(vkCreateFramebuffer(device, &fci, nullptr, &fb), "vkCreateFramebuffer");
++        return fb;
++    }
++
++    void RetireFramebuffer(VkFramebuffer& fb) {
++        if (fb != VK_NULL_HANDLE) {
++            VkFramebuffer old = fb;
++            Retire([this, old]() { vkDestroyFramebuffer(device, old, nullptr); });
++            fb = VK_NULL_HANDLE;
++        }
++    }
++
++    // ------------------------------------------------------------------ swapchain
++
++    void CreateSwapchain() {
++        VkSurfaceCapabilitiesKHR caps;
++        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &caps);
++        VkExtent2D extent = caps.currentExtent;
++        if (extent.width == 0xFFFFFFFF) {
++            extent.width = std::clamp(desiredWidth, caps.minImageExtent.width, caps.maxImageExtent.width);
++            extent.height = std::clamp(desiredHeight, caps.minImageExtent.height, caps.maxImageExtent.height);
++        }
++        if (extent.width == 0 || extent.height == 0) {
++            // Minimised: try again next frame.
++            swapchainDirty = true;
++            return;
++        }
++
++        if (swapchain == VK_NULL_HANDLE) {
++            uint32_t formatCount = 0;
++            vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
++            std::vector<VkSurfaceFormatKHR> formats(formatCount);
++            vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data());
++            swapchainFormat = formats.empty() ? VK_FORMAT_B8G8R8A8_UNORM : formats[0].format;
++            for (auto& f : formats) {
++                if ((f.format == VK_FORMAT_B8G8R8A8_UNORM || f.format == VK_FORMAT_R8G8B8A8_UNORM) &&
++                    f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
++                    swapchainFormat = f.format;
++                    break;
++                }
++            }
++        }
++
++        uint32_t modeCount = 0;
++        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &modeCount, nullptr);
++        std::vector<VkPresentModeKHR> modes(modeCount);
++        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &modeCount, modes.data());
++        VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
++        if (!vsync) {
++            auto has = [&](VkPresentModeKHR m) { return std::find(modes.begin(), modes.end(), m) != modes.end(); };
++            presentMode = has(VK_PRESENT_MODE_MAILBOX_KHR)     ? VK_PRESENT_MODE_MAILBOX_KHR
++                          : has(VK_PRESENT_MODE_IMMEDIATE_KHR) ? VK_PRESENT_MODE_IMMEDIATE_KHR
++                                                               : VK_PRESENT_MODE_FIFO_KHR;
++        }
++
++        uint32_t imageCount = std::max(caps.minImageCount + 1, 3u);
++        if (caps.maxImageCount > 0) {
++            imageCount = std::min(imageCount, caps.maxImageCount);
++        }
++
++        VkSwapchainKHR old = swapchain;
++        VkSwapchainCreateInfoKHR sci = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
++        sci.surface = surface;
++        sci.minImageCount = imageCount;
++        sci.imageFormat = swapchainFormat;
++        sci.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++        sci.imageExtent = extent;
++        sci.imageArrayLayers = 1;
++        sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
++                         (caps.supportedUsageFlags & (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
++        sci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
++        sci.preTransform = (caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
++                               ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
++                               : caps.currentTransform;
++        sci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
++                                 ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
++                                 : (VkCompositeAlphaFlagBitsKHR)(caps.supportedCompositeAlpha &
++                                                                 -(int32_t)caps.supportedCompositeAlpha);
++        sci.presentMode = presentMode;
++        sci.clipped = VK_TRUE;
++        sci.oldSwapchain = old;
++        Check(vkCreateSwapchainKHR(device, &sci, nullptr, &swapchain), "vkCreateSwapchainKHR");
++        if (old != VK_NULL_HANDLE) {
++            vkDestroySwapchainKHR(device, old, nullptr);
++        }
++        swapchainExtent = extent;
++
++        uint32_t count = 0;
++        vkGetSwapchainImagesKHR(device, swapchain, &count, nullptr);
++        std::vector<VkImage> images(count);
++        vkGetSwapchainImagesKHR(device, swapchain, &count, images.data());
++        swapchainImages.clear();
++        for (VkImage image : images) {
++            ImageVK* img = new ImageVK();
++            img->image = image;
++            img->ownsImage = false;
++            img->format = swapchainFormat;
++            img->width = extent.width;
++            img->height = extent.height;
++            img->view = CreateView(image, swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT);
++            swapchainImages.push_back(WrapImage(img));
++        }
++        VkSemaphoreCreateInfo semci = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
++        while (renderFinished.size() < count) {
++            VkSemaphore s;
++            Check(vkCreateSemaphore(device, &semci, nullptr, &s), "vkCreateSemaphore");
++            renderFinished.push_back(s);
++        }
++
++        swapchainDepth = CreateImage(extent.width, extent.height, depthFormat,
++                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
++                                         (depthSampleable ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
++                                     VK_SAMPLE_COUNT_1_BIT, true);
++        VkRenderPass rp = GetRenderPass(swapchainFormat, depthFormat, VK_SAMPLE_COUNT_1_BIT);
++        for (auto& fb : swapchainFramebuffers) {
++            RetireFramebuffer(fb);
++        }
++        swapchainFramebuffers.clear();
++        for (auto& img : swapchainImages) {
++            swapchainFramebuffers.push_back(
++                CreateVkFramebuffer(rp, img->view, swapchainDepth->view, extent.width, extent.height));
++        }
++
++        if (!framebuffers.empty()) {
++            FramebufferVK& fb0 = framebuffers[0];
++            fb0.width = extent.width;
++            fb0.height = extent.height;
++            fb0.depth = swapchainDepth;
++            fb0.renderPass = rp;
++            textures[fb0.textureId].width = extent.width;
++            textures[fb0.textureId].height = extent.height;
++        }
++        swapchainDirty = false;
++        if (imguiInitialized) {
++            ImGui_ImplVulkan_SetMinImageCount(std::max(caps.minImageCount, 2u));
++        }
++    }
++
++    void RecreateSwapchain() {
++        vkDeviceWaitIdle(device);
++        // Everything waiting for the GPU can go now, which also frees the old swapchain's framebuffers.
++        for (auto& f : frames) {
++            RunGarbage(f);
++        }
++        CreateSwapchain();
++    }
++
++    // ------------------------------------------------------------------ frame and command buffers
++
++    void RunGarbage(FrameSlot& f) {
++        auto garbage = std::move(f.garbage);
++        f.garbage.clear();
++        for (auto& fn : garbage) {
++            fn();
++        }
++    }
++
++    // Opens the current frame slot's command buffers (waiting for the GPU to finish the slot's previous use).
++    void EnsureRecording() {
++        if (recording) {
++            return;
++        }
++        FrameSlot& f = frames[frameIndex];
++        if (f.submitted) {
++            vkWaitForFences(device, 1, &f.fence, VK_TRUE, UINT64_MAX);
++            vkResetFences(device, 1, &f.fence);
++            f.submitted = false;
++        }
++        RunGarbage(f);
++        vkResetCommandPool(device, f.commandPool, 0);
++        for (auto pool : f.descriptorPools) {
++            vkResetDescriptorPool(device, pool, 0);
++        }
++        f.descriptorPoolIndex = 0;
++        f.vertices.used = 0;
++        f.uniforms.used = 0;
++        f.staging.used = 0;
++        BeginCommandBuffers(f);
++        recording = true;
++    }
++
++    void BeginCommandBuffers(FrameSlot& f) {
++        VkCommandBufferBeginInfo bi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
++        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
++        vkBeginCommandBuffer(f.drawCmd, &bi);
++        vkBeginCommandBuffer(f.uploadCmd, &bi);
++        uploadUsed = false;
++        boundPipeline = VK_NULL_HANDLE;
++        dynamicStateDirty = true;
++        descriptorDirty = true;
++        perFrameDirty = true;
++        perDrawDirty = true;
++    }
++
++    VkCommandBuffer Cmd() {
++        EnsureRecording();
++        return frames[frameIndex].drawCmd;
++    }
++
++    VkCommandBuffer UploadCmd() {
++        EnsureRecording();
++        uploadUsed = true;
++        return frames[frameIndex].uploadCmd;
++    }
++
++    // Submits everything recorded so far. With wait, blocks until the GPU is done and reopens the command buffers
++    // (used when the CPU needs results in the middle of a frame).
++    void Submit(bool endOfFrame, bool wait) {
++        if (!recording) {
++            return;
++        }
++        EndPass();
++        FrameSlot& f = frames[frameIndex];
++        if (endOfFrame && imageAcquired) {
++            Transition(f.drawCmd, *swapchainImages[imageIndex], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
++        }
++        vkEndCommandBuffer(f.uploadCmd);
++        vkEndCommandBuffer(f.drawCmd);
++
++        VkCommandBuffer cmds[2];
++        uint32_t cmdCount = 0;
++        if (uploadUsed) {
++            cmds[cmdCount++] = f.uploadCmd;
++        }
++        cmds[cmdCount++] = f.drawCmd;
++        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
++        VkSubmitInfo si = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
++        si.commandBufferCount = cmdCount;
++        si.pCommandBuffers = cmds;
++        if (acquireWaitPending) {
++            si.waitSemaphoreCount = 1;
++            si.pWaitSemaphores = &f.imageAcquired;
++            si.pWaitDstStageMask = &waitStage;
++            acquireWaitPending = false;
++        }
++        if (endOfFrame && imageAcquired) {
++            si.signalSemaphoreCount = 1;
++            si.pSignalSemaphores = &renderFinished[imageIndex];
++        }
++        Check(vkQueueSubmit(queue, 1, &si, f.fence), "vkQueueSubmit");
++        f.submitted = true;
++        recording = false;
++
++        if (wait) {
++            vkWaitForFences(device, 1, &f.fence, VK_TRUE, UINT64_MAX);
++            vkResetFences(device, 1, &f.fence);
++            f.submitted = false;
++            vkResetCommandPool(device, f.commandPool, 0);
++            BeginCommandBuffers(f);
++            recording = true;
++        }
++    }
++
++    void Transition(VkCommandBuffer cmd, ImageVK& img, VkImageLayout layout) {
++        if (img.layout == layout) {
++            return;
++        }
++        VkImageMemoryBarrier b = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
++        b.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
++        b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
++        b.oldLayout = img.layout;
++        b.newLayout = layout;
++        b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++        b.image = img.image;
++        b.subresourceRange = { img.aspect, 0, 1, 0, 1 };
++        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr,
++                             0, nullptr, 1, &b);
++        img.layout = layout;
++    }
++
++    // Images of the framebuffer being drawn to (null colour when the window image could not be acquired).
++    ImageVK* FbColor(int fbId) {
++        if (fbId == 0) {
++            return imageAcquired ? swapchainImages[imageIndex].get() : nullptr;
++        }
++        return textures[framebuffers[fbId].textureId].image.get();
++    }
++
++    bool BeginPass() {
++        if (passActive) {
++            return true;
++        }
++        FramebufferVK& fb = framebuffers[currentFb];
++        ImageVK* color = FbColor(currentFb);
++        if (color == nullptr || !fb.created) {
++            return false;
++        }
++        VkCommandBuffer cmd = Cmd();
++        Transition(cmd, *color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
++        if (fb.hasDepth && fb.depth) {
++            Transition(cmd, *fb.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
++        }
++        VkRenderPassBeginInfo rbi = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
++        rbi.renderPass = fb.renderPass;
++        rbi.framebuffer = currentFb == 0 ? swapchainFramebuffers[imageIndex] : fb.framebuffer;
++        rbi.renderArea = { { 0, 0 }, { fb.width, fb.height } };
++        vkCmdBeginRenderPass(cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
++        passActive = true;
++        activeRenderPass = fb.renderPass;
++        boundPipeline = VK_NULL_HANDLE;
++        dynamicStateDirty = true;
++        return true;
++    }
++
++    void EndPass() {
++        if (passActive) {
++            vkCmdEndRenderPass(frames[frameIndex].drawCmd);
++            passActive = false;
++        }
++    }
++
++    void StartFrame() {
++        bool wantVsync =
++            Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_VSYNC_ENABLED, 1) != 0;
++        if (wantVsync != vsync) {
++            vsync = wantVsync;
++            swapchainDirty = true;
++        }
++        EnsureRecording();
++        if (imageAcquired) {
++            return;
++        }
++        for (int attempt = 0; attempt < 2; attempt++) {
++            if (swapchainDirty || swapchain == VK_NULL_HANDLE) {
++                RecreateSwapchain();
++                if (swapchainDirty) {
++                    return; // minimised
++                }
++            }
++            VkResult r = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frames[frameIndex].imageAcquired,
++                                               VK_NULL_HANDLE, &imageIndex);
++            if (r == VK_ERROR_OUT_OF_DATE_KHR) {
++                swapchainDirty = true;
++                continue;
++            }
++            if (r != VK_SUCCESS && r != VK_SUBOPTIMAL_KHR) {
++                SPDLOG_ERROR("Vulkan: vkAcquireNextImageKHR failed ({})", (int)r);
++                return;
++            }
++            if (r == VK_SUBOPTIMAL_KHR) {
++                swapchainDirty = true;
++            }
++            imageAcquired = true;
++            acquireWaitPending = true;
++            swapchainImages[imageIndex]->layout = VK_IMAGE_LAYOUT_UNDEFINED;
++            textures[framebuffers[0].textureId].image = swapchainImages[imageIndex];
++            return;
++        }
++    }
++
++    void EndFrame() {
++        if (!recording) {
++            EnsureRecording();
++        }
++        Submit(true, false);
++    }
++
++    void Present() {
++        if (imageAcquired) {
++            VkPresentInfoKHR pi = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
++            pi.waitSemaphoreCount = 1;
++            pi.pWaitSemaphores = &renderFinished[imageIndex];
++            pi.swapchainCount = 1;
++            pi.pSwapchains = &swapchain;
++            pi.pImageIndices = &imageIndex;
++            VkResult r = vkQueuePresentKHR(queue, &pi);
++            if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) {
++                swapchainDirty = true;
++            } else if (r != VK_SUCCESS) {
++                SPDLOG_ERROR("Vulkan: vkQueuePresentKHR failed ({})", (int)r);
++            }
++            imageAcquired = false;
++            textures[framebuffers[0].textureId].image = nullptr;
++        }
++        frameIndex = (frameIndex + 1) % kFramesInFlight;
++    }
++
++    // ------------------------------------------------------------------ drawing
++
++    VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout layout) {
++        FrameSlot& f = frames[frameIndex];
++        while (true) {
++            if (f.descriptorPoolIndex == f.descriptorPools.size()) {
++                VkDescriptorPoolSize sizes[] = {
++                    { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024 * 6 },
++                    { VK_DESCRIPTOR_TYPE_SAMPLER, 1024 * 2 },
++                    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1024 * 2 },
++                    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16 },
++                    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32 },
++                };
++                VkDescriptorPoolCreateInfo pci = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
++                pci.maxSets = 1024;
++                pci.poolSizeCount = (uint32_t)std::size(sizes);
++                pci.pPoolSizes = sizes;
++                VkDescriptorPool pool;
++                Check(vkCreateDescriptorPool(device, &pci, nullptr, &pool), "vkCreateDescriptorPool");
++                f.descriptorPools.push_back(pool);
++            }
++            VkDescriptorSetAllocateInfo ai = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
++            ai.descriptorPool = f.descriptorPools[f.descriptorPoolIndex];
++            ai.descriptorSetCount = 1;
++            ai.pSetLayouts = &layout;
++            VkDescriptorSet set;
++            VkResult r = vkAllocateDescriptorSets(device, &ai, &set);
++            if (r == VK_SUCCESS) {
++                return set;
++            }
++            f.descriptorPoolIndex++;
++        }
++    }
++
++    VkPipeline GetPipeline() {
++        uint32_t flags = (depthTest ? PIPE_DEPTH_TEST : 0) | (depthMask ? PIPE_DEPTH_MASK : 0) |
++                         (zmodeDecal ? PIPE_DECAL : 0) | (outlineEnabled ? PIPE_OUTLINE_STENCIL : 0);
++        PipelineKey key = { shaderProgram, activeRenderPass, flags };
++        auto it = pipelines.find(key);
++        if (it != pipelines.end()) {
++            return it->second;
++        }
++
++        ShaderProgramVK* prg = shaderProgram;
++        VkPipelineShaderStageCreateInfo stages[2] = {};
++        stages[0] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
++        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
++        stages[0].module = prg->vertexModule;
++        stages[0].pName = "VSMain";
++        stages[1] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
++        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
++        stages[1].module = prg->fragmentModule;
++        stages[1].pName = "PSMain";
++
++        VkVertexInputBindingDescription binding = { 0, prg->numFloats * (uint32_t)sizeof(float),
++                                                    VK_VERTEX_INPUT_RATE_VERTEX };
++        VkPipelineVertexInputStateCreateInfo vi = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
++        vi.vertexBindingDescriptionCount = 1;
++        vi.pVertexBindingDescriptions = &binding;
++        vi.vertexAttributeDescriptionCount = (uint32_t)prg->attributes.size();
++        vi.pVertexAttributeDescriptions = prg->attributes.data();
++
++        VkPipelineInputAssemblyStateCreateInfo ia = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
++        ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
++
++        VkPipelineViewportStateCreateInfo vp = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
++        vp.viewportCount = 1;
++        vp.scissorCount = 1;
++
++        VkPipelineRasterizationStateCreateInfo rs = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
++        rs.depthClampEnable = depthClampSupported; // Direct3D renders with depth clipping off as well
++        rs.polygonMode = VK_POLYGON_MODE_FILL;
++        rs.cullMode = VK_CULL_MODE_NONE;
++        rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
++        rs.depthBiasEnable = zmodeDecal;
++        rs.lineWidth = 1.0f;
++
++        VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
++        for (auto& rp : renderPasses) {
++            if (rp.second == activeRenderPass) {
++                samples = std::get<2>(rp.first);
++                break;
++            }
++        }
++        VkPipelineMultisampleStateCreateInfo ms = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
++        ms.rasterizationSamples = samples;
++
++        VkPipelineDepthStencilStateCreateInfo ds = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
++        ds.depthTestEnable = depthTest || depthMask || outlineEnabled;
++        ds.depthWriteEnable = depthMask;
++        ds.depthCompareOp = depthTest ? (zmodeDecal ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS)
++                                      : VK_COMPARE_OP_ALWAYS;
++        // With cel shading outlines on, every drawn pixel records in the stencil whether it was depth tested (3D
++        // world = 1) or not (HUD = 0), so the outline pass can leave the HUD alone.
++        ds.stencilTestEnable = outlineEnabled;
++        ds.front.compareOp = VK_COMPARE_OP_ALWAYS;
++        ds.front.passOp = VK_STENCIL_OP_REPLACE;
++        ds.front.failOp = VK_STENCIL_OP_KEEP;
++        ds.front.depthFailOp = VK_STENCIL_OP_KEEP;
++        ds.front.compareMask = 0xFF;
++        ds.front.writeMask = 0xFF;
++        ds.front.reference = depthTest ? 1 : 0;
++        ds.back = ds.front;
++
++        VkPipelineColorBlendAttachmentState cba = {};
++        cba.colorWriteMask =
++            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
++        if (prg->alpha) {
++            cba.blendEnable = VK_TRUE;
++            cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
++            cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
++            cba.colorBlendOp = VK_BLEND_OP_ADD;
++            cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
++            cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // alpha is cleared to 1 and stays there
++            cba.alphaBlendOp = VK_BLEND_OP_ADD;
++        }
++        VkPipelineColorBlendStateCreateInfo cb = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
++        cb.attachmentCount = 1;
++        cb.pAttachments = &cba;
++
++        VkDynamicState dyn[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS };
++        VkPipelineDynamicStateCreateInfo dy = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
++        dy.dynamicStateCount = 3;
++        dy.pDynamicStates = dyn;
++
++        VkGraphicsPipelineCreateInfo pci = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
++        pci.stageCount = 2;
++        pci.pStages = stages;
++        pci.pVertexInputState = &vi;
++        pci.pInputAssemblyState = &ia;
++        pci.pViewportState = &vp;
++        pci.pRasterizationState = &rs;
++        pci.pMultisampleState = &ms;
++        pci.pDepthStencilState = &ds;
++        pci.pColorBlendState = &cb;
++        pci.pDynamicState = &dy;
++        pci.layout = pipelineLayout;
++        pci.renderPass = activeRenderPass;
++        VkPipeline pipeline;
++        Check(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pci, nullptr, &pipeline),
++              "vkCreateGraphicsPipelines");
++        pipelines[key] = pipeline;
++        return pipeline;
++    }
++
++    float DepthBiasSlope() {
++        // SSDB = SlopeScaledDepthBias 120 leads to -2 at 240p which is the same as N64 mode which has very little
++        // fighting (same values as the Direct3D 11 renderer)
++        switch (Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_Z_FIGHTING_MODE, 0)) {
++            case 1:
++                return -1.0f * (float)renderTargetHeight / 120;
++            case 2:
++                return -1.0f * (float)renderTargetHeight / 100;
++            default:
++                return -2.0f;
++        }
++    }
++
++    VkImageView TextureView(uint32_t textureId) {
++        if (textureId < textures.size() && textures[textureId].image && textures[textureId].image->view &&
++            textures[textureId].image->samples == VK_SAMPLE_COUNT_1_BIT &&
++            textures[textureId].image->aspect == VK_IMAGE_ASPECT_COLOR_BIT) {
++            return textures[textureId].image->view;
++        }
++        return dummyImage->view;
++    }
++
++    // Puts every texture the next draw samples into a readable layout. Layouts can't change inside a render pass,
++    // so the pass is paused for that (it continues with LOAD, nothing is lost).
++    void PrepareTextures() {
++        ImageVK* target = FbColor(currentFb);
++        for (int i = 0; i < SHADER_MAX_TEXTURES; i++) {
++            if (!shaderProgram->usedTextures[i]) {
++                continue;
++            }
++            uint32_t id = currentTextureIds[i];
++            if (id >= textures.size() || !textures[id].image) {
++                continue;
++            }
++            ImageVK* img = textures[id].image.get();
++            if (img == target || img->samples != VK_SAMPLE_COUNT_1_BIT ||
++                img->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
++                continue;
++            }
++            EndPass();
++            Transition(Cmd(), *img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++        }
++    }
++
++    void WriteUniforms() {
++        FrameSlot& f = frames[frameIndex];
++        bool replaced = false;
++        if (perFrameDirty) {
++            perFrameOffset = (uint32_t)HostAlloc(f.uniforms, sizeof(PerFrameCB), uniformAlignment,
++                                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &replaced);
++            memcpy(f.uniforms.data + perFrameOffset, &perFrameData, sizeof(PerFrameCB));
++            perFrameDirty = false;
++            if (replaced) {
++                // New buffer: the per-draw data has to be written into it too.
++                descriptorDirty = true;
++                perDrawDirty = true;
++                replaced = false;
++            }
++        }
++        if (perDrawDirty) {
++            perDrawOffset = (uint32_t)HostAlloc(f.uniforms, sizeof(PerDrawCB), uniformAlignment,
++                                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &replaced);
++            memcpy(f.uniforms.data + perDrawOffset, &perDrawData, sizeof(PerDrawCB));
++            perDrawDirty = false;
++            if (replaced) {
++                descriptorDirty = true;
++                perFrameOffset = (uint32_t)HostAlloc(f.uniforms, sizeof(PerFrameCB), uniformAlignment,
++                                                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
++                memcpy(f.uniforms.data + perFrameOffset, &perFrameData, sizeof(PerFrameCB));
++            }
++        }
++    }
++
++    void DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) {
++        if (shaderProgram == nullptr || currentFb >= (int)framebuffers.size()) {
++            return;
++        }
++        EnsureRecording();
++        if (FbColor(currentFb) == nullptr) {
++            return; // window minimised
++        }
++        PrepareTextures();
++
++        // Texture bindings and the three point filtering sizes
++        VkImageView views[SHADER_MAX_TEXTURES];
++        VkSampler samplerHandles[2];
++        for (int i = 0; i < SHADER_MAX_TEXTURES; i++) {
++            uint32_t id = currentTextureIds[i];
++            views[i] = shaderProgram->usedTextures[i] ? TextureView(id) : dummyImage->view;
++            if (views[i] == FbColor(currentFb)->view) {
++                views[i] = dummyImage->view; // can't sample the image being drawn to
++            }
++            if (views[i] != boundViews[i]) {
++                boundViews[i] = views[i];
++                descriptorDirty = true;
++                if (filterMode == FILTER_THREE_POINT && id < textures.size()) {
++                    perDrawData.mTextures[i].width = textures[id].width;
++                    perDrawData.mTextures[i].height = textures[id].height;
++                    perDrawData.mTextures[i].linear_filtering = textures[id].linearFiltering;
++                    perDrawDirty = true;
++                }
++            }
++        }
++        for (int i = 0; i < 2; i++) {
++            uint32_t id = currentTextureIds[i];
++            samplerHandles[i] = id < textures.size() && textures[id].sampler != VK_NULL_HANDLE
++                                    ? textures[id].sampler
++                                    : nearestClampSampler;
++            if (samplerHandles[i] != boundSamplers[i]) {
++                boundSamplers[i] = samplerHandles[i];
++                descriptorDirty = true;
++            }
++        }
++
++        WriteUniforms();
++        if (!BeginPass()) {
++            return;
++        }
++        VkCommandBuffer cmd = Cmd();
++        FrameSlot& f = frames[frameIndex];
++
++        if (descriptorDirty) {
++            currentDescriptorSet = AllocateDescriptorSet(descriptorSetLayout);
++            VkDescriptorImageInfo imageInfos[SHADER_MAX_TEXTURES];
++            VkDescriptorImageInfo samplerInfos[2];
++            VkDescriptorBufferInfo bufferInfos[2] = { { f.uniforms.buffer, 0, sizeof(PerFrameCB) },
++                                                      { f.uniforms.buffer, 0, sizeof(PerDrawCB) } };
++            VkWriteDescriptorSet writes[10];
++            for (int i = 0; i < SHADER_MAX_TEXTURES; i++) {
++                imageInfos[i] = { VK_NULL_HANDLE, views[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
++                writes[i] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
++                writes[i].dstSet = currentDescriptorSet;
++                writes[i].dstBinding = kTextureBinding + i;
++                writes[i].descriptorCount = 1;
++                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
++                writes[i].pImageInfo = &imageInfos[i];
++            }
++            for (int i = 0; i < 2; i++) {
++                samplerInfos[i] = { samplerHandles[i], VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED };
++                VkWriteDescriptorSet& ws = writes[6 + i];
++                ws = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
++                ws.dstSet = currentDescriptorSet;
++                ws.dstBinding = kSamplerBinding + i;
++                ws.descriptorCount = 1;
++                ws.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
++                ws.pImageInfo = &samplerInfos[i];
++                VkWriteDescriptorSet& wb = writes[8 + i];
++                wb = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
++                wb.dstSet = currentDescriptorSet;
++                wb.dstBinding = kUniformBinding + i;
++                wb.descriptorCount = 1;
++                wb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
++                wb.pBufferInfo = &bufferInfos[i];
++            }
++            vkUpdateDescriptorSets(device, 10, writes, 0, nullptr);
++            descriptorDirty = false;
++        }
++
++        VkPipeline pipeline = GetPipeline();
++        if (pipeline != boundPipeline) {
++            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
++            boundPipeline = pipeline;
++        }
++        if (dynamicStateDirty) {
++            ApplyViewportAndScissor(cmd);
++            boundDepthBias = NAN;
++            dynamicStateDirty = false;
++        }
++        float bias = zmodeDecal ? DepthBiasSlope() : 0.0f;
++        if (!(bias == boundDepthBias)) {
++            vkCmdSetDepthBias(cmd, 0.0f, 0.0f, bias);
++            boundDepthBias = bias;
++        }
++        uint32_t dynamicOffsets[2] = { perFrameOffset, perDrawOffset };
++        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &currentDescriptorSet, 2,
++                                dynamicOffsets);
++
++        VkDeviceSize bytes = buf_vbo_len * sizeof(float);
++        VkDeviceSize offset = HostAlloc(f.vertices, bytes, 16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
++        memcpy(f.vertices.data + offset, buf_vbo, bytes);
++        vkCmdBindVertexBuffers(cmd, 0, 1, &f.vertices.buffer, &offset);
++        vkCmdDraw(cmd, (uint32_t)(buf_vbo_num_tris * 3), 1, 0, 0);
++    }
++
++    void ApplyViewportAndScissor(VkCommandBuffer cmd) {
++        FramebufferVK& fb = framebuffers[currentFb];
++        // Same convention as Direct3D: y grows upwards, so the viewport is flipped (negative height).
++        float topY = (float)renderTargetHeight - viewportY - viewportH;
++        VkViewport viewport = { (float)viewportX, topY + viewportH, (float)viewportW, -(float)viewportH, 0.0f, 1.0f };
++        if (viewportH == 0) {
++            viewport.height = -1.0f;
++            viewport.y = topY + 1;
++        }
++        if (viewport.width <= 0.0f) {
++            viewport.width = 1.0f;
++        }
++        vkCmdSetViewport(cmd, 0, 1, &viewport);
++
++        int32_t x0 = std::max(scissorX, 0);
++        int32_t y0 = std::max((int)renderTargetHeight - scissorY - scissorH, 0);
++        int32_t x1 = std::min(scissorX + scissorW, (int)fb.width);
++        int32_t y1 = std::min((int)renderTargetHeight - scissorY, (int)fb.height);
++        VkRect2D scissor = { { x0, y0 }, { (uint32_t)std::max(x1 - x0, 0), (uint32_t)std::max(y1 - y0, 0) } };
++        vkCmdSetScissor(cmd, 0, 1, &scissor);
++    }
++
++    // ------------------------------------------------------------------ framebuffers
++
++    void UpdateFramebuffer(int fbId, uint32_t width, uint32_t height, uint32_t msaa, bool hasDepth) {
++        FramebufferVK& fb = framebuffers[fbId];
++        width = std::max(width, 1u);
++        height = std::max(height, 1u);
++        while (msaa > 1 && !(supportedSampleCounts & msaa)) {
++            msaa >>= 1;
++        }
++        msaa = std::max(msaa, 1u);
++
++        if (fbId == 0) {
++            desiredWidth = width;
++            desiredHeight = height;
++            fb.hasDepth = hasDepth;
++            if (swapchain != VK_NULL_HANDLE && (width != swapchainExtent.width || height != swapchainExtent.height)) {
++                swapchainDirty = true;
++            }
++            return;
++        }
++
++        if (fb.created && fb.width == width && fb.height == height && fb.msaa == msaa && fb.hasDepth == hasDepth) {
++            return;
++        }
++        if (currentFb == fbId) {
++            EndPass();
++        }
++        VkSampleCountFlagBits samples = (VkSampleCountFlagBits)msaa;
++        TextureVK& tex = textures[fb.textureId];
++        tex.image = CreateImage(width, height, kColorFormat,
++                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
++                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | (msaa == 1 ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
++                                samples, false);
++        tex.width = width;
++        tex.height = height;
++        fb.depth = nullptr;
++        if (hasDepth) {
++            fb.depth = CreateImage(width, height, depthFormat,
++                                   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
++                                       (depthSampleable ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
++                                   samples, true);
++        }
++        fb.renderPass = GetRenderPass(kColorFormat, hasDepth ? depthFormat : VK_FORMAT_UNDEFINED, samples);
++        RetireFramebuffer(fb.framebuffer);
++        RetireFramebuffer(fb.outlineFramebuffer);
++        fb.framebuffer =
++            CreateVkFramebuffer(fb.renderPass, tex.image->view, hasDepth ? fb.depth->view : VK_NULL_HANDLE, width,
++                                height);
++        fb.width = width;
++        fb.height = height;
++        fb.msaa = msaa;
++        fb.hasDepth = hasDepth;
++        fb.created = true;
++
++        // New images start out undefined; clear them so stale memory never shows.
++        VkCommandBuffer cmd = Cmd();
++        Transition(cmd, *tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++        VkClearColorValue black = { { 0.0f, 0.0f, 0.0f, 1.0f } };
++        VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
++        vkCmdClearColorImage(cmd, tex.image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
++        if (currentFb == fbId) {
++            renderTargetHeight = height;
++            dynamicStateDirty = true;
++        }
++    }
++
++    void StartDrawToFramebuffer(int fbId, float noiseScale) {
++        EnsureRecording();
++        if (fbId != currentFb || !passActive) {
++            EndPass();
++        }
++        currentFb = fbId;
++        renderTargetHeight = framebuffers[fbId].height;
++        dynamicStateDirty = true;
++        if (noiseScale != 0.0f) {
++            perFrameData.noise_scale = 1.0f / noiseScale;
++        }
++        perFrameDirty = true;
++    }
++
++    void ClearFramebuffer(bool color, bool depth) {
++        EnsureRecording();
++        FramebufferVK& fb = framebuffers[currentFb];
++        if (!BeginPass()) {
++            return;
++        }
++        VkClearAttachment atts[2];
++        uint32_t count = 0;
++        if (color) {
++            atts[count] = { VK_IMAGE_ASPECT_COLOR_BIT, 0, {} };
++            atts[count].clearValue.color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
++            count++;
++        }
++        if (depth && fb.hasDepth) {
++            atts[count] = { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, {} };
++            atts[count].clearValue.depthStencil = { 1.0f, 0 };
++            count++;
++        }
++        if (count == 0) {
++            return;
++        }
++        VkClearRect rect = { { { 0, 0 }, { fb.width, fb.height } }, 0, 1 };
++        vkCmdClearAttachments(Cmd(), count, atts, 1, &rect);
++    }
++
++    // Resolves a multisampled framebuffer into a temporary single sample image of the same size.
++    std::shared_ptr<ImageVK> ResolveToTemp(VkCommandBuffer cmd, ImageVK& src) {
++        auto tmp = CreateImage(src.width, src.height, src.format,
++                               VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
++                               VK_SAMPLE_COUNT_1_BIT, false);
++        Transition(cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++        Transition(cmd, *tmp, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++        VkImageResolve region = {};
++        region.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
++        region.dstSubresource = region.srcSubresource;
++        region.extent = { src.width, src.height, 1 };
++        vkCmdResolveImage(cmd, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, tmp->image,
++                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
++        return tmp;
++    }
++
++    // Copies a region with vkCmdBlitImage (converts between the window's BGRA and the framebuffers' RGBA).
++    void BlitRegion(VkCommandBuffer cmd, ImageVK& src, ImageVK& dst, int sx0, int sy0, int sx1, int sy1, int dx0,
++                    int dy0, int dx1, int dy1) {
++        Transition(cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++        Transition(cmd, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++        VkImageBlit blit = {};
++        blit.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
++        blit.dstSubresource = blit.srcSubresource;
++        blit.srcOffsets[0] = { sx0, sy0, 0 };
++        blit.srcOffsets[1] = { sx1, sy1, 1 };
++        blit.dstOffsets[0] = { dx0, dy0, 0 };
++        blit.dstOffsets[1] = { dx1, dy1, 1 };
++        vkCmdBlitImage(cmd, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.image,
++                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
++    }
++
++    void CopyFramebuffer(int dstId, int srcId, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0,
++                         int dstX1, int dstY1) {
++        if (srcId >= (int)framebuffers.size() || dstId >= (int)framebuffers.size()) {
++            return;
++        }
++        EnsureRecording();
++        ImageVK* src = FbColor(srcId);
++        ImageVK* dst = FbColor(dstId);
++        if (src == nullptr || dst == nullptr || src == dst) {
++            return;
++        }
++        EndPass();
++        VkCommandBuffer cmd = Cmd();
++        std::shared_ptr<ImageVK> resolved;
++        if (src->samples != VK_SAMPLE_COUNT_1_BIT) {
++            resolved = ResolveToTemp(cmd, *src);
++            src = resolved.get();
++        }
++        // Same size: copy everything, like the Direct3D 11 renderer.
++        if (src->width == dst->width && src->height == dst->height) {
++            BlitRegion(cmd, *src, *dst, 0, 0, src->width, src->height, 0, 0, dst->width, dst->height);
++            return;
++        }
++        if (srcY1 > (int)src->height || srcX1 > (int)src->width || srcX0 < 0 || srcY0 < 0 ||
++            dstY1 > (int)dst->height || dstX1 > (int)dst->width || dstX0 < 0 || dstY0 < 0) {
++            return;
++        }
++        int w = std::min(srcX1 - srcX0, (int)dst->width - dstX0);
++        int h = std::min(srcY1 - srcY0, (int)dst->height - dstY0);
++        if (w <= 0 || h <= 0) {
++            return;
++        }
++        BlitRegion(cmd, *src, *dst, srcX0, srcY0, srcX0 + w, srcY0 + h, dstX0, dstY0, dstX0 + w, dstY0 + h);
++    }
++
++    void ResolveMSAAColorBuffer(int dstId, int srcId) {
++        EnsureRecording();
++        ImageVK* src = FbColor(srcId);
++        ImageVK* dst = FbColor(dstId);
++        if (src == nullptr || dst == nullptr) {
++            return;
++        }
++        EndPass();
++        VkCommandBuffer cmd = Cmd();
++        if (src->samples == VK_SAMPLE_COUNT_1_BIT) {
++            BlitRegion(cmd, *src, *dst, 0, 0, src->width, src->height, 0, 0, dst->width, dst->height);
++            return;
++        }
++        if (dst->format == src->format && dst->width == src->width && dst->height == src->height) {
++            Transition(cmd, *src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++            Transition(cmd, *dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++            VkImageResolve region = {};
++            region.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
++            region.dstSubresource = region.srcSubresource;
++            region.extent = { src->width, src->height, 1 };
++            vkCmdResolveImage(cmd, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst->image,
++                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
++            return;
++        }
++        auto tmp = ResolveToTemp(cmd, *src);
++        BlitRegion(cmd, *tmp, *dst, 0, 0, tmp->width, tmp->height, 0, 0, std::min(dst->width, tmp->width),
++                   std::min(dst->height, tmp->height));
++    }
++
++    void ReadFramebufferToCPU(int fbId, uint32_t width, uint32_t height, uint16_t* rgba16) {
++        if (fbId >= (int)framebuffers.size()) {
++            return;
++        }
++        EnsureRecording();
++        ImageVK* src = FbColor(fbId);
++        if (src == nullptr) {
++            return;
++        }
++        EndPass();
++        VkCommandBuffer cmd = Cmd();
++        std::shared_ptr<ImageVK> resolved;
++        if (src->samples != VK_SAMPLE_COUNT_1_BIT) {
++            resolved = ResolveToTemp(cmd, *src);
++            src = resolved.get();
++        }
++        uint32_t w = std::min(width, src->width);
++        uint32_t h = std::min(height, src->height);
++        HostBuffer readback;
++        CreateHostBuffer(readback, (VkDeviceSize)w * h * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
++        Transition(cmd, *src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++        VkBufferImageCopy region = {};
++        region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
++        region.imageExtent = { w, h, 1 };
++        vkCmdCopyImageToBuffer(cmd, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.buffer, 1, &region);
++        VkMemoryBarrier mb = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
++        mb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
++        mb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
++        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mb, 0, nullptr, 0,
++                             nullptr);
++        Submit(false, true);
++        vmaInvalidateAllocation(allocator, readback.allocation, 0, VK_WHOLE_SIZE);
++
++        bool bgra = src->format == VK_FORMAT_B8G8R8A8_UNORM;
++        const uint32_t* pixels = (const uint32_t*)readback.data;
++        for (uint32_t y = 0; y < height; y++) {
++            for (uint32_t x = 0; x < width; x++) {
++                uint32_t pixel = (x < w && y < h) ? pixels[x + y * w] : 0;
++                uint32_t c0 = pixel & 0xFF, c2 = (pixel >> 16) & 0xFF;
++                uint32_t rr = bgra ? c2 : c0, bb = bgra ? c0 : c2;
++                uint8_t r = ((rr + 4) * 0x1F) / 0xFF;
++                uint8_t g = ((((pixel >> 8) & 0xFF) + 4) * 0x1F) / 0xFF;
++                uint8_t b = ((bb + 4) * 0x1F) / 0xFF;
++                uint8_t a = ((pixel >> 24) & 0xFF) ? 1 : 0;
++                rgba16[x + y * width] = (r << 11) | (g << 6) | (b << 1) | a;
++            }
++        }
++        vmaDestroyBuffer(allocator, readback.buffer, readback.allocation);
++    }
++
++    void InitDepthRead() {
++        VkDescriptorSetLayoutBinding b[3] = {
++            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
++            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
++            { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
++        };
++        VkDescriptorSetLayoutCreateInfo lci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
++        lci.bindingCount = 3;
++        lci.pBindings = b;
++        Check(vkCreateDescriptorSetLayout(device, &lci, nullptr, &depthReadSetLayout), "descriptor set layout");
++        VkPipelineLayoutCreateInfo plci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
++        plci.setLayoutCount = 1;
++        plci.pSetLayouts = &depthReadSetLayout;
++        Check(vkCreatePipelineLayout(device, &plci, nullptr, &depthReadPipelineLayout), "pipeline layout");
++        const char* sources[2] = { sDepthReadShader, sDepthReadShaderMsaa };
++        for (int i = 0; i < 2; i++) {
++            std::vector<uint32_t> spirv;
++            if (!CompileToSpirv(sources[i], EShLangCompute, false, "main", spirv)) {
++                continue;
++            }
++            VkShaderModule module = CreateShaderModule(spirv);
++            VkComputePipelineCreateInfo cpci = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
++            cpci.stage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
++            cpci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
++            cpci.stage.module = module;
++            cpci.stage.pName = "main";
++            cpci.layout = depthReadPipelineLayout;
++            vkCreateComputePipelines(device, pipelineCache, 1, &cpci, nullptr, &depthReadPipelines[i]);
++            vkDestroyShaderModule(device, module, nullptr);
++        }
++    }
++
++    std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff>
++    GetPixelDepth(int fbId, const std::set<std::pair<float, float>>& coordinates) {
++        std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff> res;
++        FramebufferVK& fb = framebuffers[fbId];
++        EnsureRecording();
++        ImageVK* depth = fb.depth.get();
++        bool msaa = depth != nullptr && depth->samples != VK_SAMPLE_COUNT_1_BIT;
++        if (depth == nullptr || !depthSampleable || depthReadPipelines[msaa ? 1 : 0] == VK_NULL_HANDLE ||
++            coordinates.empty() || (fbId == 0 && !imageAcquired)) {
++            for (const auto& c : coordinates) {
++                res.emplace(c, 0);
++            }
++            return res;
++        }
++        VkDeviceSize count = coordinates.size();
++        if (coordBuffer.size < count * sizeof(Coord)) {
++            if (coordBuffer.buffer != VK_NULL_HANDLE) {
++                vkDeviceWaitIdle(device);
++                vmaDestroyBuffer(allocator, coordBuffer.buffer, coordBuffer.allocation);
++                vmaDestroyBuffer(allocator, depthOutBuffer.buffer, depthOutBuffer.allocation);
++            }
++            VkDeviceSize n = std::max<VkDeviceSize>(count, 64);
++            CreateHostBuffer(coordBuffer, n * sizeof(Coord), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, false);
++            CreateHostBuffer(depthOutBuffer, n * sizeof(float), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
++        }
++        Coord* coords = (Coord*)coordBuffer.data;
++        size_t i = 0;
++        for (const auto& c : coordinates) {
++            // Same y flip as the Direct3D renderer: the interpreter's coordinates start at the bottom.
++            coords[i].x = std::clamp((int)c.first, 0, (int)depth->width - 1);
++            coords[i].y = std::clamp((int)depth->height - 1 - (int)c.second, 0, (int)depth->height - 1);
++            i++;
++        }
++        vmaFlushAllocation(allocator, coordBuffer.allocation, 0, VK_WHOLE_SIZE);
++
++        EndPass();
++        VkCommandBuffer cmd = Cmd();
++        Transition(cmd, *depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
++        VkDescriptorSet set = AllocateDescriptorSet(depthReadSetLayout);
++        VkDescriptorImageInfo ii = { nearestClampSampler, depth->view, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
++        VkDescriptorBufferInfo bi[2] = { { coordBuffer.buffer, 0, count * sizeof(Coord) },
++                                         { depthOutBuffer.buffer, 0, count * sizeof(float) } };
++        VkWriteDescriptorSet w[3] = {};
++        for (int k = 0; k < 3; k++) {
++            w[k] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
++            w[k].dstSet = set;
++            w[k].dstBinding = k;
++            w[k].descriptorCount = 1;
++        }
++        w[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
++        w[0].pImageInfo = &ii;
++        w[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++        w[1].pBufferInfo = &bi[0];
++        w[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++        w[2].pBufferInfo = &bi[1];
++        vkUpdateDescriptorSets(device, 3, w, 0, nullptr);
++        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, depthReadPipelines[msaa ? 1 : 0]);
++        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, depthReadPipelineLayout, 0, 1, &set, 0, nullptr);
++        vkCmdDispatch(cmd, (uint32_t)count, 1, 1);
++        VkMemoryBarrier mb = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
++        mb.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
++        mb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
++        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mb, 0,
++                             nullptr, 0, nullptr);
++        Submit(false, true);
++        vmaInvalidateAllocation(allocator, depthOutBuffer.allocation, 0, VK_WHOLE_SIZE);
++        const float* values = (const float*)depthOutBuffer.data;
++        i = 0;
++        for (const auto& c : coordinates) {
++            res.emplace(c, (uint16_t)(values[i++] * 65532.0f));
++        }
++        return res;
++    }
++
++    // ------------------------------------------------------------------ outlines
++
++    VkShaderModule CreateShaderModule(const std::vector<uint32_t>& spirv) {
++        VkShaderModuleCreateInfo ci = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
++        ci.codeSize = spirv.size() * sizeof(uint32_t);
++        ci.pCode = spirv.data();
++        VkShaderModule module;
++        Check(vkCreateShaderModule(device, &ci, nullptr, &module), "vkCreateShaderModule");
++        return module;
++    }
++
++    bool InitOutlines() {
++        std::vector<uint32_t> vs, ps;
++        if (!CompileToSpirv(sOutlineShader, EShLangVertex, true, "VSMain", vs) ||
++            !CompileToSpirv(sOutlineShader, EShLangFragment, true, "PSMain", ps)) {
++            return false;
++        }
++        VkDescriptorSetLayoutBinding b[2] = {
++            { 0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
++            { 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
++        };
++        VkDescriptorSetLayoutCreateInfo lci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
++        lci.bindingCount = 2;
++        lci.pBindings = b;
++        Check(vkCreateDescriptorSetLayout(device, &lci, nullptr, &outlineSetLayout), "descriptor set layout");
++        VkPushConstantRange pcr = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16 };
++        VkPipelineLayoutCreateInfo plci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
++        plci.setLayoutCount = 1;
++        plci.pSetLayouts = &outlineSetLayout;
++        plci.pushConstantRangeCount = 1;
++        plci.pPushConstantRanges = &pcr;
++        Check(vkCreatePipelineLayout(device, &plci, nullptr, &outlinePipelineLayout), "pipeline layout");
++
++        VkShaderModule vsModule = CreateShaderModule(vs);
++        VkShaderModule psModule = CreateShaderModule(ps);
++        VkPipelineShaderStageCreateInfo stages[2] = {};
++        stages[0] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
++        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
++        stages[0].module = vsModule;
++        stages[0].pName = "VSMain";
++        stages[1] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
++        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
++        stages[1].module = psModule;
++        stages[1].pName = "PSMain";
++        VkPipelineVertexInputStateCreateInfo vi = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
++        VkPipelineInputAssemblyStateCreateInfo ia = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
++        ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
++        VkPipelineViewportStateCreateInfo vp = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
++        vp.viewportCount = 1;
++        vp.scissorCount = 1;
++        VkPipelineRasterizationStateCreateInfo rs = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
++        rs.polygonMode = VK_POLYGON_MODE_FILL;
++        rs.cullMode = VK_CULL_MODE_NONE;
++        rs.lineWidth = 1.0f;
++        VkPipelineMultisampleStateCreateInfo ms = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
++        ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
++        VkPipelineDepthStencilStateCreateInfo ds = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
++        VkPipelineColorBlendAttachmentState cba = {};
++        cba.blendEnable = VK_TRUE;
++        cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
++        cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
++        cba.colorBlendOp = VK_BLEND_OP_ADD;
++        cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
++        cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
++        cba.alphaBlendOp = VK_BLEND_OP_ADD;
++        cba.colorWriteMask =
++            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
++        VkPipelineColorBlendStateCreateInfo cb = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
++        cb.attachmentCount = 1;
++        cb.pAttachments = &cba;
++        VkDynamicState dyn[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
++        VkPipelineDynamicStateCreateInfo dy = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
++        dy.dynamicStateCount = 2;
++        dy.pDynamicStates = dyn;
++        VkGraphicsPipelineCreateInfo pci = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
++        pci.stageCount = 2;
++        pci.pStages = stages;
++        pci.pVertexInputState = &vi;
++        pci.pInputAssemblyState = &ia;
++        pci.pViewportState = &vp;
++        pci.pRasterizationState = &rs;
++        pci.pMultisampleState = &ms;
++        pci.pDepthStencilState = &ds;
++        pci.pColorBlendState = &cb;
++        pci.pDynamicState = &dy;
++        pci.layout = outlinePipelineLayout;
++        pci.renderPass = GetRenderPass(kColorFormat, VK_FORMAT_UNDEFINED, VK_SAMPLE_COUNT_1_BIT);
++        VkResult r = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pci, nullptr, &outlinePipeline);
++        vkDestroyShaderModule(device, vsModule, nullptr);
++        vkDestroyShaderModule(device, psModule, nullptr);
++        return r == VK_SUCCESS;
++    }
++
++    // Draws the cel shading outlines over a finished game frame (single sample framebuffer with a depth buffer).
++    void DrawOutlines(int fbId) {
++        if (!outlineEnabled || outlineInitFailed || fbId <= 0 || fbId >= (int)framebuffers.size()) {
++            return;
++        }
++        FramebufferVK& fb = framebuffers[fbId];
++        if (!fb.created || fb.msaa > 1 || !fb.hasDepth || !fb.depth || fb.depth->stencilView == VK_NULL_HANDLE) {
++            return;
++        }
++        if (outlinePipeline == VK_NULL_HANDLE && !InitOutlines()) {
++            outlineInitFailed = true;
++            return;
++        }
++        EnsureRecording();
++        EndPass();
++        TextureVK& tex = textures[fb.textureId];
++        VkCommandBuffer cmd = Cmd();
++        VkRenderPass rp = GetRenderPass(kColorFormat, VK_FORMAT_UNDEFINED, VK_SAMPLE_COUNT_1_BIT);
++        if (fb.outlineFramebuffer == VK_NULL_HANDLE) {
++            fb.outlineFramebuffer = CreateVkFramebuffer(rp, tex.image->view, VK_NULL_HANDLE, fb.width, fb.height);
++        }
++        Transition(cmd, *fb.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
++        Transition(cmd, *tex.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
++
++        VkDescriptorSet set = AllocateDescriptorSet(outlineSetLayout);
++        VkDescriptorImageInfo ii[2] = {
++            { VK_NULL_HANDLE, fb.depth->view, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
++            { VK_NULL_HANDLE, fb.depth->stencilView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
++        };
++        VkWriteDescriptorSet w[2] = {};
++        for (int k = 0; k < 2; k++) {
++            w[k] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
++            w[k].dstSet = set;
++            w[k].dstBinding = k;
++            w[k].descriptorCount = 1;
++            w[k].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
++            w[k].pImageInfo = &ii[k];
++        }
++        vkUpdateDescriptorSets(device, 2, w, 0, nullptr);
++
++        VkRenderPassBeginInfo rbi = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
++        rbi.renderPass = rp;
++        rbi.framebuffer = fb.outlineFramebuffer;
++        rbi.renderArea = { { 0, 0 }, { fb.width, fb.height } };
++        vkCmdBeginRenderPass(cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
++        VkViewport viewport = { 0.0f, 0.0f, (float)fb.width, (float)fb.height, 0.0f, 1.0f };
++        VkRect2D scissor = { { 0, 0 }, { fb.width, fb.height } };
++        vkCmdSetViewport(cmd, 0, 1, &viewport);
++        vkCmdSetScissor(cmd, 0, 1, &scissor);
++        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, outlinePipeline);
++        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, outlinePipelineLayout, 0, 1, &set, 0, nullptr);
++        // Keep the lines about the same width on screen at any internal resolution (thickness is per 480 rows).
++        int px = (int)fmaxf(1.0f, roundf(outlineThickness * (float)fb.height / 480.0f));
++        int32_t pc[4] = { px, px, (int32_t)fb.width, (int32_t)fb.height };
++        vkCmdPushConstants(cmd, outlinePipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
++        vkCmdDraw(cmd, 3, 1, 0, 0);
++        vkCmdEndRenderPass(cmd);
++        boundPipeline = VK_NULL_HANDLE;
++        dynamicStateDirty = true;
++    }
++
++    // ------------------------------------------------------------------ ImGui
++
++    VkDescriptorSet ImGuiSet(const std::shared_ptr<ImageVK>& img) {
++        if (!imguiInitialized || !img || img->samples != VK_SAMPLE_COUNT_1_BIT ||
++            img->aspect != VK_IMAGE_ASPECT_COLOR_BIT || !img->ownsImage) {
++            return VK_NULL_HANDLE;
++        }
++        if (img->imguiSet == VK_NULL_HANDLE) {
++            img->imguiSet = ImGui_ImplVulkan_AddTexture(imguiSampler, img->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++            imguiImages[img->imguiSet] = img;
++        }
++        return img->imguiSet;
++    }
++
++    void ImGuiRenderDrawData(ImDrawData* drawData) {
++        if (!imguiInitialized || drawData == nullptr) {
++            return;
++        }
++        EnsureRecording();
++        if (!imageAcquired) {
++            return;
++        }
++        // Every framebuffer or texture the UI shows has to be readable before the UI pass starts.
++        for (int n = 0; n < drawData->CmdListsCount; n++) {
++            const ImDrawList* list = drawData->CmdLists[n];
++            for (const ImDrawCmd& c : list->CmdBuffer) {
++                auto it = imguiImages.find((VkDescriptorSet)c.GetTexID());
++                if (it == imguiImages.end()) {
++                    continue;
++                }
++                auto img = it->second.lock();
++                if (img && img->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
++                    EndPass();
++                    Transition(Cmd(), *img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++                }
++            }
++        }
++        int savedFb = currentFb;
++        if (currentFb != 0) {
++            EndPass();
++            currentFb = 0;
++        }
++        if (!BeginPass()) {
++            currentFb = savedFb;
++            return;
++        }
++        ImGui_ImplVulkan_RenderDrawData(drawData, Cmd());
++        boundPipeline = VK_NULL_HANDLE;
++        dynamicStateDirty = true;
++        currentFb = savedFb;
++        if (savedFb != 0) {
++            EndPass();
++        }
++    }
++
++    void InitImGui() {
++        ImGui_ImplVulkan_InitInfo info = {};
++        info.ApiVersion = VK_API_VERSION_1_1;
++        info.Instance = instance;
++        info.PhysicalDevice = physicalDevice;
++        info.Device = device;
++        info.QueueFamily = queueFamily;
++        info.Queue = queue;
++        info.RenderPass = framebuffers[0].renderPass;
++        info.MinImageCount = 2;
++        info.ImageCount = std::max<uint32_t>((uint32_t)swapchainImages.size(), kFramesInFlight + 1);
++        info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
++        info.PipelineCache = pipelineCache;
++        info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE + 256;
++        info.CheckVkResultFn = [](VkResult r) {
++            if (r < 0) {
++                SPDLOG_ERROR("Vulkan (ImGui): error {}", (int)r);
++            }
++        };
++        imguiInitialized = ImGui_ImplVulkan_Init(&info);
++    }
++
++    // ------------------------------------------------------------------ shaders
++
++    ShaderProgramVK* CreateShader(uint64_t id0, uint32_t id1) {
++        CCFeatures cc;
++        gfx_cc_get_features(id0, id1, &cc);
++        size_t numFloats = 0;
++        std::string source = gfx_hlsl_build_shader(numFloats, cc, false, filterMode == FILTER_THREE_POINT, srgbMode);
++        std::vector<uint32_t> vs, ps;
++        if (!CompileToSpirv(source, EShLangVertex, true, "VSMain", vs) ||
++            !CompileToSpirv(source, EShLangFragment, true, "PSMain", ps)) {
++            SPDLOG_ERROR("Vulkan: failed shader source:\n{}", source);
++            throw std::runtime_error("Vulkan: shader compilation failed");
++        }
++        ShaderProgramVK& prg = shaderPrograms[std::make_pair(id0, id1)];
++        prg.vertexModule = CreateShaderModule(vs);
++        prg.fragmentModule = CreateShaderModule(ps);
++        prg.numInputs = cc.numInputs;
++        prg.numFloats = (uint8_t)numFloats;
++        prg.alpha = cc.opt_alpha;
++        prg.usedTextures[0] = cc.usedTextures[0];
++        prg.usedTextures[1] = cc.usedTextures[1];
++        prg.usedTextures[2] = cc.used_masks[0];
++        prg.usedTextures[3] = cc.used_masks[1];
++        prg.usedTextures[4] = cc.used_blend[0];
++        prg.usedTextures[5] = cc.used_blend[1];
++
++        // Vertex layout, in the order of the shader's inputs (same as the Direct3D 11 input layout).
++        uint32_t location = 0, offset = 0;
++        auto add = [&](VkFormat format, uint32_t floats) {
++            prg.attributes.push_back({ location++, 0, format, offset });
++            offset += floats * sizeof(float);
++        };
++        add(VK_FORMAT_R32G32B32A32_SFLOAT, 4);
++        for (int i = 0; i < 2; i++) {
++            if (cc.usedTextures[i]) {
++                add(VK_FORMAT_R32G32_SFLOAT, 2);
++                if (cc.clamp[i][0]) {
++                    add(VK_FORMAT_R32_SFLOAT, 1);
++                }
++                if (cc.clamp[i][1]) {
++                    add(VK_FORMAT_R32_SFLOAT, 1);
++                }
++            }
++        }
++        if (cc.opt_fog) {
++            add(VK_FORMAT_R32G32B32A32_SFLOAT, 4);
++        }
++        if (cc.opt_grayscale) {
++            add(VK_FORMAT_R32G32B32A32_SFLOAT, 4);
++        }
++        for (int i = 0; i < cc.numInputs; i++) {
++            if (cc.opt_alpha) {
++                add(VK_FORMAT_R32G32B32A32_SFLOAT, 4);
++            } else {
++                add(VK_FORMAT_R32G32B32_SFLOAT, 3);
++            }
++        }
++        return &prg;
++    }
++
++    // ------------------------------------------------------------------ init and shutdown
++
++    void Init() {
++        window = windowBackend->GetSdlWindow();
++        if (volkInitialize() != VK_SUCCESS) {
++            throw std::runtime_error("Vulkan: no Vulkan loader");
++        }
++        glslang::InitializeProcess();
++        CreateInstance();
++        PickDevice();
++        CreateDevice();
++        CreateFrameSlots();
++        CreateLayouts();
++
++        int w = 1, h = 1;
++        SDL_Vulkan_GetDrawableSize(window, &w, &h);
++        desiredWidth = std::max(w, 1);
++        desiredHeight = std::max(h, 1);
++        vsync = Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_VSYNC_ENABLED, 1) != 0;
++
++        // Texture 0 / framebuffer 0 stand for the window.
++        textures.emplace_back();
++        framebuffers.emplace_back();
++        framebuffers[0].textureId = 0;
++        framebuffers[0].hasDepth = true;
++        framebuffers[0].created = true;
++        CreateSwapchain();
++        if (framebuffers[0].renderPass == VK_NULL_HANDLE) {
++            framebuffers[0].renderPass = GetRenderPass(swapchainFormat, depthFormat, VK_SAMPLE_COUNT_1_BIT);
++        }
++
++        dummyImage = CreateImage(1, 1, kColorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
++                                 VK_SAMPLE_COUNT_1_BIT, false);
++        VkCommandBuffer cmd = UploadCmd();
++        Transition(cmd, *dummyImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++        VkClearColorValue zero = {};
++        VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
++        vkCmdClearColorImage(cmd, dummyImage->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1, &range);
++        Transition(cmd, *dummyImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++
++        if (depthSampleable) {
++            InitDepthRead();
++        }
++        InitImGui();
++    }
++
++    void Shutdown() {
++        if (device == VK_NULL_HANDLE) {
++            return;
++        }
++        vkDeviceWaitIdle(device);
++        if (imguiInitialized && ImGui::GetCurrentContext() != nullptr &&
++            ImGui::GetIO().BackendRendererUserData != nullptr) {
++            for (auto& [set, weak] : imguiImages) {
++                if (auto img = weak.lock()) {
++                    img->imguiSet = VK_NULL_HANDLE;
++                }
++            }
++            imguiImages.clear();
++            ImGui_ImplVulkan_Shutdown();
++        }
++        imguiInitialized = false;
++        textures.clear();
++        framebuffers.clear();
++        swapchainImages.clear();
++        swapchainDepth = nullptr;
++        dummyImage = nullptr;
++        for (auto& f : frames) {
++            RunGarbage(f);
++        }
++        for (auto& f : frames) {
++            DestroyHostBufferLater(f.vertices);
++            DestroyHostBufferLater(f.uniforms);
++            DestroyHostBufferLater(f.staging);
++            RunGarbage(f);
++            for (auto pool : f.descriptorPools) {
++                vkDestroyDescriptorPool(device, pool, nullptr);
++            }
++            vkDestroyCommandPool(device, f.commandPool, nullptr);
++            vkDestroyFence(device, f.fence, nullptr);
++            vkDestroySemaphore(device, f.imageAcquired, nullptr);
++        }
++        for (auto s : renderFinished) {
++            vkDestroySemaphore(device, s, nullptr);
++        }
++        for (auto& fb : swapchainFramebuffers) {
++            vkDestroyFramebuffer(device, fb, nullptr);
++        }
++        if (coordBuffer.buffer != VK_NULL_HANDLE) {
++            vmaDestroyBuffer(allocator, coordBuffer.buffer, coordBuffer.allocation);
++            vmaDestroyBuffer(allocator, depthOutBuffer.buffer, depthOutBuffer.allocation);
++        }
++        for (auto& [key, p] : pipelines) {
++            vkDestroyPipeline(device, p, nullptr);
++        }
++        for (auto& [key, prg] : shaderPrograms) {
++            vkDestroyShaderModule(device, prg.vertexModule, nullptr);
++            vkDestroyShaderModule(device, prg.fragmentModule, nullptr);
++        }
++        for (auto& [key, rp] : renderPasses) {
++            vkDestroyRenderPass(device, rp, nullptr);
++        }
++        for (auto& [key, s] : samplers) {
++            vkDestroySampler(device, s, nullptr);
++        }
++        vkDestroySampler(device, imguiSampler, nullptr);
++        vkDestroySampler(device, nearestClampSampler, nullptr);
++        for (auto p : depthReadPipelines) {
++            if (p != VK_NULL_HANDLE) {
++                vkDestroyPipeline(device, p, nullptr);
++            }
++        }
++        if (outlinePipeline != VK_NULL_HANDLE) {
++            vkDestroyPipeline(device, outlinePipeline, nullptr);
++        }
++        vkDestroyPipelineLayout(device, outlinePipelineLayout, nullptr);
++        vkDestroyDescriptorSetLayout(device, outlineSetLayout, nullptr);
++        vkDestroyPipelineLayout(device, depthReadPipelineLayout, nullptr);
++        vkDestroyDescriptorSetLayout(device, depthReadSetLayout, nullptr);
++        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
++        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
++        vkDestroyPipelineCache(device, pipelineCache, nullptr);
++        vkDestroySwapchainKHR(device, swapchain, nullptr);
++        vmaDestroyAllocator(allocator);
++        vkDestroyDevice(device, nullptr);
++        device = VK_NULL_HANDLE;
++        vkDestroySurfaceKHR(instance, surface, nullptr);
++        if (debugMessenger != VK_NULL_HANDLE) {
++            vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
++        }
++        vkDestroyInstance(instance, nullptr);
++        glslang::FinalizeProcess();
++    }
++};
++
++// ====================================================================== GfxRenderingAPIVulkan
++
++GfxRenderingAPIVulkan::GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend)
++    : mImpl(std::make_unique<VulkanRenderer>()) {
++    mImpl->windowBackend = windowBackend;
++}
++
++GfxRenderingAPIVulkan::~GfxRenderingAPIVulkan() {
++    mImpl->Shutdown();
++}
++
++bool GfxRenderingAPIVulkan::IsSupported() {
++    static int sSupported = -1;
++    if (sSupported != -1) {
++        return sSupported == 1;
++    }
++    sSupported = 0;
++    if (volkInitialize() != VK_SUCCESS || volkGetInstanceVersion() < VK_API_VERSION_1_1) {
++        return false;
++    }
++    VkApplicationInfo app = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
++    app.apiVersion = VK_API_VERSION_1_1;
++    VkInstanceCreateInfo ci = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
++    ci.pApplicationInfo = &app;
++    VkInstance instance;
++    if (vkCreateInstance(&ci, nullptr, &instance) != VK_SUCCESS) {
++        return false;
++    }
++    volkLoadInstanceOnly(instance);
++    uint32_t count = 0;
++    vkEnumeratePhysicalDevices(instance, &count, nullptr);
++    std::vector<VkPhysicalDevice> devices(count);
++    vkEnumeratePhysicalDevices(instance, &count, devices.data());
++    for (VkPhysicalDevice pd : devices) {
++        VkPhysicalDeviceProperties props;
++        vkGetPhysicalDeviceProperties(pd, &props);
++        if (props.apiVersion >= VK_API_VERSION_1_1) {
++            sSupported = 1;
++            break;
++        }
++    }
++    vkDestroyInstance(instance, nullptr);
++    return sSupported == 1;
++}
++
++const char* GfxRenderingAPIVulkan::GetName() {
++    return "Vulkan";
++}
++
++int GfxRenderingAPIVulkan::GetMaxTextureSize() {
++    return (int)mImpl->deviceProperties.limits.maxImageDimension2D;
++}
++
++GfxClipParameters GfxRenderingAPIVulkan::GetClipParameters() {
++    return { true, false };
++}
++
++void GfxRenderingAPIVulkan::UnloadShader(ShaderProgram* oldPrg) {
++}
++
++void GfxRenderingAPIVulkan::LoadShader(ShaderProgram* newPrg) {
++    mImpl->shaderProgram = (ShaderProgramVK*)newPrg;
++}
++
++ShaderProgram* GfxRenderingAPIVulkan::CreateAndLoadNewShader(uint64_t shaderId0, uint32_t shaderId1) {
++    mImpl->shaderProgram = mImpl->CreateShader(shaderId0, shaderId1);
++    return (ShaderProgram*)mImpl->shaderProgram;
++}
++
++ShaderProgram* GfxRenderingAPIVulkan::LookupShader(uint64_t shaderId0, uint32_t shaderId1) {
++    auto it = mImpl->shaderPrograms.find(std::make_pair(shaderId0, shaderId1));
++    return it == mImpl->shaderPrograms.end() ? nullptr : (ShaderProgram*)&it->second;
++}
++
++void GfxRenderingAPIVulkan::ShaderGetInfo(ShaderProgram* prg, uint8_t* numInputs, bool usedTextures[2]) {
++    ShaderProgramVK* p = (ShaderProgramVK*)prg;
++    *numInputs = p->numInputs;
++    usedTextures[0] = p->usedTextures[0];
++    usedTextures[1] = p->usedTextures[1];
++}
++
++uint32_t GfxRenderingAPIVulkan::NewTexture() {
++    mImpl->textures.emplace_back();
++    return (uint32_t)(mImpl->textures.size() - 1);
++}
++
++void GfxRenderingAPIVulkan::SelectTexture(int tile, uint32_t textureId) {
++    mImpl->currentTile = tile;
++    mImpl->currentTextureIds[tile] = textureId;
++}
++
++void GfxRenderingAPIVulkan::UploadTexture(const uint8_t* rgba32Buf, uint32_t width, uint32_t height) {
++    VulkanRenderer& r = *mImpl;
++    TextureVK& tex = r.textures[r.currentTextureIds[r.currentTile]];
++    width = std::max(width, 1u);
++    height = std::max(height, 1u);
++    VkCommandBuffer cmd = r.UploadCmd();
++    FrameSlot& f = r.frames[r.frameIndex];
++    VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
++    VkDeviceSize offset = r.HostAlloc(f.staging, bytes, 16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
++    memcpy(f.staging.data + offset, rgba32Buf, bytes);
++
++    // Always a new image: draws already recorded this frame keep using the old one.
++    auto img = r.CreateImage(width, height, kColorFormat,
++                             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
++                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
++                             VK_SAMPLE_COUNT_1_BIT, false);
++    r.Transition(cmd, *img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++    VkBufferImageCopy region = {};
++    region.bufferOffset = offset;
++    region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
++    region.imageExtent = { width, height, 1 };
++    vkCmdCopyBufferToImage(cmd, f.staging.buffer, img->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
++    r.Transition(cmd, *img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++    tex.image = img;
++    tex.width = width;
++    tex.height = height;
++}
++
++void GfxRenderingAPIVulkan::SetSamplerParameters(int tile, bool linear_filter, uint32_t cms, uint32_t cmt) {
++    VulkanRenderer& r = *mImpl;
++    TextureVK& tex = r.textures[r.currentTextureIds[tile]];
++    tex.linearFiltering = linear_filter;
++    tex.sampler = r.GetSampler(linear_filter && r.filterMode == FILTER_LINEAR, GfxCmToVk(cms), GfxCmToVk(cmt));
++}
++
++void GfxRenderingAPIVulkan::SetDepthTestAndMask(bool depth_test, bool z_upd) {
++    mImpl->depthTest = depth_test;
++    mImpl->depthMask = z_upd;
++}
++
++void GfxRenderingAPIVulkan::SetZmodeDecal(bool decal) {
++    mImpl->zmodeDecal = decal;
++}
++
++void GfxRenderingAPIVulkan::SetViewport(int x, int y, int width, int height) {
++    mImpl->viewportX = x;
++    mImpl->viewportY = y;
++    mImpl->viewportW = width;
++    mImpl->viewportH = height;
++    mImpl->dynamicStateDirty = true;
++}
++
++void GfxRenderingAPIVulkan::SetScissor(int x, int y, int width, int height) {
++    mImpl->scissorX = x;
++    mImpl->scissorY = y;
++    mImpl->scissorW = width;
++    mImpl->scissorH = height;
++    mImpl->dynamicStateDirty = true;
++}
++
++void GfxRenderingAPIVulkan::SetUseAlpha(bool useAlpha) {
++    // Part of the pipeline state from the shader
++}
++
++void GfxRenderingAPIVulkan::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) {
++    mImpl->DrawTriangles(buf_vbo, buf_vbo_len, buf_vbo_num_tris);
++}
++
++void GfxRenderingAPIVulkan::Init() {
++    mImpl->Init();
++}
++
++void GfxRenderingAPIVulkan::OnResize() {
++}
++
++void GfxRenderingAPIVulkan::StartFrame() {
++    VulkanRenderer& r = *mImpl;
++    r.perFrameData.noise_frame++;
++    if (r.perFrameData.noise_frame > 150) {
++        // No high values, as noise starts to look ugly
++        r.perFrameData.noise_frame = 0;
++    }
++    MM3DRenderSettings mm3d = GetMM3DRenderSettings();
++    r.perFrameData.color_brightness = mm3d.brightness;
++    r.perFrameData.color_saturation = mm3d.saturation;
++    r.perFrameData.color_cel_bands = mm3d.celBands;
++    r.outlineEnabled = mm3d.outlines && r.depthSampleable;
++    r.outlineThickness = mm3d.outlineThickness;
++    r.perFrameDirty = true;
++    r.StartFrame();
++}
++
++bool GfxRenderingAPIVulkan::OutlinesWanted() {
++    return GetMM3DRenderSettings().outlines && mImpl->depthSampleable;
++}
++
++void GfxRenderingAPIVulkan::DrawOutlines(int fbId) {
++    mImpl->DrawOutlines(fbId);
++}
++
++void GfxRenderingAPIVulkan::EndFrame() {
++    mImpl->EndFrame();
++}
++
++void GfxRenderingAPIVulkan::FinishRender() {
++    mImpl->Present();
++}
++
++int GfxRenderingAPIVulkan::CreateFramebuffer() {
++    VulkanRenderer& r = *mImpl;
++    uint32_t textureId = NewTexture();
++    r.framebuffers.emplace_back();
++    r.framebuffers.back().textureId = textureId;
++    r.textures[textureId].linearFiltering = true;
++    r.textures[textureId].sampler =
++        r.GetSampler(r.filterMode == FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
++    return (int)r.framebuffers.size() - 1;
++}
++
++void GfxRenderingAPIVulkan::UpdateFramebufferParameters(int fb_id, uint32_t width, uint32_t height,
++                                                        uint32_t msaa_level, bool opengl_invertY, bool render_target,
++                                                        bool has_depth_buffer, bool can_extract_depth) {
++    mImpl->UpdateFramebuffer(fb_id, width, height, msaa_level, has_depth_buffer);
++}
++
++void GfxRenderingAPIVulkan::StartDrawToFramebuffer(int fbId, float noiseScale) {
++    mImpl->StartDrawToFramebuffer(fbId, noiseScale);
++}
++
++void GfxRenderingAPIVulkan::CopyFramebuffer(int fbDstId, int fbSrcId, int srcX0, int srcY0, int srcX1, int srcY1,
++                                            int dstX0, int dstY0, int dstX1, int dstY1) {
++    mImpl->CopyFramebuffer(fbDstId, fbSrcId, srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1);
++}
++
++void GfxRenderingAPIVulkan::ClearFramebuffer(bool color, bool depth) {
++    mImpl->ClearFramebuffer(color, depth);
++}
++
++void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int fbId, uint32_t width, uint32_t height, uint16_t* rgba16Buf) {
++    mImpl->ReadFramebufferToCPU(fbId, width, height, rgba16Buf);
++}
++
++void GfxRenderingAPIVulkan::ResolveMSAAColorBuffer(int fbIdTarget, int fbIdSrc) {
++    mImpl->ResolveMSAAColorBuffer(fbIdTarget, fbIdSrc);
++}
++
++std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff>
++GfxRenderingAPIVulkan::GetPixelDepth(int fb_id, const std::set<std::pair<float, float>>& coordinates) {
++    return mImpl->GetPixelDepth(fb_id, coordinates);
++}
++
++void* GfxRenderingAPIVulkan::GetFramebufferTextureId(int fbId) {
++    VulkanRenderer& r = *mImpl;
++    if (fbId <= 0 || fbId >= (int)r.framebuffers.size()) {
++        return nullptr;
++    }
++    return (void*)r.ImGuiSet(r.textures[r.framebuffers[fbId].textureId].image);
++}
++
++void GfxRenderingAPIVulkan::SelectTextureFb(int fbId) {
++    SelectTexture(0, mImpl->framebuffers[fbId].textureId);
++}
++
++void GfxRenderingAPIVulkan::DeleteTexture(uint32_t texId) {
++    if (texId < mImpl->textures.size() && texId != 0) {
++        mImpl->textures[texId].image = nullptr;
++    }
++}
++
++void GfxRenderingAPIVulkan::SetTextureFilter(FilteringMode mode) {
++    mImpl->filterMode = mode;
++    gfx_texture_cache_clear();
++}
++
++FilteringMode GfxRenderingAPIVulkan::GetTextureFilter() {
++    return mImpl->filterMode;
++}
++
++void GfxRenderingAPIVulkan::SetSrgbMode() {
++    mImpl->srgbMode = true;
++}
++
++ImTextureID GfxRenderingAPIVulkan::GetTextureById(int id) {
++    if (id < 0 || id >= (int)mImpl->textures.size()) {
++        return nullptr;
++    }
++    return (ImTextureID)mImpl->ImGuiSet(mImpl->textures[id].image);
++}
++
++void GfxRenderingAPIVulkan::ImGuiNewFrame() {
++    if (mImpl->imguiInitialized) {
++        ImGui_ImplVulkan_NewFrame();
++    }
++}
++
++void GfxRenderingAPIVulkan::ImGuiRenderDrawData(ImDrawData* drawData) {
++    mImpl->ImGuiRenderDrawData(drawData);
++}
++
++} // namespace Fast
++
++#endif
 diff --git a/src/fast/interpreter.cpp b/src/fast/interpreter.cpp
 index 19d9e12f..86513bfe 100644
 --- a/src/fast/interpreter.cpp
@@ -1100,6 +4654,20 @@ index 0c36b4f4..8726cde1 100644
 +    const char* externaldir = "/storage/emulated/0/2S2H-MM3D";
      if (externaldir != NULL) {
          return externaldir;
+     }
+diff --git a/src/ship/config/Config.cpp b/src/ship/config/Config.cpp
+index f5b220c3..e5270941 100644
+--- a/src/ship/config/Config.cpp
++++ b/src/ship/config/Config.cpp
+@@ -323,6 +323,9 @@ void Config::SetWindowBackend(WindowBackend backend) {
+         case WindowBackend::FAST3D_SDL_METAL:
+             SetString("Window.Backend.Name", "Metal");
+             break;
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            SetString("Window.Backend.Name", "Vulkan");
++            break;
+         default:
+             SetString("Window.Backend.Name", "");
      }
 diff --git a/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp b/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp
 index 8dc3ee18..6f8445c6 100644
@@ -1344,7 +4912,7 @@ index 8819c392..01bee2f2 100644
              const float textWidth = GetStringWidth(overlay.Value.c_str());
              const float textOffset = 40.0f;
 diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
-index 17f0c2b0..5148d6b7 100644
+index 17f0c2b0..d114b096 100644
 --- a/src/ship/window/gui/Gui.cpp
 +++ b/src/ship/window/gui/Gui.cpp
 @@ -31,7 +31,7 @@
@@ -1356,7 +4924,19 @@ index 17f0c2b0..5148d6b7 100644
  #endif
  
  #ifdef ENABLE_OPENGL
-@@ -128,9 +128,10 @@ void Gui::Init(GuiWindowInitData windowImpl) {
+@@ -40,6 +40,11 @@
+ 
+ #endif
+ 
++#ifdef ENABLE_VULKAN
++#include "fast/backends/gfx_vulkan.h"
++#include <imgui_impl_sdl2.h>
++#endif
++
+ #if defined(ENABLE_DX11) || defined(ENABLE_DX12)
+ #include <imgui_impl_dx11.h>
+ #include <imgui_impl_win32.h>
+@@ -128,9 +133,10 @@ void Gui::Init(GuiWindowInitData windowImpl) {
                                                            &iconsConfig, sIconsRanges);
  
  #if defined(__ANDROID__)
@@ -1370,7 +4950,73 @@ index 17f0c2b0..5148d6b7 100644
  #endif
  
      auto imguiIniPath = Context::GetPathRelativeToAppDirectory("imgui.ini");
-@@ -540,6 +541,12 @@ void Gui::DrawMenu() {
+@@ -174,6 +180,13 @@ void Gui::ImGuiWMInit() {
+             SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+             ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mImpl.Opengl.Window), mImpl.Opengl.Context);
+             break;
++#ifdef ENABLE_VULKAN
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
++            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
++            ImGui_ImplSDL2_InitForVulkan(static_cast<SDL_Window*>(mImpl.Vulkan.Window));
++            break;
++#endif
+ #if __APPLE__
+         case WindowBackend::FAST3D_SDL_METAL:
+             SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+@@ -205,6 +218,12 @@ void Gui::ShutDownImGui(Ship::Window* window) {
+             ImGui_ImplMetal_Shutdown();
+             break;
+ #endif
++#ifdef ENABLE_VULKAN
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            // The Vulkan renderer shuts its ImGui backend down with the device.
++            ImGui_ImplSDL2_Shutdown();
++            break;
++#endif
+ #if defined(ENABLE_DX11) || defined(ENABLE_DX12)
+         case WindowBackend::FAST3D_DXGI_DX11:
+             ImGui_ImplWin32_Shutdown();
+@@ -288,6 +307,9 @@ bool Gui::SupportsViewports() {
+         case WindowBackend::FAST3D_SDL_OPENGL:
+         case WindowBackend::FAST3D_SDL_METAL:
+             return true;
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            // Floating windows would need their own swapchains; the Vulkan renderer keeps everything in one.
++            return false;
+         default:
+             return false;
+     }
+@@ -297,6 +319,7 @@ void Gui::HandleWindowEvents(WindowEvent event) {
+     switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
+         case WindowBackend::FAST3D_SDL_OPENGL:
+         case WindowBackend::FAST3D_SDL_METAL:
++        case WindowBackend::FAST3D_SDL_VULKAN:
+             ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(event.Sdl.Event));
+ #if defined(__ANDROID__) || defined(__IOS__)
+             Mobile::ImGuiProcessEvent(mImGuiIo->WantTextInput);
+@@ -355,6 +378,12 @@ void Gui::ImGuiBackendNewFrame() {
+             break;
+ #endif
+ 
++#ifdef ENABLE_VULKAN
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            static_cast<Fast::GfxRenderingAPIVulkan*>(mInterpreter.lock()->GetCurrentRenderingAPI())->ImGuiNewFrame();
++            break;
++#endif
++
+ #ifdef __APPLE__
+         case WindowBackend::FAST3D_SDL_METAL: {
+             Fast::GfxRenderingAPIMetal* api =
+@@ -373,6 +402,7 @@ void Gui::ImGuiWMNewFrame() {
+     switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
+         case WindowBackend::FAST3D_SDL_OPENGL:
+         case WindowBackend::FAST3D_SDL_METAL:
++        case WindowBackend::FAST3D_SDL_VULKAN:
+             ImGui_ImplSDL2_NewFrame();
+             break;
+ #ifdef ENABLE_DX11
+@@ -540,6 +570,12 @@ void Gui::DrawMenu() {
  
      ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_NoDockingInCentralNode);
  
@@ -1383,7 +5029,7 @@ index 17f0c2b0..5148d6b7 100644
      if (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
          (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
           Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0))) {
-@@ -565,6 +572,18 @@ void Gui::DrawMenu() {
+@@ -565,6 +601,18 @@ void Gui::DrawMenu() {
          }
      }
  
@@ -1402,3 +5048,17 @@ index 17f0c2b0..5148d6b7 100644
      // Mac interprets this as cmd+r when io.ConfigMacOSXBehavior is on (on by default)
      if ((ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) &&
          ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+@@ -872,6 +920,13 @@ void Gui::ImGuiRenderDrawData(ImDrawData* data) {
+             ImGui_ImplDX11_RenderDrawData(data);
+             break;
+ #endif
++
++#ifdef ENABLE_VULKAN
++        case WindowBackend::FAST3D_SDL_VULKAN:
++            static_cast<Fast::GfxRenderingAPIVulkan*>(mInterpreter.lock()->GetCurrentRenderingAPI())
++                ->ImGuiRenderDrawData(data);
++            break;
++#endif
+         default:
+             break;
+     }
