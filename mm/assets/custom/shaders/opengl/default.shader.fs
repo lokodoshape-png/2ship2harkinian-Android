@@ -43,6 +43,9 @@ out vec4 vOutColor;
 
 uniform int frame_count;
 uniform float noise_scale;
+uniform float color_brightness;
+uniform float color_saturation;
+uniform float color_cel_bands;
 
 uniform int texture_width[2];
 uniform int texture_height[2];
@@ -125,6 +128,24 @@ void main() {
         @end
     @end
 
+    @if(o_cel)
+        // Cel shading: the light falling on the surface snaps to a few flat tones, with a soft edge so the
+        // bands do not shimmer. Texture detail is left alone, only the lighting is flattened.
+        @if(o_alpha)
+            vec4 celShade = vInput@{o_cel_input};
+        @else
+            vec3 celShade = vInput@{o_cel_input};
+        @end
+        if (color_cel_bands > 0.5) {
+            float celLight = max(celShade.r, max(celShade.g, celShade.b));
+            float celX = celLight * color_cel_bands;
+            float celW = max(fwidth(celX) * 1.5, 0.15);
+            float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, fract(celX)) + 1.0;
+            float celTone = min(celStep / color_cel_bands, 1.0);
+            celShade.rgb = celLight > 0.001 ? celShade.rgb * (celTone / celLight) : celShade.rgb;
+        }
+    @end
+
     @if(o_alpha) 
         vec4 texel;
     @else 
@@ -170,6 +191,25 @@ void main() {
 
     texel = WRAP(texel, -0.51, 1.51);
     texel = clamp(texel, 0.0, 1.0);
+    @if(o_world && !o_cel)
+        // World draws without vertex lighting (pre-lit or flat-coloured objects) get the toon tones on their
+        // final colour instead, at partial strength so their textures keep some detail.
+        if (color_cel_bands > 0.5) {
+            float celLight = max(texel.r, max(texel.g, texel.b));
+            float celX = celLight * color_cel_bands;
+            float celW = max(fwidth(celX) * 1.5, 0.15);
+            float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, fract(celX)) + 1.0;
+            float celTone = min(celStep / color_cel_bands, 1.0);
+            if (celLight > 0.001) texel.rgb = clamp(texel.rgb * mix(1.0, celTone / celLight, 0.6), 0.0, 1.0);
+        }
+    @end
+    texel.rgb = clamp(mix(vec3(dot(texel.rgb, vec3(0.299, 0.587, 0.114))), texel.rgb, color_saturation) * color_brightness, 0.0, 1.0);
+    @if(o_world)
+        // Cel shading gives the 3D world more vivid, cartoon-like colours.
+        if (color_cel_bands > 0.5) {
+            texel.rgb = clamp(mix(vec3(dot(texel.rgb, vec3(0.299, 0.587, 0.114))), texel.rgb, 1.25), 0.0, 1.0);
+        }
+    @end
     // TODO discard if alpha is 0?
     @if(o_fog)
         @if(o_alpha)

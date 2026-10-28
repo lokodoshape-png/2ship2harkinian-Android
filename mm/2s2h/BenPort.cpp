@@ -36,6 +36,7 @@
 #include <SDL2/SDL_scancode.h>
 #endif
 #include "Extractor/Extract.h"
+#include "Language/GameLanguage.h"
 // OTRTODO
 //#include <functions.h>
 #include "2s2h/Enhancements/FrameInterpolation/FrameInterpolation.h"
@@ -169,6 +170,10 @@ OTRGlobals::OTRGlobals() {
     });
 
     archiveFiles.insert(archiveFiles.end(), patchFiles.begin(), patchFiles.end());
+
+    // Translation packs go last so their text overrides the game's and any mod's.
+    std::vector<std::string> languagePacks = GameLanguage::GetPackArchives(appShortName);
+    archiveFiles.insert(archiveFiles.end(), languagePacks.begin(), languagePacks.end());
 
     std::unordered_set<uint32_t> validHashes = { MM_NTSC_US_10, MM_NTSC_US_GC };
 

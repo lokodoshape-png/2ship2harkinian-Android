@@ -66,6 +66,9 @@ float4 grayscale : GRAYSCALE;
 cbuffer PerFrameCB : register(b0) {
     uint noise_frame;
     float noise_scale;
+    float color_brightness;
+    float color_saturation;
+    float color_cel_bands;
 }
 
 float random(in float3 value) {
@@ -241,6 +244,23 @@ float4 PSMain(PSInput input, float4 screenSpace : SV_Position) : SV_TARGET {
         @end
     @end
 
+    @if(o_cel)
+        // Cel shading: the vertex lighting snaps to a few flat tones; texture detail is left alone.
+        @if(o_alpha)
+            float4 celShade = input.input@{o_cel_input};
+        @else
+            float3 celShade = input.input@{o_cel_input};
+        @end
+        if (color_cel_bands > 0.5) {
+            float celLight = max(celShade.r, max(celShade.g, celShade.b));
+            float celX = celLight * color_cel_bands;
+            float celW = max(fwidth(celX) * 1.5, 0.15);
+            float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;
+            float celTone = min(celStep / color_cel_bands, 1.0);
+            if (celLight > 0.001) celShade.rgb *= celTone / celLight;
+        }
+    @end
+
     @if(o_alpha) 
         float4 texel;
     @else
@@ -290,6 +310,24 @@ float4 PSMain(PSInput input, float4 screenSpace : SV_Position) : SV_TARGET {
 
     texel = WRAP(texel, -0.51, 1.51);
     texel = clamp(texel, 0.0, 1.0);
+    @if(o_world && !o_cel)
+        // World draws without vertex lighting (pre-lit or flat-coloured objects) get the toon tones on their
+        // final colour instead, at partial strength so their textures keep some detail.
+        if (color_cel_bands > 0.5) {
+            float celLight = max(texel.r, max(texel.g, texel.b));
+            float celX = celLight * color_cel_bands;
+            float celW = max(fwidth(celX) * 1.5, 0.15);
+            float celStep = floor(celX) + smoothstep(1.0 - celW, 1.0, frac(celX)) + 1.0;
+            float celTone = min(celStep / color_cel_bands, 1.0);
+            if (celLight > 0.001) texel.rgb = saturate(texel.rgb * lerp(1.0, celTone / celLight, 0.6));
+        }
+    @end
+    // MM3D-style colour options: brightness and saturation for everything the game draws.
+    texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, 0.114)).xxx, texel.rgb, color_saturation) * color_brightness);
+    @if(o_world)
+        // Cel shading gives the 3D world more vivid, cartoon-like colours.
+        if (color_cel_bands > 0.5) texel.rgb = saturate(lerp(dot(texel.rgb, float3(0.299, 0.587, 0.114)).xxx, texel.rgb, 1.25));
+    @end
     // TODO discard if alpha is 0?
     @if(o_fog)
         @if(o_alpha)

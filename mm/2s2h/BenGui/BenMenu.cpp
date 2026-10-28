@@ -1,6 +1,7 @@
 #include "BenMenu.h"
 #include "UIWidgets.hpp"
 #include "Translation.h"
+#include "ModsMenu.h"
 #include "BenPort.h"
 #include "BenInputEditorWindow.h"
 #include "DeveloperTools/SaveEditor.h"
@@ -683,6 +684,19 @@ void BenMenu::AddSettings() {
         .CVar("gWindows.InputViewerSettings")
         .WindowName("Input Viewer Settings")
         .Options(ButtonOptions().Tooltip("Enables the separate Input Viewer Settings Window."));
+
+    // Mods
+    path.sidebarName = "Mods";
+    path.column = SECTION_COLUMN_1;
+    AddSidebarEntry("Settings", path.sidebarName, 1);
+    AddWidget(path, "Mods", WIDGET_CUSTOM).CustomFunction([](WidgetInfo& info) { BenGui::DrawModsMenu(); });
+
+    // Game text language
+    path.sidebarName = "Game Language";
+    AddSidebarEntry("Settings", path.sidebarName, 1);
+    AddWidget(path, "Game Language", WIDGET_CUSTOM).CustomFunction([](WidgetInfo& info) {
+        BenGui::DrawGameLanguageMenu();
+    });
 }
 int32_t motionBlurStrength;
 
@@ -1844,6 +1858,39 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.MM3D.Lighting.DirectionalScale")
         .Options(IntSliderOptions().Min(50).Max(200).DefaultValue(110).Tooltip(
             "Strength of the sun, moon and lamp light on characters. 100 = same as N64."));
+    AddWidget(path, "Overall Brightness: %d%%", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.MM3D.Lighting.Brightness")
+        .Options(IntSliderOptions().Min(80).Max(150).DefaultValue(115).Tooltip(
+            "Brightens everything on screen, scenery included. 100 = same as N64. Works with OpenGL and DirectX."));
+    AddWidget(path, "Color Saturation: %d%%", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.MM3D.Lighting.Saturation")
+        .Options(IntSliderOptions().Min(50).Max(150).DefaultValue(115).Tooltip(
+            "More vivid colors, like on the 3DS. 100 = same as N64. Works with OpenGL and DirectX."));
+
+    AddWidget(path, "Cel Shading", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Cel Shading (Anime Look)", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.CelShading")
+        .Options(CheckboxOptions().Tooltip(
+            "Anime look: the 3D world's lighting turns into a few flat shadow tones, colors get more vivid and "
+            "everything gets a black outline. Textures and the HUD stay the same. Works with OpenGL and DirectX."));
+    AddWidget(path, "Shadow Tones: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.CelShadingBands")
+        .PreFunc([](WidgetInfo& info) { info.isHidden = !CVarGetInteger("gEnhancements.Graphics.CelShading", 0); })
+        .Options(IntSliderOptions().Min(2).Max(6).DefaultValue(2).Tooltip(
+            "2 = strong light and shadow, like a fighting game anime look; more tones = softer."));
+    AddWidget(path, "Black Outline", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.CelOutline")
+        .PreFunc([](WidgetInfo& info) { info.isHidden = !CVarGetInteger("gEnhancements.Graphics.CelShading", 0); })
+        .Options(CheckboxOptions()
+                     .Tooltip("Draws black lines around characters and objects. Turns off with MSAA above 1.")
+                     .DefaultValue(true));
+    AddWidget(path, "Outline Thickness: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.CelOutlineThickness")
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = !CVarGetInteger("gEnhancements.Graphics.CelShading", 0) ||
+                            !CVarGetInteger("gEnhancements.Graphics.CelOutline", 1);
+        })
+        .Options(IntSliderOptions().Min(1).Max(4).DefaultValue(2));
 
     // HUD Editor
     path = { "Enhancements", "HUD Editor", SECTION_COLUMN_1 };
