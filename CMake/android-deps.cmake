@@ -128,6 +128,10 @@ FetchContent_Declare(
     OVERRIDE_FIND_PACKAGE
 )
 FetchContent_MakeAvailable(Opus)
+# The port includes <opus/opus.h> (the installed layout); the source tree keeps the headers directly in include/.
+file(GLOB opus_public_headers ${opus_SOURCE_DIR}/include/*.h)
+file(COPY ${opus_public_headers} DESTINATION ${CMAKE_BINARY_DIR}/opus-include/opus)
+target_include_directories(opus INTERFACE $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/opus-include>)
 
 set(OP_DISABLE_HTTP ON)
 set(OP_DISABLE_EXAMPLES ON)
