@@ -12,6 +12,7 @@
 #include "2s2h/DeveloperTools/DeveloperTools.h"
 #include "HudEditor.h"
 #include "2s2h/Language/GameLanguage.h"
+#include "2s2h/Mods/ModInstaller.h"
 
 #include "2s2h/Enhancements/Trackers/ItemTracker.h"
 #include "2s2h/Enhancements/Trackers/ItemTrackerSettings.h"
@@ -946,6 +947,54 @@ void DrawEnhancementsMenu() {
     }
 }
 
+void DrawModsMenu() {
+    if (UIWidgets::BeginMenu("Mods")) {
+        static std::vector<ModInstaller::ModFile> sMods;
+        static std::string sMessage;
+        static bool sChanged = false;
+        static double sNextScan = 0.0;
+        // Rescan now and then, so a file the app copied in (Android picker) shows up without reopening the menu.
+        if (ImGui::GetTime() >= sNextScan) {
+            sMods = ModInstaller::List(appShortName);
+            sNextScan = ImGui::GetTime() + 1.0;
+        }
+
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 900.0f);
+        if (UIWidgets::Button("Adicionar mod...")) {
+            sMessage = ModInstaller::OpenPicker(appShortName);
+            sNextScan = 0.0;
+        }
+        ImGui::TextWrapped("Aceita mods do 2Ship em .o2r, .otr ou .zip. Se o .zip tiver arquivos .o2r/.otr dentro, "
+                           "eles são extraídos. Os mods ficam na pasta:");
+        ImGui::TextWrapped("%s", ModInstaller::GetModsFolder(appShortName).c_str());
+        if (!sMessage.empty()) {
+            ImGui::TextWrapped("%s", sMessage.c_str());
+        }
+
+        ImGui::SeparatorText("Mods instalados");
+        if (sMods.empty()) {
+            ImGui::TextWrapped("Nenhum mod instalado.");
+        }
+        for (ModInstaller::ModFile& mod : sMods) {
+            bool enabled = mod.enabled;
+            if (ImGui::Checkbox(mod.name.c_str(), &enabled) && ModInstaller::SetEnabled(mod, enabled)) {
+                sChanged = true;
+                sNextScan = 0.0;
+            }
+        }
+        if (sChanged) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Feche e abra o jogo para aplicar.");
+        }
+
+        ImGui::SeparatorText("Texturas");
+        UIWidgets::CVarCheckbox("Usar assets alternativos", "gEnhancements.Mods.AlternateAssets",
+                                { .tooltip = "Pacotes de texturas HD costumam precisar desta opção ligada." });
+        ImGui::PopTextWrapPos();
+
+        ImGui::EndMenu();
+    }
+}
+
 void DrawCheatsMenu() {
     if (UIWidgets::BeginMenu("Trapaças")) {
         UIWidgets::CVarCheckbox("Vida infinita", "gCheats.InfiniteHealth");
@@ -1134,6 +1183,10 @@ void BenMenuBar::DrawElement() {
         ImGui::SetCursorPosY(0.0f);
 
         DrawEnhancementsMenu();
+
+        ImGui::SetCursorPosY(0.0f);
+
+        DrawModsMenu();
 
         ImGui::SetCursorPosY(0.0f);
 

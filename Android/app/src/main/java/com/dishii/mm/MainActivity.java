@@ -143,6 +143,9 @@ public class MainActivity extends SDLActivity{
     private static final int STORAGE_PERMISSION_REQUEST_CODE = 2296;
     private static final int FILE_PICKER_REQUEST_CODE = 0;
     private static final int TRANSLATION_PICKER_REQUEST_CODE = 3;
+    private static final int MOD_PICKER_REQUEST_CODE = 4;
+    // Must match mm/2s2h/Mods/ModInstaller.cpp.
+    private static final String MODS_FOLDER = "mods";
     // Must match mm/2s2h/Language/GameLanguage.cpp.
     private static final String TRANSLATION_FOLDER = "traducoes/pt-BR";
     private static final String LANGUAGE_FILE = "idioma.txt";
@@ -296,6 +299,16 @@ public class MainActivity extends SDLActivity{
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 installTranslationPack(data.getData());
             }
+        } else if (requestCode == MOD_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                        installMod(data.getClipData().getItemAt(i).getUri());
+                    }
+                } else if (data.getData() != null) {
+                    installMod(data.getData());
+                }
+            }
         } else if (requestCode == FILE_PICKER_REQUEST_CODE && (resultCode != RESULT_OK || data == null)) {
             // Picker closed without a file: unblock the extractor, which reports that no ROM was chosen.
             nativeHandleSelectedFile("");
@@ -353,6 +366,117 @@ public class MainActivity extends SDLActivity{
             intent.setType("*/*");
             startActivityForResult(intent, TRANSLATION_PICKER_REQUEST_CODE);
         });
+    }
+
+    // Called from the Mods menu: pick one or more mods and copy them into the mods folder.
+    public void openModPicker() {
+        runOnUiThread(() -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            startActivityForResult(intent, MOD_PICKER_REQUEST_CODE);
+        });
+    }
+
+    private static boolean isModArchiveName(String name) {
+        String lower = name.toLowerCase();
+        return lower.endsWith(".o2r") || lower.endsWith(".otr") || lower.endsWith(".zip");
+    }
+
+    private static void copyStream(InputStream in, OutputStream out) throws IOException {
+        byte[] buffer = new byte[65536];
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+            out.write(buffer, 0, read);
+        }
+    }
+
+    // Copies a mod into the mods folder. A .zip that only wraps .o2r/.otr files (how mods are often downloaded)
+    // has those files taken out; any other .zip is a mod archive itself and is copied as it is.
+    private void installMod(Uri uri) {
+        File folder = new File(new File(Environment.getExternalStorageDirectory(), DATA_FOLDER), MODS_FOLDER);
+
+        String name = null;
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (column >= 0) {
+                    name = cursor.getString(column);
+                }
+            }
+        } catch (Exception e) {
+            Log.w("mods", "Could not read the file name", e);
+        }
+        if (name == null || name.isEmpty()) {
+            name = "mod.o2r";
+        }
+        name = name.replaceAll("[/\\\\]", "_");
+        if (!isModArchiveName(name)) {
+            Toast.makeText(this, "Escolha um mod .o2r, .otr ou .zip (" + name + ")", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!folder.isDirectory() && !folder.mkdirs()) {
+            Toast.makeText(this, "Não foi possível criar a pasta " + folder.getPath(), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        java.util.List<String> installed = new java.util.ArrayList<>();
+        try {
+            if (name.toLowerCase().endsWith(".zip")) {
+                // First pass: does the zip only wrap mod archives?
+                boolean hasArchives = false;
+                boolean hasOther = false;
+                try (java.util.zip.ZipInputStream zip =
+                         new java.util.zip.ZipInputStream(getContentResolver().openInputStream(uri))) {
+                    java.util.zip.ZipEntry entry;
+                    while ((entry = zip.getNextEntry()) != null) {
+                        if (entry.isDirectory()) {
+                            continue;
+                        }
+                        String entryName = new File(entry.getName()).getName();
+                        String lower = entryName.toLowerCase();
+                        if (lower.endsWith(".o2r") || lower.endsWith(".otr")) {
+                            hasArchives = true;
+                        } else if (!lower.endsWith(".txt") && !lower.endsWith(".md") && !lower.endsWith(".pdf") &&
+                                   !lower.endsWith(".png") && !lower.endsWith(".jpg")) {
+                            hasOther = true;
+                        }
+                    }
+                }
+                if (hasArchives && !hasOther) {
+                    try (java.util.zip.ZipInputStream zip =
+                             new java.util.zip.ZipInputStream(getContentResolver().openInputStream(uri))) {
+                        java.util.zip.ZipEntry entry;
+                        while ((entry = zip.getNextEntry()) != null) {
+                            String entryName = new File(entry.getName()).getName();
+                            String lower = entryName.toLowerCase();
+                            if (entry.isDirectory() || !(lower.endsWith(".o2r") || lower.endsWith(".otr"))) {
+                                continue;
+                            }
+                            try (OutputStream out = new FileOutputStream(new File(folder, entryName))) {
+                                copyStream(zip, out);
+                            }
+                            installed.add(entryName);
+                        }
+                    }
+                }
+            }
+            if (installed.isEmpty()) {
+                try (InputStream in = getContentResolver().openInputStream(uri);
+                     OutputStream out = new FileOutputStream(new File(folder, name))) {
+                    copyStream(in, out);
+                }
+                installed.add(name);
+            }
+        } catch (Exception e) {
+            Log.e("mods", "Failed to install the mod", e);
+            Toast.makeText(this, "Erro ao instalar o mod: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Toast.makeText(this, "Mod instalado: " + android.text.TextUtils.join(", ", installed) + ". Feche e abra o jogo para usar.",
+                       Toast.LENGTH_LONG).show();
     }
 
     private void installTranslationPack(Uri uri) {
