@@ -4,6 +4,7 @@
 #include <bit>
 #include <random>
 #include <vector>
+#include <sstream>
 #include <cassert>
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <ship/Context.h>
