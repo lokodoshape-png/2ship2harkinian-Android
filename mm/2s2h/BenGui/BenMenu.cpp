@@ -1830,15 +1830,18 @@ void BenMenu::AddEnhancements() {
                               "Inverted Song of Time, the Song of Double Time and the Scarecrow's Song. With the "
                               "cursor on the Song of Time, press L or C-Down to switch and A to hear the notes.")
                      .DefaultValue(true));
-    AddWidget(path, "Bombers' Notebook Guide with the Notebook", WIDGET_CVAR_CHECKBOX)
+    AddWidget(path, "Tips Inside the Bombers' Notebook", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.BombersNotebookGuide")
-        .Options(CheckboxOptions().Tooltip(
-            "When the Bombers' Notebook opens, a guide opens too, with each person's reward, the right day and "
-            "time, the place and the mask or condition needed. The person selected in the notebook is highlighted."));
+        .Options(CheckboxOptions()
+                     .Tooltip("While the Bombers' Notebook is open, the selected person's tips appear on the notebook "
+                              "as notes: the reward, the right day and time, the place and the mask or condition "
+                              "needed. A note is yellow while the reward is still to get and turns green once it "
+                              "has been received.")
+                     .DefaultValue(true));
     AddWidget(path, "Open Bombers' Notebook Guide", WIDGET_WINDOW_BUTTON)
         .CVar("gWindows.BombersNotebookGuide")
         .WindowName("Bombers Notebook Guide")
-        .Options(ButtonOptions().Tooltip("Opens the Bombers' Notebook guide in a window.").Size(Sizes::Inline));
+        .Options(ButtonOptions().Tooltip("Opens the full list of Bombers' Notebook tips in a window.").Size(Sizes::Inline));
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "3DS-Style Lighting", WIDGET_SEPARATOR_TEXT);

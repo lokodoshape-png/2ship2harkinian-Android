@@ -1033,13 +1033,16 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "Como no Majora's Mask 3D, a Song of Time na página de Status da Missão também mostra a Inverted Song of Time, a "
       "Song of Double Time e a Scarecrow's Song. Com o cursor na Song of Time, aperte L ou C-Baixo para trocar e A "
       "para ouvir as notas." },
-    { "Bombers' Notebook Guide with the Notebook", "Guia do Caderno dos Bombers junto com o caderno" },
-    { "When the Bombers' Notebook opens, a guide opens too, with each person's reward, the right day and time, the "
-      "place and the mask or condition needed. The person selected in the notebook is highlighted.",
-      "Quando o Caderno dos Bombers abre, um guia abre junto, com a recompensa de cada pessoa, o dia e a hora certos, "
-      "o lugar e a máscara ou condição necessária. A pessoa selecionada no caderno fica destacada." },
+    { "Tips Inside the Bombers' Notebook", "Dicas dentro do Caderno dos Bombers" },
+    { "While the Bombers' Notebook is open, the selected person's tips appear on the notebook as notes: the reward, "
+      "the right day and time, the place and the mask or condition needed. A note is yellow while the reward is "
+      "still to get and turns green once it has been received.",
+      "Com o Caderno dos Bombers aberto, as dicas da pessoa selecionada aparecem no próprio caderno como lembretes: "
+      "a recompensa, o dia e a hora certos, o lugar e a máscara ou condição necessária. O lembrete fica amarelo "
+      "enquanto falta pegar a recompensa e fica verde quando ela já foi recebida." },
     { "Open Bombers' Notebook Guide", "Abrir guia do Caderno dos Bombers" },
-    { "Opens the Bombers' Notebook guide in a window.", "Abre o guia do Caderno dos Bombers em uma janela." },
+    { "Opens the full list of Bombers' Notebook tips in a window.",
+      "Abre a lista completa de dicas do Caderno dos Bombers em uma janela." },
     { "3DS-Style Lighting", "Iluminação estilo 3DS" },
     { "Makes scenes brighter and with much less fog, close to the look of Majora's Mask 3D. Day and night lighting "
       "changes still work.",
