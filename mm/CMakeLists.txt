@@ -400,6 +400,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
                 -Wno-int-conversion
                 -Wno-implicit-int
                 -Wno-implicit-function-declaration
+                # Bionic's fortified memcpy/memset are overloaded, so the decomp's integer addresses (uintptr_t)
+                # no longer convert implicitly and the call fails to resolve. Desktop builds are not fortified.
+                -U_FORTIFY_SOURCE
             >
             $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>
             $<$<COMPILE_LANGUAGE:CXX>:
