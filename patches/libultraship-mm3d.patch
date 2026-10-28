@@ -1794,10 +1794,10 @@ index eb5df8b2..57aa4933 100644
      SDL_Quit();
 diff --git a/src/fast/backends/gfx_vulkan.cpp b/src/fast/backends/gfx_vulkan.cpp
 new file mode 100644
-index 00000000..111539c7
+index 00000000..f0f9ef63
 --- /dev/null
 +++ b/src/fast/backends/gfx_vulkan.cpp
-@@ -0,0 +1,2616 @@
+@@ -0,0 +1,2639 @@
 +#ifdef ENABLE_VULKAN
 +
 +#include "fast/backends/gfx_vulkan.h"
@@ -3990,6 +3990,9 @@ index 00000000..111539c7
 +
 +    void Init() {
 +        window = windowBackend->GetSdlWindow();
++        if (window == nullptr) {
++            throw std::runtime_error(std::string("Vulkan: no SDL Vulkan window: ") + SDL_GetError());
++        }
 +        if (volkInitialize() != VK_SUCCESS) {
 +            throw std::runtime_error("Vulkan: no Vulkan loader");
 +        }
@@ -4138,6 +4141,26 @@ index 00000000..111539c7
 +        return sSupported == 1;
 +    }
 +    sSupported = 0;
++    // SDL itself must be built with Vulkan support, or it cannot create the window or its surface.
++    bool videoWasInit = SDL_WasInit(SDL_INIT_VIDEO) != 0;
++#if defined(_WIN32) && SDL_VERSION_ATLEAST(2, 24, 0)
++    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
++#endif
++    if (!videoWasInit && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
++        return false;
++    }
++    bool sdlVulkan = SDL_Vulkan_LoadLibrary(nullptr) == 0;
++    if (sdlVulkan) {
++        SDL_Vulkan_UnloadLibrary();
++    } else {
++        SPDLOG_WARN("Vulkan unavailable in SDL: {}", SDL_GetError());
++    }
++    if (!videoWasInit) {
++        SDL_QuitSubSystem(SDL_INIT_VIDEO);
++    }
++    if (!sdlVulkan) {
++        return false;
++    }
 +    if (volkInitialize() != VK_SUCCESS || volkGetInstanceVersion() < VK_API_VERSION_1_1) {
 +        return false;
 +    }

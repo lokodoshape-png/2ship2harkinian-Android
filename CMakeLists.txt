@@ -106,7 +106,7 @@ elseif ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
 endif()
 
 vcpkg_bootstrap()
-vcpkg_install_packages(zlib bzip2 libzip libpng sdl2 sdl2-net glew glfw3 nlohmann-json tinyxml2 spdlog libogg libvorbis opus opusfile)
+vcpkg_install_packages(zlib bzip2 libzip libpng "sdl2[core,vulkan]" sdl2-net glew glfw3 nlohmann-json tinyxml2 spdlog libogg libvorbis opus opusfile --recurse)
 endif()
 
 ################################################################################
