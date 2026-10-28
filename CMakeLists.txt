@@ -158,11 +158,34 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 ################################################################################
 # Sub-projects
 ################################################################################
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # The NDK's clang makes these warnings errors by default; the decomp, ZAPD and the exporters rely on them.
+    add_compile_options(
+        -Wno-error=format-security
+        $<$<COMPILE_LANGUAGE:C>:-Wno-error=implicit-function-declaration>
+        $<$<COMPILE_LANGUAGE:C>:-Wno-error=implicit-int>
+        $<$<COMPILE_LANGUAGE:C>:-Wno-error=int-conversion>
+        $<$<COMPILE_LANGUAGE:C>:-Wno-error=incompatible-function-pointer-types>
+    )
+    include(CMake/android-deps.cmake)
+endif()
+
 add_subdirectory(libultraship ${CMAKE_BINARY_DIR}/libultraship)
 target_compile_definitions(libultraship PUBLIC INCLUDE_MPQ_SUPPORT)
 add_subdirectory(ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
 add_subdirectory(OTRExporter)
 add_subdirectory(mm)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # On desktop these headers come from the system include path; on Android they live in the fetched sources.
+    target_link_libraries(OTRExporter PUBLIC tinyxml2::tinyxml2 libzip::zip)
+    target_link_libraries(ZAPDLib PUBLIC tinyxml2::tinyxml2 libzip::zip)
+
+    # MainActivity copies these into the data folder on first run; the in-app extractor reads them from there.
+    set(ANDROID_ASSETS_DIR "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets")
+    file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/extractor/" DESTINATION "${ANDROID_ASSETS_DIR}")
+    file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/xml/" DESTINATION "${ANDROID_ASSETS_DIR}/xml")
+endif()
 
 set_property(TARGET 2ship PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)
 set_property(TARGET 2ship PROPERTY APPIMAGE_DESKTOP_FILE "${CMAKE_SOURCE_DIR}/mm/linux/2s2h.desktop")
@@ -269,5 +292,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     set(CPACK_GENERATOR "Bundle")
 endif()
 
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMake/Packaging-2.cmake)
 include(CMake/Packaging.cmake)
+endif()

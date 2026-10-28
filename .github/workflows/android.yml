@@ -1,0 +1,138 @@
+name: Build Android APK (base 4.0)
+
+on:
+  push:
+    branches: [ mm3d-4.0 ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The app copies 2ship.o2r (the port's own ROM-free resources) out of its APK assets on first run,
+  # so it is built here on the host the same way main.yml does for the desktop packages.
+  port-archive:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Apply libultraship patch (MM3D cel shading, colour options and Android)
+        run: git -C libultraship apply --ignore-whitespace ../patches/libultraship-mm3d.patch
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat .github/workflows/apt-deps.txt) libzip-dev zipcmp zipmerge ziptool
+      - name: Install SDL2 and tinyxml2
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.30.3/SDL2-2.30.3.tar.gz
+          tar -xzf SDL2-2.30.3.tar.gz
+          (cd SDL2-2.30.3 && ./configure --enable-hidapi-libusb > /dev/null && make -j4 > /dev/null && sudo make install > /dev/null)
+          sudo cp -a /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+          sudo apt-get remove -y libtinyxml2-dev
+          wget -q https://github.com/leethomason/tinyxml2/archive/refs/tags/10.0.0.tar.gz
+          tar -xzf 10.0.0.tar.gz
+          cmake -S tinyxml2-10.0.0 -B tinyxml2-10.0.0/build > /dev/null
+          cmake --build tinyxml2-10.0.0/build -j4 > /dev/null
+          sudo cmake --install tinyxml2-10.0.0/build > /dev/null
+      - name: Generate 2ship.o2r
+        run: |
+          cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release
+          cmake --build build-cmake --config Release --target Generate2ShipOtr -j4
+          ls -la 2ship.o2r
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: 2ship.o2r
+          retention-days: 3
+
+  apk:
+    needs: port-archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.0.10792818" "platforms;android-33" "build-tools;34.0.0"
+
+      - name: Apply patches and point Gradle at the runner's CMake
+        run: |
+          # Renderer (cel shading, outlines, colour options) and the Android parts of LUS: touch controls,
+          # phone gyroscope, back button, and the app's own data folder /storage/emulated/0/2S2H-MM3D.
+          git -C libultraship apply --ignore-whitespace ../patches/libultraship-mm3d.patch
+          git -C ZAPDTR apply --ignore-whitespace ../patches/zapdtr-android.patch
+          cmake --version
+          echo "sdk.dir=$ANDROID_HOME" > Android/local.properties
+          echo "cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")" >> Android/local.properties
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-2ship-o2r
+          path: Android/app/src/main/assets
+
+      - name: Build debug APK
+        working-directory: Android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          # The native code must be an optimized build even in the debug APK (see app/build.gradle).
+          grep -h "^CMAKE_BUILD_TYPE" app/.cxx/*/*/arm64-v8a/CMakeCache.txt | tee /dev/stderr | grep -q "=Release"
+          unzip -l app/build/outputs/apk/debug/*.apk | grep -E "lib/arm64-v8a/|assets/2ship.o2r|assets/assets/Config"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2ship-mm3d-android-4.0
+          path: Android/app/build/outputs/apk/debug/*.apk
+
+      # The release holds only the app; the game data (mm.o2r) is generated on the phone from the user's own ROM.
+      - name: Publish release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          short_sha="${GITHUB_SHA::7}"
+          tag="android-4.0-build-${GITHUB_RUN_NUMBER}"
+          apk="2ship-mm3d-4.0-android-${short_sha}.apk"
+          cp Android/app/build/outputs/apk/debug/*.apk "$apk"
+          cat > notes.md <<NOTES
+          APK do 2Ship MM3D para Android (arm64), agora na base 2Ship 4.0.2: menu novo em português, recursos estilo Majora's Mask 3D, segurar B para acelerar cenas, cel shading com contorno, menu de mods e pacotes de tradução.
+
+          **Como instalar**
+          1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular. Ele atualiza o 2Ship MM3D que você já tem.
+          2. Na primeira vez, permita o acesso a todos os arquivos. O app recria os arquivos dele na pasta \`2S2H-MM3D\`.
+          3. Escolha a sua ROM do Majora's Mask (N64). O app gera de novo o \`mm.o2r\` no próprio celular, porque a base 4.0 usa um formato novo. Os mods e as traduções da pasta continuam lá.
+
+          O menu abre com o botão Back da tela ou com o botão Voltar do Android.
+
+          A ROM e os arquivos do jogo não fazem parte deste download.
+
+          Commit: ${GITHUB_SHA} (branch ${GITHUB_REF_NAME})
+          NOTES
+          sed -i 's/^          //' notes.md
+          # Release creation sometimes gets a transient HTTP 403 from the API, so it is retried a few times.
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+              --title "2Ship MM3D Android (base 4.0) - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+              --notes-file notes.md --latest; then
+              exit 0
+            fi
+            echo "Release creation failed (attempt $attempt), retrying in 60s"
+            sleep 60
+          done
+          exit 1

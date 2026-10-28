@@ -49,11 +49,31 @@ size_t gSystemHeapSize = 0;
 
 void InitOTR();
 void Heaps_Free(void);
+
+#ifdef __ANDROID__
+#include <jni.h>
+#include <SDL2/SDL.h>
+// MainActivity copies the port's files into the data folder on first run; the game must not start before that.
+static void WaitForJavaSetup(void) {
+    JNIEnv* env = SDL_AndroidGetJNIEnv();
+    jclass mainActivityClass = (*env)->FindClass(env, "com/dishii/mm/MainActivity");
+    jmethodID waitMethod = (*env)->GetStaticMethodID(env, mainActivityClass, "waitForSetupFromNative", "()V");
+    (*env)->CallStaticVoidMethod(env, mainActivityClass, waitMethod);
+    (*env)->DeleteLocalRef(env, mainActivityClass);
+}
+#endif
+
 #ifdef __GNUC__
 #define SDL_main main
 #endif
 
+#ifdef __ANDROID__
+// SDLActivity looks up SDL_main (SDL_main.h maps main back to it) and expects an int result.
+int SDL_main(int argc, char** argv /* void* arg*/) {
+    WaitForJavaSetup();
+#else
 void SDL_main(int argc, char** argv /* void* arg*/) {
+#endif
     intptr_t fb;
     intptr_t sysHeap;
     s32 exit;
@@ -151,4 +171,7 @@ void SDL_main(int argc, char** argv /* void* arg*/) {
     FreeConsole();
 #endif
     Heaps_Free();
+#ifdef __ANDROID__
+    return 0;
+#endif
 }

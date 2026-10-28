@@ -1,5 +1,5 @@
 diff --git a/include/fast/backends/gfx_direct3d_common.h b/include/fast/backends/gfx_direct3d_common.h
-index bfe5f96..f521524 100644
+index bfe5f960..f5215249 100644
 --- a/include/fast/backends/gfx_direct3d_common.h
 +++ b/include/fast/backends/gfx_direct3d_common.h
 @@ -15,7 +15,10 @@ namespace Fast {
@@ -59,7 +59,7 @@ index bfe5f96..f521524 100644
  
  std::string gfx_direct3d_common_build_shader(size_t& numFloats, const CCFeatures& cc_features,
 diff --git a/include/fast/backends/gfx_opengl.h b/include/fast/backends/gfx_opengl.h
-index d5fd900..a5e4123 100644
+index d5fd9002..a5e41230 100644
 --- a/include/fast/backends/gfx_opengl.h
 +++ b/include/fast/backends/gfx_opengl.h
 @@ -38,6 +38,9 @@ struct ShaderProgram {
@@ -99,7 +99,7 @@ index d5fd900..a5e4123 100644
  
  } // namespace Fast
 diff --git a/include/fast/backends/gfx_rendering_api.h b/include/fast/backends/gfx_rendering_api.h
-index d95bcc0..0658b37 100644
+index d95bcc0d..0658b370 100644
 --- a/include/fast/backends/gfx_rendering_api.h
 +++ b/include/fast/backends/gfx_rendering_api.h
 @@ -27,8 +27,25 @@ struct hash_pair_ff {
@@ -129,7 +129,7 @@ index d95bcc0..0658b37 100644
      virtual const char* GetName() = 0;
      virtual int GetMaxTextureSize() = 0;
 diff --git a/include/fast/interpreter.h b/include/fast/interpreter.h
-index ee52672..81d2068 100644
+index ee526729..81d20685 100644
 --- a/include/fast/interpreter.h
 +++ b/include/fast/interpreter.h
 @@ -83,6 +83,11 @@ enum class ShaderOpts {
@@ -153,8 +153,56 @@ index ee52672..81d2068 100644
  };
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
+diff --git a/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h b/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h
+index 75ec491c..8be8cbfa 100644
+--- a/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h
++++ b/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h
+@@ -13,6 +13,12 @@ class SDLGyroMapping final : public ControllerGyroMapping {
+ 
+     std::string GetPhysicalDeviceName() override;
+ 
++#ifdef __ANDROID__
++    // The phone's own gyroscope, used when the active gamepad (or the touch overlay) has none.
++    static bool PhoneHasGyro();
++    static bool GetPhoneGyroData(float gyroData[3]);
++#endif
++
+   private:
+     float mNeutralPitch;
+     float mNeutralYaw;
+diff --git a/include/ship/port/mobile/MobileImpl.h b/include/ship/port/mobile/MobileImpl.h
+index de38dd2f..b0871f74 100644
+--- a/include/ship/port/mobile/MobileImpl.h
++++ b/include/ship/port/mobile/MobileImpl.h
+@@ -10,5 +10,13 @@ namespace Ship {
+ class Mobile {
+   public:
+     static void ImGuiProcessEvent(bool wantsTextInput);
++#ifdef __ANDROID__
++    // On-screen controls drawn by the Java activity (MainActivity) and fed in through a virtual SDL joystick.
++    static bool IsUsingTouchscreenControls();
++    static void EnableTouchArea();
++    static void DisableTouchArea();
++    static float GetCameraYaw();
++    static float GetCameraPitch();
++#endif
+ };
+ }; // namespace Ship
+diff --git a/src/fast/Fast3dWindow.cpp b/src/fast/Fast3dWindow.cpp
+index 9943170d..5f5f64bf 100644
+--- a/src/fast/Fast3dWindow.cpp
++++ b/src/fast/Fast3dWindow.cpp
+@@ -53,7 +53,7 @@ Fast3dWindow::~Fast3dWindow() {
+ void Fast3dWindow::Init() {
+     bool gameMode = false;
+ 
+-#ifdef __linux__
++#if defined(__linux__) && !defined(__ANDROID__)
+     std::ifstream osReleaseFile("/etc/os-release");
+     if (osReleaseFile.is_open()) {
+         std::string line;
 diff --git a/src/fast/backends/gfx_direct3d11.cpp b/src/fast/backends/gfx_direct3d11.cpp
-index 1077d2a..14defbe 100644
+index 1077d2a4..14defbee 100644
 --- a/src/fast/backends/gfx_direct3d11.cpp
 +++ b/src/fast/backends/gfx_direct3d11.cpp
 @@ -3,6 +3,7 @@
@@ -516,7 +564,7 @@ index 1077d2a..14defbe 100644
          { "append_formula", (InvokeFunc)prism_append_formula },
          { "update_floats", (InvokeFunc)update_raw_floats },
 diff --git a/src/fast/backends/gfx_opengl.cpp b/src/fast/backends/gfx_opengl.cpp
-index 0b11466..3f4b080 100644
+index 0b114667..cf1b17e8 100644
 --- a/src/fast/backends/gfx_opengl.cpp
 +++ b/src/fast/backends/gfx_opengl.cpp
 @@ -57,6 +57,9 @@ static void VertexArraySetAttribs(ShaderProgram* prg) {
@@ -664,7 +712,7 @@ index 0b11466..3f4b080 100644
 +#if defined(__APPLE__)
 +#define OUTLINE_GLSL_HEADER "#version 410 core\n"
 +#elif defined(USE_OPENGLES)
-+#define OUTLINE_GLSL_HEADER "#version 300 es\nprecision highp float;\n"
++#define OUTLINE_GLSL_HEADER "#version 300 es\nprecision highp float;\nprecision highp sampler2D;\n"
 +#else
 +#define OUTLINE_GLSL_HEADER "#version 130\n"
 +#endif
@@ -813,7 +861,7 @@ index 0b11466..3f4b080 100644
      glEnable(GL_SCISSOR_TEST);
  }
 diff --git a/src/fast/interpreter.cpp b/src/fast/interpreter.cpp
-index 19d9e12..86513bf 100644
+index 19d9e12f..86513bfe 100644
 --- a/src/fast/interpreter.cpp
 +++ b/src/fast/interpreter.cpp
 @@ -383,6 +383,14 @@ void Interpreter::GenerateCC(ColorCombiner* comb, const ColorCombinerKey& key) {
@@ -900,7 +948,7 @@ index 19d9e12..86513bf 100644
  
      cc_features->usedTextures[0] = false;
 diff --git a/src/fast/shaders/directx/default.shader.hlsl b/src/fast/shaders/directx/default.shader.hlsl
-index 980becb..ad0efea 100644
+index 980becb8..ad0efeaf 100644
 --- a/src/fast/shaders/directx/default.shader.hlsl
 +++ b/src/fast/shaders/directx/default.shader.hlsl
 @@ -66,6 +66,9 @@ float4 grayscale : GRAYSCALE;
@@ -963,7 +1011,7 @@ index 980becb..ad0efea 100644
      @if(o_fog)
          @if(o_alpha)
 diff --git a/src/fast/shaders/opengl/default.shader.fs b/src/fast/shaders/opengl/default.shader.fs
-index 404caae..48779f4 100644
+index 404caae6..48779f46 100644
 --- a/src/fast/shaders/opengl/default.shader.fs
 +++ b/src/fast/shaders/opengl/default.shader.fs
 @@ -43,6 +43,9 @@ out vec4 vOutColor;
@@ -1027,3 +1075,330 @@ index 404caae..48779f4 100644
      // TODO discard if alpha is 0?
      @if(o_fog)
          @if(o_alpha)
+diff --git a/src/ship/Context.cpp b/src/ship/Context.cpp
+index 0c36b4f4..8726cde1 100644
+--- a/src/ship/Context.cpp
++++ b/src/ship/Context.cpp
+@@ -392,7 +392,9 @@ std::string Context::GetShortName() {
+ 
+ std::string Context::GetAppBundlePath() {
+ #if defined(__ANDROID__)
+-    const char* externaldir = SDL_AndroidGetExternalStoragePath();
++    // Shared storage folder the user can reach with a file manager (ROM, mods, translation packs). This build uses
++    // its own folder so it can sit beside the original 2Ship app; MainActivity.DATA_FOLDER must match.
++    const char* externaldir = "/storage/emulated/0/2S2H-MM3D";
+     if (externaldir != NULL) {
+         return externaldir;
+     }
+@@ -455,7 +457,9 @@ std::string Context::GetAppBundlePath() {
+ 
+ std::string Context::GetAppDirectoryPath(std::string appName) {
+ #if defined(__ANDROID__)
+-    const char* externaldir = SDL_AndroidGetExternalStoragePath();
++    // Shared storage folder the user can reach with a file manager (ROM, mods, translation packs). This build uses
++    // its own folder so it can sit beside the original 2Ship app; MainActivity.DATA_FOLDER must match.
++    const char* externaldir = "/storage/emulated/0/2S2H-MM3D";
+     if (externaldir != NULL) {
+         return externaldir;
+     }
+diff --git a/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp b/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp
+index 8dc3ee18..6f8445c6 100644
+--- a/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp
++++ b/src/ship/controller/controldevice/controller/mapping/factories/GyroMappingFactory.cpp
+@@ -41,7 +41,11 @@ std::shared_ptr<ControllerGyroMapping> GyroMappingFactory::CreateGyroMappingFrom
+     for (auto [instanceId, gamepad] :
+          Context::GetInstance()->GetControlDeck()->GetConnectedPhysicalDeviceManager()->GetConnectedSDLGamepadsForPort(
+              portIndex)) {
++#ifdef __ANDROID__
++        if (!SDL_GameControllerHasSensor(gamepad, SDL_SENSOR_GYRO) && !SDLGyroMapping::PhoneHasGyro()) {
++#else
+         if (!SDL_GameControllerHasSensor(gamepad, SDL_SENSOR_GYRO)) {
++#endif
+             continue;
+         }
+ 
+diff --git a/src/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.cpp b/src/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.cpp
+index cd4a33f0..6f265c22 100644
+--- a/src/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.cpp
++++ b/src/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.cpp
+@@ -8,6 +8,56 @@
+ #include "ship/controller/controldeck/ControlDeck.h"
+ 
+ namespace Ship {
++#ifdef __ANDROID__
++static SDL_Sensor* sPhoneGyro = nullptr;
++
++bool SDLGyroMapping::PhoneHasGyro() {
++    if (sPhoneGyro != nullptr) {
++        return true;
++    }
++    if (!SDL_WasInit(SDL_INIT_SENSOR)) {
++        SDL_InitSubSystem(SDL_INIT_SENSOR);
++    }
++    for (int i = 0; i < SDL_NumSensors(); i++) {
++        if (SDL_SensorGetDeviceType(i) == SDL_SENSOR_GYRO) {
++            sPhoneGyro = SDL_SensorOpen(i);
++            break;
++        }
++    }
++    return sPhoneGyro != nullptr;
++}
++
++// Returns pitch and yaw rates in the screen's frame, so tilting works the same in either landscape orientation.
++bool SDLGyroMapping::GetPhoneGyroData(float gyroData[3]) {
++    if (!PhoneHasGyro()) {
++        return false;
++    }
++    SDL_SensorUpdate();
++    if (SDL_SensorGetData(sPhoneGyro, gyroData, 3) != 0) {
++        return false;
++    }
++    const float gyroX = gyroData[0];
++    const float gyroY = gyroData[1];
++    switch (SDL_GetDisplayOrientation(0)) {
++        case SDL_ORIENTATION_PORTRAIT_FLIPPED:
++            gyroData[0] = -gyroX;
++            gyroData[1] = -gyroY;
++            break;
++        case SDL_ORIENTATION_LANDSCAPE:
++            gyroData[0] = -gyroY;
++            gyroData[1] = gyroX;
++            break;
++        case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
++            gyroData[0] = gyroY;
++            gyroData[1] = -gyroX;
++            break;
++        default:
++            break;
++    }
++    return true;
++}
++#endif
++
+ SDLGyroMapping::SDLGyroMapping(uint8_t portIndex, float sensitivity, float neutralPitch, float neutralYaw,
+                                float neutralRoll)
+     : ControllerInputMapping(PhysicalDeviceType::SDLGamepad),
+@@ -34,6 +84,16 @@ void SDLGyroMapping::Recalibrate() {
+         return;
+     }
+ 
++#ifdef __ANDROID__
++    float phoneGyro[3];
++    if (GetPhoneGyroData(phoneGyro)) {
++        mNeutralPitch = phoneGyro[0];
++        mNeutralYaw = phoneGyro[1];
++        mNeutralRoll = phoneGyro[2];
++        return;
++    }
++#endif
++
+     // if we didn't find a gyro device zero everything out
+     mNeutralPitch = 0;
+     mNeutralYaw = 0;
+@@ -64,6 +124,15 @@ void SDLGyroMapping::UpdatePad(float& x, float& y) {
+         return;
+     }
+ 
++#ifdef __ANDROID__
++    float phoneGyro[3];
++    if (GetPhoneGyroData(phoneGyro)) {
++        x = (phoneGyro[0] - mNeutralPitch) * mSensitivity;
++        y = (phoneGyro[1] - mNeutralYaw) * mSensitivity;
++        return;
++    }
++#endif
++
+     // if we didn't find a gyro device zero everything out
+     x = 0;
+     y = 0;
+diff --git a/src/ship/port/mobile/MobileImpl.cpp b/src/ship/port/mobile/MobileImpl.cpp
+index 34391d1b..c6e573fc 100644
+--- a/src/ship/port/mobile/MobileImpl.cpp
++++ b/src/ship/port/mobile/MobileImpl.cpp
+@@ -1,7 +1,7 @@
+ #if defined(__ANDROID__) || defined(__IOS__)
+-#include "MobileImpl.h"
++#include "ship/port/mobile/MobileImpl.h"
+ #include <SDL2/SDL.h>
+-#include "ship/public/bridge/consolevariablebridge.h"
++#include "libultraship/bridge/consolevariablebridge.h"
+ 
+ #include <imgui_internal.h>
+ 
+@@ -25,3 +25,102 @@ void Ship::Mobile::ImGuiProcessEvent(bool wantsTextInput) {
+     }
+ }
+ #endif
++
++#ifdef __ANDROID__
++#include <jni.h>
++
++static float sCameraYaw = 0.0f;
++static float sCameraPitch = 0.0f;
++static bool sUsingTouchscreenControls = false;
++static int sVirtualJoystickId = -1;
++static SDL_Joystick* sVirtualJoystick = nullptr;
++
++bool Ship::Mobile::IsUsingTouchscreenControls() {
++    return sUsingTouchscreenControls;
++}
++
++static void CallActivityVoidMethod(const char* name) {
++    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
++    jobject activity = (jobject)SDL_AndroidGetActivity();
++    if (env == nullptr || activity == nullptr) {
++        return;
++    }
++    jclass activityClass = env->GetObjectClass(activity);
++    jmethodID method = env->GetMethodID(activityClass, name, "()V");
++    if (method != nullptr) {
++        env->CallVoidMethod(activity, method);
++    } else {
++        env->ExceptionClear();
++    }
++    env->DeleteLocalRef(activityClass);
++    env->DeleteLocalRef(activity);
++}
++
++// While a menu is open, swipes on the camera area go to ImGui instead of turning the camera.
++void Ship::Mobile::EnableTouchArea() {
++    CallActivityVoidMethod("EnableTouchArea");
++}
++
++void Ship::Mobile::DisableTouchArea() {
++    CallActivityVoidMethod("DisableTouchArea");
++}
++
++float Ship::Mobile::GetCameraYaw() {
++    return sCameraYaw;
++}
++
++float Ship::Mobile::GetCameraPitch() {
++    return sCameraPitch;
++}
++
++extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_attachController(JNIEnv* env, jobject obj) {
++    sVirtualJoystickId = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 18, 0);
++    if (sVirtualJoystickId == -1) {
++        SDL_Log("Could not create the touch overlay's virtual controller");
++        return;
++    }
++    sVirtualJoystick = SDL_JoystickOpen(sVirtualJoystickId);
++    if (sVirtualJoystick == nullptr) {
++        SDL_Log("Could not open the touch overlay's virtual controller");
++    }
++    sUsingTouchscreenControls = true;
++}
++
++extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_detachController(JNIEnv* env, jobject obj) {
++    SDL_JoystickClose(sVirtualJoystick);
++    SDL_JoystickDetachVirtual(sVirtualJoystickId);
++    sVirtualJoystick = nullptr;
++    sVirtualJoystickId = -1;
++    sUsingTouchscreenControls = false;
++}
++
++extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_setCameraState(JNIEnv* env, jobject obj, jint axis,
++                                                                                jfloat value) {
++    if (axis == 0) {
++        sCameraYaw = value;
++    } else if (axis == 1) {
++        sCameraPitch = value;
++    }
++}
++
++// Negative button numbers are trigger axes (see ControllerButtons.java).
++extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_setButton(JNIEnv* env, jobject obj, jint button,
++                                                                           jboolean value) {
++    if (sVirtualJoystick == nullptr) {
++        return;
++    }
++    if (button < 0) {
++        SDL_JoystickSetVirtualAxis(sVirtualJoystick, -button, value ? SDL_MAX_SINT16 : -SDL_MAX_SINT16);
++    } else {
++        SDL_JoystickSetVirtualButton(sVirtualJoystick, button, value);
++    }
++}
++
++extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_setAxis(JNIEnv* env, jobject obj, jint axis,
++                                                                         jshort value) {
++    if (sVirtualJoystick == nullptr) {
++        return;
++    }
++    SDL_JoystickSetVirtualAxis(sVirtualJoystick, axis, value);
++}
++#endif
+diff --git a/src/ship/window/gui/GameOverlay.cpp b/src/ship/window/gui/GameOverlay.cpp
+index 8819c392..01bee2f2 100644
+--- a/src/ship/window/gui/GameOverlay.cpp
++++ b/src/ship/window/gui/GameOverlay.cpp
+@@ -238,8 +238,8 @@ void GameOverlay::Draw() {
+ 
+             const ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, duration);
+ #ifdef __ANDROID__
+-            const float textWidth = GetStringWidth(overlay.Value.c_str()) * 2.0f;
+-            const float textOffset = 40.0f * 2.0f;
++            const float textWidth = GetStringWidth(overlay.Value.c_str()) * 3.0f;
++            const float textOffset = 40.0f * 3.0f;
+ #else
+             const float textWidth = GetStringWidth(overlay.Value.c_str());
+             const float textOffset = 40.0f;
+diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
+index 17f0c2b0..5148d6b7 100644
+--- a/src/ship/window/gui/Gui.cpp
++++ b/src/ship/window/gui/Gui.cpp
+@@ -31,7 +31,7 @@
+ #endif
+ 
+ #if defined(__ANDROID__) || defined(__IOS__)
+-#include "port/mobile/MobileImpl.h"
++#include "ship/port/mobile/MobileImpl.h"
+ #endif
+ 
+ #ifdef ENABLE_OPENGL
+@@ -128,9 +128,10 @@ void Gui::Init(GuiWindowInitData windowImpl) {
+                                                           &iconsConfig, sIconsRanges);
+ 
+ #if defined(__ANDROID__)
+-    // Scale everything by 2 for Android
+-    ImGui::GetStyle().ScaleAllSizes(2.0f);
+-    mImGuiIo->FontGlobalScale = 2.0f;
++    // Scale everything by 3 for Android phones, and let the touch overlay's controller drive the menus.
++    ImGui::GetStyle().ScaleAllSizes(3.0f);
++    mImGuiIo->FontGlobalScale = 3.0f;
++    Ship::Context::GetInstance()->GetConsoleVariables()->SetInteger(CVAR_IMGUI_CONTROLLER_NAV, 1);
+ #endif
+ 
+     auto imguiIniPath = Context::GetPathRelativeToAppDirectory("imgui.ini");
+@@ -540,6 +541,12 @@ void Gui::DrawMenu() {
+ 
+     ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_NoDockingInCentralNode);
+ 
++#ifdef __ANDROID__
++    // The system back button opens and closes the menu like Escape does on PC.
++    if (ImGui::IsKeyPressed(ImGuiKey_AppBack, false) && GetMenu()) {
++        GetMenu()->ToggleVisibility();
++    }
++#endif
+     if (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+         (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
+          Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0))) {
+@@ -565,6 +572,18 @@ void Gui::DrawMenu() {
+         }
+     }
+ 
++#ifdef __ANDROID__
++    static bool sTouchAreaDisabled = false;
++    if (GetMenuOrMenubarVisible() != sTouchAreaDisabled) {
++        sTouchAreaDisabled = !sTouchAreaDisabled;
++        if (sTouchAreaDisabled) {
++            Mobile::DisableTouchArea();
++        } else {
++            Mobile::EnableTouchArea();
++        }
++    }
++#endif
++
+     // Mac interprets this as cmd+r when io.ConfigMacOSXBehavior is on (on by default)
+     if ((ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) &&
+         ImGui::IsKeyPressed(ImGuiKey_R, false)) {

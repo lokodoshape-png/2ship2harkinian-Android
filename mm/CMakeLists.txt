@@ -176,7 +176,12 @@ set(ALL_FILES
 ################################################################################
 # Target
 ################################################################################
-add_executable(${PROJECT_NAME} ${ALL_FILES})
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # SDLActivity loads the game as lib2ship.so and calls its SDL_main.
+    add_library(${PROJECT_NAME} SHARED ${ALL_FILES})
+else()
+    add_executable(${PROJECT_NAME} ${ALL_FILES})
+endif()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 use_props(${PROJECT_NAME} "${CMAKE_CONFIGURATION_TYPES}" "${DEFAULT_CXX_PROPS}")
@@ -374,6 +379,39 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         target_link_options(${PROJECT_NAME} PRIVATE
             -pthread
         )
+    elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
+        # The NDK's clang turns several old-C patterns into errors by default; the decomp relies on them.
+        target_compile_options(${PROJECT_NAME} PRIVATE
+            -Wall -Wextra -Wno-error
+            -Wno-return-type
+            -Wno-unused-parameter
+            -Wno-unused-function
+            -Wno-unused-variable
+            -Wno-missing-field-initializers
+            -Wno-parentheses
+            -Wno-narrowing
+            -Wno-missing-braces
+            -Wno-format-security
+            -Wno-unknown-warning-option
+            $<$<COMPILE_LANGUAGE:C>:
+                -Wno-ignored-qualifiers
+                -Wno-incompatible-pointer-types
+                -Wno-incompatible-function-pointer-types
+                -Wno-int-conversion
+                -Wno-implicit-int
+                -Wno-implicit-function-declaration
+            >
+            $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>
+            $<$<COMPILE_LANGUAGE:CXX>:
+                -Wno-c++11-narrowing
+                -Wno-deprecated-enum-enum-conversion
+            >
+            -pthread
+        )
+
+        target_link_options(${PROJECT_NAME} PRIVATE
+            -pthread
+        )
     elseif (CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
         target_compile_options(${PROJECT_NAME} PRIVATE
             -Wall -Wextra -Wno-error
@@ -497,7 +535,7 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
     set(VS_COPY_ASSETS_CMD ${CMAKE_COMMAND} -E copy_directory_if_different $<TARGET_FILE_DIR:2ship>/assets ${CMAKE_BINARY_DIR}/mm/assets)
 endif()
-if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS|Android")
     add_custom_command(
         TARGET ${PROJECT_NAME}
         POST_BUILD
@@ -562,6 +600,26 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
         -lglad
         Threads::Threads
     )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # These targets come from CMake/android-deps.cmake.
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
+    set(ADDITIONAL_LIBRARY_DEPENDENCIES
+        "libultraship;"
+        "ZAPDLib;"
+        "Ogg::ogg"
+        "Vorbis::vorbis"
+        "Vorbis::vorbisenc"
+        "Vorbis::vorbisfile"
+        "Opus::opus"
+        "OpusFile::opusfile"
+        "libzip::zip"
+        SDL2::SDL2
+        android
+        log
+        ${CMAKE_DL_LIBS}
+        Threads::Threads
+    )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
     find_package(SDL2 REQUIRED)
     set(ADDITIONAL_LIBRARY_DEPENDENCIES
@@ -599,7 +657,7 @@ else()
 
 endif()
 
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|NintendoSwitch|CafeOS")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|NintendoSwitch|CafeOS|Android")
 INSTALL(TARGETS 2ship DESTINATION . COMPONENT 2s2h)
 endif()
 
@@ -616,7 +674,7 @@ configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/macosx/Info.plist.in ${CMAKE_BINARY_
 INSTALL(TARGETS 2ship DESTINATION ../MacOS COMPONENT 2s2h)
 INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION ../MacOS COMPONENT 2s2h)
 INSTALL(FILES ${CMAKE_BINARY_DIR}/mm/2ship.o2r DESTINATION ../Resources COMPONENT 2s2h)
-elseif(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "NintendoSwitch|CafeOS")
+elseif(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "NintendoSwitch|CafeOS|Android")
 INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION . COMPONENT 2s2h)
 endif()
 

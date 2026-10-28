@@ -34,7 +34,7 @@ void DrawMenuBarIcon() {
 void DrawBenMenu() {
     if (UIWidgets::BeginMenu("2Ship")) {
         if (UIWidgets::MenuItem("Hide Menu Bar",
-#if !defined(__SWITCH__) && !defined(__WIIU__)
+#if !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__ANDROID__)
                                 "F1"
 #else
                                 "[-]"
@@ -42,7 +42,7 @@ void DrawBenMenu() {
                                 )) {
             Ship::Context::GetInstance()->GetWindow()->GetGui()->GetMenuBar()->ToggleVisibility();
         }
-#if !defined(__SWITCH__) && !defined(__WIIU__)
+#if !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__ANDROID__)
         if (UIWidgets::MenuItem("Toggle Fullscreen", "F11")) {
             Ship::Context::GetInstance()->GetWindow()->ToggleFullscreen();
         }
@@ -50,7 +50,7 @@ void DrawBenMenu() {
         if (UIWidgets::MenuItem("Reset",
 #ifdef __APPLE__
                                 "Command-R"
-#elif !defined(__SWITCH__) && !defined(__WIIU__)
+#elif !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__ANDROID__)
                                 "Ctrl+R"
 #else
                                 ""
@@ -60,7 +60,7 @@ void DrawBenMenu() {
                 Ship::Context::GetInstance()->GetWindow()->GetGui()->GetGuiWindow("Console"))
                 ->Dispatch("reset");
         }
-#if !defined(__SWITCH__) && !defined(__WIIU__)
+#if !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__ANDROID__)
         if (UIWidgets::MenuItem("Open App Files Folder")) {
             std::string filesPath = Ship::Context::GetInstance()->GetAppDirectoryPath();
             SDL_OpenURL(std::string("file:///" + std::filesystem::absolute(filesPath).string()).c_str());
