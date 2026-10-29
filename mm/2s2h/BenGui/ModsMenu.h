@@ -7,6 +7,8 @@ namespace BenGui {
 void DrawModsMenu();
 // Game text language and where its translation pack goes (Settings > Game Language).
 void DrawGameLanguageMenu();
+// Songs from a folder the player picks, replacing the game's music (Enhancements > Audio Editor).
+void DrawMusicMenu();
 
 } // namespace BenGui
 

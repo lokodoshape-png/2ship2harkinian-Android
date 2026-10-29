@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.os.Bundle;
 import android.os.Environment;
@@ -144,6 +145,9 @@ public class MainActivity extends SDLActivity{
     private static final int FILE_PICKER_REQUEST_CODE = 0;
     private static final int TRANSLATION_PICKER_REQUEST_CODE = 3;
     private static final int MOD_PICKER_REQUEST_CODE = 4;
+    private static final int MUSIC_PICKER_REQUEST_CODE = 5;
+    // Must match mm/2s2h/Enhancements/Audio/MusicFolder.cpp (the library is "musicas" in the data folder).
+    private static final String MUSIC_IMPORT_FOLDER = "musicas/.origem";
     // Must match mm/2s2h/Mods/ModInstaller.cpp.
     private static final String MODS_FOLDER = "mods";
     // Must match mm/2s2h/Language/GameLanguage.cpp.
@@ -299,6 +303,11 @@ public class MainActivity extends SDLActivity{
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 installTranslationPack(data.getData());
             }
+        } else if (requestCode == MUSIC_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                final Uri tree = data.getData();
+                Executors.newSingleThreadExecutor().execute(() -> copyMusicFolder(tree));
+            }
         } else if (requestCode == MOD_PICKER_REQUEST_CODE) {
             if (resultCode == RESULT_OK && data != null) {
                 if (data.getClipData() != null) {
@@ -369,6 +378,70 @@ public class MainActivity extends SDLActivity{
     }
 
     // Called from the Mods menu: pick one or more mods and copy them into the mods folder.
+    public void openMusicFolderPicker() {
+        runOnUiThread(() -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            startActivityForResult(intent, MUSIC_PICKER_REQUEST_CODE);
+        });
+    }
+
+    private static boolean isMusicFileName(String name) {
+        String lower = name.toLowerCase();
+        return lower.endsWith(".wav") || lower.endsWith(".flac") || lower.endsWith(".mp3") || lower.endsWith(".ogg")
+                || lower.endsWith(".opus") || lower.endsWith(".oga") || lower.equals("loops.txt");
+    }
+
+    // Copies the songs (and loops.txt) of the picked folder into the data folder; the game converts them from
+    // there into its music library and deletes the copy.
+    private void copyMusicFolder(Uri tree) {
+        File target = new File(new File(Environment.getExternalStorageDirectory(), DATA_FOLDER), MUSIC_IMPORT_FOLDER);
+        deleteRecursively(target);
+        target.mkdirs();
+        runOnUiThread(() -> Toast.makeText(this, "Copiando as músicas...", Toast.LENGTH_SHORT).show());
+
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree,
+                DocumentsContract.getTreeDocumentId(tree));
+        String[] columns = { DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE };
+        int copied = 0;
+        try (Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
+            while (cursor != null && cursor.moveToNext()) {
+                String id = cursor.getString(0);
+                String name = cursor.getString(1);
+                if (name == null || DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(2))
+                        || !isMusicFileName(name)) {
+                    continue;
+                }
+                Uri file = DocumentsContract.buildDocumentUriUsingTree(tree, id);
+                try (InputStream in = getContentResolver().openInputStream(file);
+                     OutputStream out = new FileOutputStream(new File(target, name))) {
+                    copyStream(in, out);
+                    copied++;
+                } catch (IOException e) {
+                    Log.e("music", "Failed to copy " + name, e);
+                }
+            }
+        } catch (Exception e) {
+            Log.e("music", "Failed to list the music folder", e);
+        }
+        final int count = copied;
+        runOnUiThread(() -> Toast.makeText(this, count + " arquivo(s) copiado(s). Convertendo no menu Músicas...",
+                Toast.LENGTH_LONG).show());
+        nativeMusicFolderCopied(target.getAbsolutePath());
+    }
+
+    private static void deleteRecursively(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteRecursively(child);
+            }
+        }
+        file.delete();
+    }
+
+    public native void nativeMusicFolderCopied(String path);
+
     public void openModPicker() {
         runOnUiThread(() -> {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);

@@ -285,6 +285,9 @@ void AudioCollection::AddToCollection(char* otrPath, uint16_t seqNum) {
 }
 
 uint16_t AudioCollection::GetDefaultReplacement(uint16_t seqId) {
+    if (!CVarGetInteger("gEnhancements.Audio.AutoReplaceByName", 1)) {
+        return seqId;
+    }
     auto it = mAutoReplacements.find(seqId);
     return it != mAutoReplacements.end() ? it->second : seqId;
 }
@@ -314,9 +317,9 @@ uint16_t AudioCollection::GetOriginalSequence(uint16_t seqId) {
 
     for (const auto& a : mSequenceMap) {
         const std::string cvarKey = GetCvarKey(a.second.sfxKey);
-        auto autoIt = mAutoReplacements.find(a.first);
+        uint16_t autoReplacement = GetDefaultReplacement(a.first);
         int replacementSeq =
-            CVarGetInteger(cvarKey.c_str(), autoIt != mAutoReplacements.end() ? autoIt->second : NA_BGM_DISABLED);
+            CVarGetInteger(cvarKey.c_str(), autoReplacement != a.first ? autoReplacement : NA_BGM_DISABLED);
         if (replacementSeq == seqId) {
             return a.first;
         }

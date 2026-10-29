@@ -37,6 +37,7 @@
 #endif
 #include "Extractor/Extract.h"
 #include "Language/GameLanguage.h"
+#include "2s2h/Enhancements/Audio/MusicFolder.h"
 // OTRTODO
 //#include <functions.h>
 #include "2s2h/Enhancements/FrameInterpolation/FrameInterpolation.h"
@@ -193,6 +194,8 @@ OTRGlobals::OTRGlobals() {
 
     // tell LUS to reserve 3 SoH specific threads (Game, Audio, Save)
     context->InitResourceManager(archiveFiles, {}, 3);
+    // Songs from the player's music folder, ahead of the audio engine reading the custom sequences.
+    MusicFolder::Mount();
     prevAltAssets = CVarGetInteger("gEnhancements.Mods.AlternateAssets", 0);
     context->GetResourceManager()->SetAltAssetsEnabled(prevAltAssets);
 

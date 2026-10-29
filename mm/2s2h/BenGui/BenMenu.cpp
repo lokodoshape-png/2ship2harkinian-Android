@@ -1928,6 +1928,7 @@ void BenMenu::AddEnhancements() {
     AddWidget(path, "Popout Audio Editor", WIDGET_WINDOW_BUTTON)
         .CVar("gWindows.AudioEditor")
         .WindowName("Audio Editor");
+    AddWidget(path, "Music", WIDGET_CUSTOM).CustomFunction([](WidgetInfo& info) { BenGui::DrawMusicMenu(); });
 }
 
 void BenMenu::AddDevTools() {

@@ -8,6 +8,8 @@
 #include "UIWidgets.hpp"
 #include "2s2h/Language/GameLanguage.h"
 #include "2s2h/Mods/ModInstaller.h"
+#include "2s2h/Enhancements/Audio/MusicFolder.h"
+#include "2s2h/Enhancements/Audio/AudioCollection.h"
 
 namespace BenGui {
 
@@ -73,6 +75,68 @@ void DrawGameLanguageMenu() {
         GameLanguage::OpenPackPicker();
     }
 #endif
+}
+
+void DrawMusicMenu() {
+    static std::vector<MusicFolder::Track> sTracks = MusicFolder::GetTracks();
+    static bool sWasRunning = false;
+    const MusicFolder::ImportStatus status = MusicFolder::GetImportStatus();
+    if (sWasRunning && !status.running) {
+        sTracks = MusicFolder::GetTracks();
+    }
+    sWasRunning = status.running;
+
+    ImGui::SeparatorText(Tr("Music"));
+    ImGui::TextWrapped("%s", Tr("Pick a folder with your songs (wav, flac, mp3, ogg or opus). Name each file after the "
+                                "game song it replaces, like \"Clock Town Day 1.flac\"; the names are listed below. "
+                                "The songs are converted into the game's music folder:"));
+    ImGui::TextWrapped("%s", MusicFolder::GetLibraryFolder().c_str());
+
+    if (status.running) {
+        ImGui::TextWrapped("%s %d/%d: %s", Tr("Converting songs"), status.done, status.total, status.current.c_str());
+        ImGui::ProgressBar(status.total > 0 ? (float)status.done / status.total : 0.0f, ImVec2(-1.0f, 0.0f));
+    } else {
+        if (UIWidgets::Button("Choose Music Folder...", UIWidgets::ButtonOptions().Size(UIWidgets::Sizes::Inline))) {
+            MusicFolder::PickFolder();
+        }
+        if (!sTracks.empty()) {
+            ImGui::SameLine();
+            if (UIWidgets::Button("Remove Music", UIWidgets::ButtonOptions().Size(UIWidgets::Sizes::Inline))) {
+                MusicFolder::Clear();
+                sTracks.clear();
+            }
+        }
+    }
+    if (!status.message.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", status.message.c_str());
+    }
+
+    UIWidgets::CVarCheckbox("Play Songs in Place of the Originals", "gEnhancements.Audio.AutoReplaceByName",
+                            UIWidgets::CheckboxOptions().DefaultValue(true).Tooltip(
+                                "A song named after a game song plays instead of it. The Audio Editor can "
+                                "still choose another song for any track."));
+    ImGui::TextWrapped("%s", Tr("To skip an intro when the song repeats, put a loops.txt in the folder with lines "
+                                "like \"Termina Field = 7.5\" or \"Clock Town Day 1 = 3.1 - 92.4\" (seconds)."));
+
+    if (!sTracks.empty() && ImGui::CollapsingHeader(Tr("Songs in the music folder"))) {
+        for (const MusicFolder::Track& track : sTracks) {
+            if (track.replaces.empty()) {
+                ImGui::BulletText("%s  (%s)", track.name.c_str(), Tr("choose where it plays in the Audio Editor"));
+            } else {
+                ImGui::BulletText("%s  ->  %s", track.name.c_str(), track.replaces.c_str());
+            }
+        }
+    }
+    if (ImGui::CollapsingHeader(Tr("Game song names"))) {
+        if (AudioCollection::Instance != nullptr) {
+            for (const auto& [seqId, info] : AudioCollection::Instance->GetAllSequences()) {
+                if (seqId <= AudioCollection::Instance->GetMaxOriginalSeqId() && info.canBeReplaced &&
+                    (info.category & (SEQ_BGM_CUSTOM | SEQ_BGM_CUSTOM_FANFARE))) {
+                    ImGui::BulletText("%s", info.label.c_str());
+                }
+            }
+        }
+    }
 }
 
 } // namespace BenGui
