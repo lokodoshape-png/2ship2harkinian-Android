@@ -9,6 +9,7 @@
 #include "z64save.h"
 #include "BenPort.h"
 #include "2s2h/GameInteractor/GameInteractor.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "assets/archives/schedule_dma_static/schedule_dma_static_yar.h"
 #include "assets/archives/icon_item_static/icon_item_static_yar.h"
 #include "assets/archives/icon_item_24_static/icon_item_24_static_yar.h"
@@ -4210,11 +4211,37 @@ TexturePtr sOcarinaButtonTextures[] = {
     gOcarinaATex, gOcarinaCDownTex, gOcarinaCRightTex, gOcarinaCLeftTex, gOcarinaCUpTex,
 };
 
+// #region 2S2H [Enhancement] Controller button icons for the ocarina notes
+static ButtonPrompt sOcarinaButtonPrompts[] = {
+    BUTTON_PROMPT_A, BUTTON_PROMPT_CDOWN, BUTTON_PROMPT_CRIGHT, BUTTON_PROMPT_CLEFT, BUTTON_PROMPT_CUP,
+};
+
+// Sets up the colors for a note and returns its texture. The icons keep their own colors.
+static TexturePtr Message_SetupOcarinaButton(Gfx** gfxP, u8 button, u8 primR, u8 primG, u8 primB, u8 alpha, u8 envR,
+                                             u8 envG, u8 envB) {
+    Gfx* gfx = *gfxP;
+    const char* icon = ButtonPrompts_Icon(sOcarinaButtonPrompts[button]);
+
+    if (icon != NULL) {
+        gDPSetCombineMode(gfx++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+        gDPSetPrimColor(gfx++, 0, 0, 255, 255, 255, alpha);
+    } else {
+        gDPSetCombineLERP(gfx++, PRIMITIVE, ENVIRONMENT, TEXEL0, ENVIRONMENT, TEXEL0, 0, PRIMITIVE, 0, PRIMITIVE,
+                          ENVIRONMENT, TEXEL0, ENVIRONMENT, TEXEL0, 0, PRIMITIVE, 0);
+        gDPSetPrimColor(gfx++, 0, 0, primR, primG, primB, alpha);
+        gDPSetEnvColor(gfx++, envR, envG, envB, 0);
+    }
+    *gfxP = gfx;
+    return icon != NULL ? (TexturePtr)icon : sOcarinaButtonTextures[button];
+}
+// #endregion
+
 void Message_DrawOcarinaButtons(PlayState* play, Gfx** gfxP) {
     MessageContext* msgCtx = &play->msgCtx;
     Gfx* gfx = *gfxP;
     u16 i;
     u16 notePosX;
+    TexturePtr noteTex;
 
     if ((play->msgCtx.msgMode >= MSGMODE_OCARINA_PLAYING) && (msgCtx->msgMode <= MSGMODE_40)) {
         if ((msgCtx->ocarinaAction != OCARINA_ACTION_FREE_PLAY) &&
@@ -4245,11 +4272,11 @@ void Message_DrawOcarinaButtons(PlayState* play, Gfx** gfxP) {
 
                     for (notePosX = 98, i = 0; i < sOcarinaButtonStepR; notePosX += 18, i++) {
                         gDPPipeSync(gfx++);
-                        gDPSetPrimColor(gfx++, 0, 0, 150, 150, 150, 150);
-                        gDPSetEnvColor(gfx++, 10, 10, 10, 0);
+                        noteTex = Message_SetupOcarinaButton(
+                            &gfx, gOcarinaSongButtons[sOcarinaButtonStepG].buttonIndex[i], 150, 150, 150, 150, 10, 10, 10);
 
                         gDPLoadTextureBlock(
-                            gfx++, sOcarinaButtonTextures[gOcarinaSongButtons[sOcarinaButtonStepG].buttonIndex[i]],
+                            gfx++, noteTex,
                             G_IM_FMT_IA, G_IM_SIZ_8b, 16, 16, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP,
                             G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
 
@@ -4279,16 +4306,18 @@ void Message_DrawOcarinaButtons(PlayState* play, Gfx** gfxP) {
 
                     gDPPipeSync(gfx++);
                     if (sOcarinaButtonIndexBuf[i] == OCARINA_BTN_A) {
-                        gDPSetPrimColor(gfx++, 0, 0, sOcarinaButtonAPrimR, sOcarinaButtonAPrimG, sOcarinaButtonAPrimB,
-                                        sOcarinaButtonAlphaValues[i]);
-                        gDPSetEnvColor(gfx++, sOcarinaButtonAEnvR, sOcarinaButtonAEnvG, sOcarinaButtonAEnvB, 0);
+                        noteTex = Message_SetupOcarinaButton(&gfx, sOcarinaButtonIndexBuf[i], sOcarinaButtonAPrimR,
+                                                             sOcarinaButtonAPrimG, sOcarinaButtonAPrimB,
+                                                             sOcarinaButtonAlphaValues[i], sOcarinaButtonAEnvR,
+                                                             sOcarinaButtonAEnvG, sOcarinaButtonAEnvB);
                     } else {
-                        gDPSetPrimColor(gfx++, 0, 0, sOcarinaButtonCPrimR, sOcarinaButtonCPrimG, sOcarinaButtonCPrimB,
-                                        sOcarinaButtonAlphaValues[i]);
-                        gDPSetEnvColor(gfx++, sOcarinaButtonCEnvR, sOcarinaButtonCEnvG, sOcarinaButtonCEnvB, 0);
+                        noteTex = Message_SetupOcarinaButton(&gfx, sOcarinaButtonIndexBuf[i], sOcarinaButtonCPrimR,
+                                                             sOcarinaButtonCPrimG, sOcarinaButtonCPrimB,
+                                                             sOcarinaButtonAlphaValues[i], sOcarinaButtonCEnvR,
+                                                             sOcarinaButtonCEnvG, sOcarinaButtonCEnvB);
                     }
 
-                    gDPLoadTextureBlock(gfx++, sOcarinaButtonTextures[sOcarinaButtonIndexBuf[i]], G_IM_FMT_IA,
+                    gDPLoadTextureBlock(gfx++, noteTex, G_IM_FMT_IA,
                                         G_IM_SIZ_8b, 16, 16, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP,
                                         G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
 

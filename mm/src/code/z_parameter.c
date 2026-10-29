@@ -20,6 +20,7 @@
 #include "BenPort.h"
 #include <string.h>
 #include "2s2h/BenGui/HudEditor.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "2s2h/BenGui/CosmeticEditor.h"
 #include "2s2h_assets.h"
 #include "2s2h/GameInteractor/GameInteractor.h"
@@ -9299,6 +9300,10 @@ void Interface_Draw(PlayState* play) {
         // #endregion
 
         Interface_DrawAButton(play);
+
+        // 2S2H [Enhancement] Controller button icons on the HUD buttons
+        ButtonPrompts_DrawItemButtonBadges(play);
+        ButtonPrompts_DrawAButtonBadge(play);
 
         Interface_DrawPauseMenuEquippingIcons(play);
 

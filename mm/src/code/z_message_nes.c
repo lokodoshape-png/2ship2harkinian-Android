@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <libultraship/bridge/consolevariablebridge.h>
 #include "2s2h/GameInteractor/GameInteractor.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 
 // True when the Brazilian Portuguese language pack is loaded (2s2h/Language/GameLanguage.cpp). The strings the game
 // builds in code (owl statue names, ordinals, mask colors, hours) then use the pack's own spelling and font bytes.
@@ -952,6 +953,10 @@ void Message_DrawTextNES(PlayState* play, Gfx** gfxP, u16 textDrawPos) {
                         sColorsButtonsNES[(s16)sButtonColorIndicesNES[(u8)character - MESSAGE_BTN_A]].g;
                     msgCtx->textColorB =
                         sColorsButtonsNES[(s16)sButtonColorIndicesNES[(u8)character - MESSAGE_BTN_A]].b;
+                    if (ButtonPrompts_MessageGlyph((u8)character) != NULL) {
+                        // The controller icons carry their own colors.
+                        msgCtx->textColorR = msgCtx->textColorG = msgCtx->textColorB = 255;
+                    }
                     Message_DrawTextChar(play, &font->charBuf[font->unk_11D88][charTexIndex], &gfx);
                     msgCtx->textColorR = prevR;
                     msgCtx->textColorG = prevG;

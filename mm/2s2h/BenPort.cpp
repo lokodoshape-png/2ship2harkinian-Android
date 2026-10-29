@@ -38,6 +38,7 @@
 #include "Extractor/Extract.h"
 #include "Language/GameLanguage.h"
 #include "2s2h/Enhancements/Audio/MusicFolder.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 // OTRTODO
 //#include <functions.h>
 #include "2s2h/Enhancements/FrameInterpolation/FrameInterpolation.h"
@@ -196,6 +197,7 @@ OTRGlobals::OTRGlobals() {
     context->InitResourceManager(archiveFiles, {}, 3);
     // Songs from the player's music folder, ahead of the audio engine reading the custom sequences.
     MusicFolder::Mount();
+    ButtonPrompts::Mount();
     prevAltAssets = CVarGetInteger("gEnhancements.Mods.AlternateAssets", 0);
     context->GetResourceManager()->SetAltAssetsEnabled(prevAltAssets);
 

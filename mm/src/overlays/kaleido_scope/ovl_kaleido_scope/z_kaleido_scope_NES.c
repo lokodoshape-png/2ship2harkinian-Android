@@ -26,6 +26,7 @@
 #include "2s2h/GameInteractor/GameInteractor.h"
 
 #include "2s2h/Enhancements/Songs/Songs.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include <libultraship/bridge/consolevariablebridge.h>
 
 #pragma increment_block_number "n64-us:128"
@@ -1083,6 +1084,21 @@ TexturePtr D_8082B9A8[] = {
     gPauseToMasksENGTex,
     gPauseToSelectItemENGTex,
 };
+// #region 2S2H [Enhancement] Controller button icons in place of the N64 button DLs, on the quad at `point`
+static Gfx* KaleidoScope_DrawButtonIcon(Gfx* gfx, Gfx* originalDL, ButtonPromptPauseTexture which, s16 width,
+                                        s16 height, u16 point, u8 alpha) {
+    const char* texture = ButtonPrompts_PauseTexture(which);
+
+    if (texture == NULL) {
+        gSPDisplayList(gfx++, originalDL);
+        return gfx;
+    }
+    gDPPipeSync(gfx++);
+    gDPSetPrimColor(gfx++, 0, 0, 255, 255, 255, alpha);
+    return Gfx_DrawTexQuadIA8(gfx, (TexturePtr)texture, width, height, point);
+}
+// #endregion
+
 void KaleidoScope_DrawInfoPanel(PlayState* play) {
     static s16 sPauseZRCursorColorTargets[][4] = {
         { 180, 210, 255, 220 },
@@ -1246,19 +1262,31 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
 
     gSPDisplayList(POLY_OPA_DISP++, gItemNamePanelDL);
 
-    if ((pauseCtx->cursorSpecialPos == PAUSE_CURSOR_PAGE_LEFT) &&
-        (!pauseCtx->mainState || (pauseCtx->mainState == PAUSE_MAIN_STATE_UNK))) {
-        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 150, 140, 90, sPauseZRCursorAlpha);
+    {
+        // 2S2H [Enhancement] The icon alphas follow the prim colors set for the original DLs
+        u8 zrAlpha = 255;
+
+        if ((pauseCtx->cursorSpecialPos == PAUSE_CURSOR_PAGE_LEFT) &&
+            (!pauseCtx->mainState || (pauseCtx->mainState == PAUSE_MAIN_STATE_UNK))) {
+            gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 150, 140, 90, sPauseZRCursorAlpha);
+            zrAlpha = sPauseZRCursorAlpha;
+        }
+
+        POLY_OPA_DISP =
+            KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gZButtonIconDL, BUTTON_PROMPT_PAUSE_Z, 24, 32, 8, zrAlpha);
+        if (ButtonPrompts_PauseTexture(BUTTON_PROMPT_PAUSE_Z) != NULL) {
+            gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 150, 140, 90, zrAlpha);
+        }
+
+        if ((pauseCtx->cursorSpecialPos == PAUSE_CURSOR_PAGE_RIGHT) &&
+            (!pauseCtx->mainState || (pauseCtx->mainState == PAUSE_MAIN_STATE_UNK))) {
+            gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 150, 140, 90, sPauseZRCursorAlpha);
+            zrAlpha = sPauseZRCursorAlpha;
+        }
+
+        POLY_OPA_DISP =
+            KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gRButtonIconDL, BUTTON_PROMPT_PAUSE_R, 24, 32, 12, zrAlpha);
     }
-
-    gSPDisplayList(POLY_OPA_DISP++, gZButtonIconDL);
-
-    if ((pauseCtx->cursorSpecialPos == PAUSE_CURSOR_PAGE_RIGHT) &&
-        (!pauseCtx->mainState || (pauseCtx->mainState == PAUSE_MAIN_STATE_UNK))) {
-        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 150, 140, 90, sPauseZRCursorAlpha);
-    }
-
-    gSPDisplayList(POLY_OPA_DISP++, gRButtonIconDL);
 
     if (pauseCtx->cursorSpecialPos != 0) {
         j = (pauseCtx->cursorSpecialPos * 4) - 32;
@@ -1340,7 +1368,7 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
             // #region 2S2H - fixed vtx size for correct texture size
             pauseCtx->infoPanelVtx[21].v.tc[0] = pauseCtx->infoPanelVtx[23].v.tc[0] = 64 * (1 << 5);
 
-            gSPDisplayList(POLY_OPA_DISP++, gAButtonIconDL);
+            POLY_OPA_DISP = KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gAButtonIconDL, BUTTON_PROMPT_PAUSE_A, 24, 16, 0, 255);
             gDPPipeSync(POLY_OPA_DISP++);
             gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
 
@@ -1386,7 +1414,7 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
 
             pauseCtx->infoPanelVtx[21].v.tc[0] = pauseCtx->infoPanelVtx[23].v.tc[0] = 64 * (1 << 5);
 
-            gSPDisplayList(POLY_OPA_DISP++, gCButtonIconsDL);
+            POLY_OPA_DISP = KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gCButtonIconsDL, BUTTON_PROMPT_PAUSE_C, 48, 16, 0, 255);
 
             gDPPipeSync(POLY_OPA_DISP++);
             gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
@@ -1413,7 +1441,7 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
 
                 pauseCtx->infoPanelVtx[21].v.tc[0] = pauseCtx->infoPanelVtx[23].v.tc[0] = 96 * (1 << 5);
 
-                gSPDisplayList(POLY_OPA_DISP++, gAButtonIconDL);
+                POLY_OPA_DISP = KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gAButtonIconDL, BUTTON_PROMPT_PAUSE_A, 24, 16, 0, 255);
 
                 gDPPipeSync(POLY_OPA_DISP++);
                 gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
@@ -1438,7 +1466,7 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
 
             pauseCtx->infoPanelVtx[21].v.tc[0] = pauseCtx->infoPanelVtx[23].v.tc[0] = 96 * (1 << 5);
 
-            gSPDisplayList(POLY_OPA_DISP++, gAButtonIconDL);
+            POLY_OPA_DISP = KaleidoScope_DrawButtonIcon(POLY_OPA_DISP, gAButtonIconDL, BUTTON_PROMPT_PAUSE_A, 24, 16, 0, 255);
 
             gDPPipeSync(POLY_OPA_DISP++);
             gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);

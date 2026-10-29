@@ -8,6 +8,7 @@
 #include "DeveloperTools/CollisionViewer.h"
 #include "2s2h/Enhancements/GfxPatcher/AuthenticGfxPatches.h"
 #include "2s2h/PresetManager/PresetManager.h"
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "HudEditor.h"
 #include "Notification.h"
 #include <variant>
@@ -29,6 +30,10 @@ extern SaveContext gSaveContext;
 }
 extern std::unordered_map<s16, const char*> warpPointSceneList;
 extern void Warp();
+
+static const std::vector<const char*> buttonIconStyleOptions = {
+    "Automatic", "N64", "Xbox", "PlayStation", "Nintendo Switch", "Keyboard",
+};
 
 static const std::unordered_map<int32_t, const char*> menuThemeOptions = {
     { UIWidgets::Colors::Red, "Red" },
@@ -593,6 +598,22 @@ void BenMenu::AddSettings() {
         .CVar("gWindows.BenInputEditor")
         .WindowName("2S2H Input Editor")
         .Options(ButtonOptions().Tooltip("Enables the separate Bindings Window.").Size(Sizes::Inline));
+    AddWidget(path, "Button Icons", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Button Icon Style", WIDGET_CVAR_COMBOBOX)
+        .CVar("gEnhancements.ButtonPrompts.Style")
+        .Options(ComboboxOptions()
+                     .Tooltip("How the game shows its buttons in dialogue, the pause menu, the ocarina and the HUD. "
+                              "Automatic follows the controller or keyboard you used last, and each button is shown "
+                              "as the one it is bound to. N64 keeps the original icons.")
+                     .ComboVec(&buttonIconStyleOptions));
+    AddWidget(path, "Show Buttons on the HUD", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.ButtonPrompts.HudBadges")
+        .Options(CheckboxOptions()
+                     .Tooltip("Small icons on the A, B and C buttons of the HUD with the button that presses them.")
+                     .DefaultValue(true));
+    AddWidget(path, "Icons in use", WIDGET_CUSTOM).CustomFunction([](WidgetInfo& info) {
+        ImGui::Text("%s %s", BenGui::Tr("Icons in use:"), ButtonPrompts::GetActiveStyleName().c_str());
+    });
 
     path.sidebarName = "Overlay";
     path.column = SECTION_COLUMN_1;
@@ -1445,6 +1466,12 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.Cutscenes.FastForwardSpeed")
         .Options(IntSliderOptions().Min(2).Max(8).DefaultValue(5).Tooltip(
             "How many times faster a cutscene plays while B is held."));
+    AddWidget(path, "Show Fast Forward Hint", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Cutscenes.FastForwardHint")
+        .Options(CheckboxOptions()
+                     .Tooltip("Shows \"Hold B to speed up\" in the corner during cutscenes, with the icon of your "
+                              "controller.")
+                     .DefaultValue(true));
 
     // Dialogue Enhancements
     path.column = SECTION_COLUMN_2;

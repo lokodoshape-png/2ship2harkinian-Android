@@ -9,6 +9,17 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-10-29
+- **Ícones de botão conforme o controle** (Configurações > Controles > Ícones dos botões). Os botões aparecem como os do
+  controle usado por último (Xbox, PlayStation, Nintendo Switch ou teclado), e cada botão do N64 é mostrado como o botão
+  a que está ligado no mapeamento.
+  - Valem para os diálogos, os ícones do menu de pausa (A, C, Z e R), as notas da ocarina e uns ícones pequenos nos
+    botões A, B e C do HUD (podem ser desligados).
+  - "Automático" troca sozinho ao mudar de controle. "N64" mantém os ícones originais. Os ícones são desenhados pelo
+    próprio jogo, sem nenhum asset de terceiros.
+- **Aviso "Segure [botão] para acelerar"** no canto da tela durante as cenas, com o ícone do seu controle. Enquanto
+  acelera, mostra "Acelerando". Pode ser desligado em Melhorias > Atalhos.
+- **Textos da tradução PT-BR que o jogo monta sozinho:** "horas" na contagem da lua, os ordinais das fadas perdidas
+  e das Skulltulas ("3a fada", "21o"), as cores das máscaras da Casa da Aranha e os nomes das estátuas da coruja.
 - **Músicas no menu** (Melhorias > Editor de Áudio > Músicas). Em "Escolher pasta de músicas..." você aponta uma pasta
   com as suas faixas (wav, flac, mp3, ogg ou opus). O jogo converte tudo para a pasta `musicas` e mostra uma barra de progresso.
   - Uma faixa com o nome de uma música do jogo (por exemplo `Clock Town Day 1.flac`) toca no lugar dela.

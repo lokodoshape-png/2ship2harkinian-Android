@@ -3,6 +3,7 @@
 #include "assets/interface/nes_font_static/nes_font_static.h"
 #include "assets/interface/message_static/message_static.h"
 #include <string.h>
+#include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 
 // #region 2S2H [Port] Asset tables we can pull from instead of from ROM
 const char* fontTbl[156] = {
@@ -180,8 +181,11 @@ void Font_LoadCharNES(PlayState* play, u8 codePointIndex, s32 offset) {
     Font* font = &msgCtx->font;
 
     int fontIdx = codePointIndex - 0x20;
+    const char* prompt = ButtonPrompts_MessageGlyph(codePointIndex);
 
-    if (fontIdx >= 0 && fontIdx < ARRAY_COUNT(fontTbl)) {
+    if (prompt != NULL) {
+        memcpy(&font->charBuf[font->unk_11D88][offset], prompt, strlen(prompt) + 1);
+    } else if (fontIdx >= 0 && fontIdx < ARRAY_COUNT(fontTbl)) {
         memcpy(&font->charBuf[font->unk_11D88][offset], fontTbl[fontIdx], strlen(fontTbl[fontIdx]) + 1);
     }
 
