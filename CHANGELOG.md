@@ -9,6 +9,9 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-10-29
+- **Android: cada build novo instala por cima do anterior.** Antes cada build era assinado com uma chave diferente e o
+  Android recusava a atualização ("conflito com um pacote já existente"). Na primeira vez com esta versão é preciso
+  desinstalar o app antigo; a pasta `2S2H-MM3D` fica no celular.
 - **Android: controle físico navega nos menus.** Os menus liam só o primeiro controle, que era o virtual dos botões de
   toque; agora leem todos. Ao usar um controle físico os botões de toque somem sozinhos e voltam ao tocar na tela.
 - **Android: menu do 2Ship sem os botões de toque por cima.** Enquanto o menu está aberto os botões de toque somem, então

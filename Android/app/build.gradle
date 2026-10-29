@@ -35,8 +35,19 @@ android {
             }
         }
     }
+    signingConfigs {
+        // A fixed debug key kept in the repository. Without it every CI runner signs with a fresh key, and
+        // Android refuses to install a new build over the last one ("conflito com um pacote já existente").
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
         debug {
+            signingConfig signingConfigs.debug
             // The CI publishes the debug APK, so its native code must still be optimized: at -O0 the
             // on-device ROM extraction (ZAPD) and the game itself run many times slower.
             externalNativeBuild {
