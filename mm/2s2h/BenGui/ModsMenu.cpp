@@ -9,6 +9,7 @@
 #include "2s2h/Language/GameLanguage.h"
 #include "2s2h/Mods/ModInstaller.h"
 #include "2s2h/Enhancements/Audio/MusicFolder.h"
+#include "2s2h/Enhancements/Audio/SequenceMidi.h"
 #include "2s2h/Enhancements/Audio/AudioCollection.h"
 
 namespace BenGui {
@@ -110,6 +111,17 @@ void DrawMusicMenu() {
     if (!status.message.empty()) {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", status.message.c_str());
     }
+    static std::string sModMessage;
+    if (!status.running && !sTracks.empty()) {
+        if (UIWidgets::Button("Export as Mod (.o2r)", UIWidgets::ButtonOptions().Size(UIWidgets::Sizes::Inline))) {
+            MusicFolder::ExportMod(&sModMessage);
+        }
+        ImGui::TextWrapped("%s", Tr("Packs these songs into one mod file. On this device they already play; the mod "
+                                    "is for another device or for sharing, installed through Settings > Mods."));
+        if (!sModMessage.empty()) {
+            ImGui::TextWrapped("%s", sModMessage.c_str());
+        }
+    }
 
     UIWidgets::CVarCheckbox("Play Songs in Place of the Originals", "gEnhancements.Audio.AutoReplaceByName",
                             UIWidgets::CheckboxOptions().DefaultValue(true).Tooltip(
@@ -127,6 +139,23 @@ void DrawMusicMenu() {
             }
         }
     }
+    ImGui::SeparatorText(Tr("Game Songs as MIDI"));
+    ImGui::TextWrapped("%s", Tr("Saves every game song as a MIDI file, already named for the music folder, with a "
+                                "loops.txt of its loop points. Arrange them in any music program, export the audio "
+                                "with the same names and choose that folder above."));
+    const SequenceMidi::ExportStatus midiStatus = SequenceMidi::GetExportStatus();
+    if (midiStatus.running) {
+        ImGui::TextWrapped("%s %d/%d", Tr("Exporting songs"), midiStatus.done, midiStatus.total);
+        ImGui::ProgressBar(midiStatus.total > 0 ? (float)midiStatus.done / midiStatus.total : 0.0f,
+                           ImVec2(-1.0f, 0.0f));
+    } else if (UIWidgets::Button("Export Game Songs (MIDI)",
+                                 UIWidgets::ButtonOptions().Size(UIWidgets::Sizes::Inline))) {
+        SequenceMidi::StartExport(SequenceMidi::GetExportFolder());
+    }
+    if (!midiStatus.message.empty()) {
+        ImGui::TextWrapped("%s", midiStatus.message.c_str());
+    }
+
     if (ImGui::CollapsingHeader(Tr("Game song names"))) {
         if (AudioCollection::Instance != nullptr) {
             for (const auto& [seqId, info] : AudioCollection::Instance->GetAllSequences()) {

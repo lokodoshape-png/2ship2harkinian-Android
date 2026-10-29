@@ -16,6 +16,7 @@
 #include <ship/resource/archive/ArchiveManager.h>
 #include <ship/utils/StringHelper.h>
 #include <ship/utils/StrHash64.h>
+#include <zip.h>
 
 #include <dr_flac.h>
 #include <dr_mp3.h>
@@ -42,7 +43,7 @@ using BenGui::Tr;
 namespace MusicFolder {
 
 static constexpr uint32_t kRate = 48000; // Opus always decodes at 48 kHz
-static constexpr int kBitrate = 96000; // per channel
+static constexpr int kBitrate = 96000;   // per channel
 static constexpr double kPi = 3.14159265358979323846;
 static const char* kIndexName = "faixas.json";
 
@@ -152,55 +153,96 @@ std::vector<Track> GetTracks() {
 
 // ------------------------------------------------------------------ archive
 
-// Serves the library as the files a streamed-audio mod carries (see ResourceFactoryXMLAudioSequenceV0 and
-// louist103/future): custom/music, custom/fonts and custom/samples hold XML, custom/sampleData the Opus data.
+// The files a streamed-audio mod carries for the library (see ResourceFactoryXMLAudioSequenceV0 and louist103/future):
+// custom/music, custom/fonts and custom/samples hold XML, custom/sampleData the Opus data.
+struct LibraryFiles {
+    std::map<std::string, std::string> xml;
+    std::map<std::string, std::string> data; // archive path -> file name in the library folder
+    std::vector<std::string> order;
+};
+
+static std::string Escape(const std::string& text) {
+    std::string out;
+    for (char c : text) {
+        switch (c) {
+            case '&':
+                out += "&amp;";
+                break;
+            case '"':
+                out += "&quot;";
+                break;
+            case '<':
+                out += "&lt;";
+                break;
+            case '>':
+                out += "&gt;";
+                break;
+            default:
+                out += c;
+        }
+    }
+    return out;
+}
+
+static LibraryFiles BuildLibraryFiles(const std::string& folder) {
+    LibraryFiles files;
+    for (const Track& track : ReadIndex(folder)) {
+        const std::string fontPath = "custom/fonts/" + track.name + "_FONT.xml";
+        std::string fontXml = "<SoundFont Version=\"0\" Num=\"0\" Medium=\"Cart\" CachePolicy=\"Either\" "
+                              "Data1=\"511\" Data2=\"3840\" Data3=\"0\">\n<Drums/>\n<Instruments>\n";
+        for (uint32_t ch = 0; ch < track.channels; ch++) {
+            const std::string file = ChannelFile(track, ch);
+            const std::string dataPath = "custom/sampleData/" + file;
+            const std::string samplePath = "custom/samples/" + file + "_SAMPLE.xml";
+            files.data[dataPath] = file;
+            files.xml[samplePath] =
+                "<Sample Version=\"0\" Codec=\"S16\" Medium=\"Cart\" bit26=\"0\" CustomFormat=\"ogg\" "
+                "Size=\"" +
+                std::to_string(track.frames * 2) + "\" Path=\"" + Escape(dataPath) + "\">\n<ADPCMLoop Start=\"" +
+                std::to_string(track.loopStart) + "\" End=\"" + std::to_string(track.loopEnd) + "\" Count=\"" +
+                (track.once ? "0" : "-1") + "\"/>\n</Sample>\n";
+            fontXml += "<Instrument IsValid=\"true\" Loaded=\"false\" NormalRangeLo=\"0\" NormalRangeHi=\"127\" "
+                       "ReleaseRate=\"239\">\n<Envelopes>\n<Envelope Delay=\"1\" Arg=\"32000\"/>\n"
+                       "<Envelope Delay=\"1000\" Arg=\"32000\"/>\n<Envelope Delay=\"-1\" Arg=\"0\"/>\n"
+                       "<Envelope Delay=\"0\" Arg=\"0\"/>\n</Envelopes>\n<NormalNotesSound SampleRef=\"" +
+                       Escape(samplePath) + "\" Tuning=\"1.5\"/>\n</Instrument>\n";
+            files.order.push_back(dataPath);
+            files.order.push_back(samplePath);
+        }
+        fontXml += "</Instruments>\n</SoundFont>\n";
+        files.xml[fontPath] = fontXml;
+        files.order.push_back(fontPath);
+
+        // A streamed sequence names its font by the CRC64 of the font's path, stored byte by byte.
+        uint64_t crc = CRC64(fontPath.c_str());
+        std::string fonts;
+        for (int i = 0; i < 8; i++) {
+            fonts += "<FontIndex FontIdx=\"" + std::to_string(reinterpret_cast<uint8_t*>(&crc)[i]) + "\"/>\n";
+        }
+        const std::string seqPath = "custom/music/" + track.name + "_SEQ.xml" + (track.once ? "_fanfare" : "");
+        files.xml[seqPath] = "<Sequence Index=\"0\" Medium=\"Cart\" CachePolicy=\"Temporary\" Size=\"0\" "
+                             "Streamed=\"true\" Length=\"" +
+                             std::to_string((track.frames + kRate - 1) / kRate) + "\" Looped=\"" +
+                             (track.once ? "false" : "true") + "\" Stereo=\"" +
+                             (track.channels == 2 ? "true" : "false") + "\">\n<FontIndicies>\n" + fonts +
+                             "</FontIndicies>\n</Sequence>\n";
+        files.order.push_back(seqPath);
+    }
+    return files;
+}
+
+// Serves the library as an archive, so it plays without being packed.
 class MusicLibraryArchive final : public Ship::Archive {
   public:
     MusicLibraryArchive(const std::string& folder) : Ship::Archive(folder), mFolder(folder) {
     }
 
     bool Open() override {
-        for (const Track& track : ReadIndex(mFolder)) {
-            const std::string fontPath = "custom/fonts/" + track.name + "_FONT.xml";
-            std::string fontXml = "<SoundFont Version=\"0\" Num=\"0\" Medium=\"Cart\" CachePolicy=\"Either\" "
-                                  "Data1=\"511\" Data2=\"3840\" Data3=\"0\">\n<Drums/>\n<Instruments>\n";
-            for (uint32_t ch = 0; ch < track.channels; ch++) {
-                const std::string file = ChannelFile(track, ch);
-                const std::string dataPath = "custom/sampleData/" + file;
-                const std::string samplePath = "custom/samples/" + file + "_SAMPLE.xml";
-                mData[dataPath] = file;
-                mXml[samplePath] =
-                    "<Sample Version=\"0\" Codec=\"S16\" Medium=\"Cart\" bit26=\"0\" CustomFormat=\"ogg\" "
-                    "Size=\"" +
-                    std::to_string(track.frames * 2) + "\" Path=\"" + Escape(dataPath) + "\">\n<ADPCMLoop Start=\"" +
-                    std::to_string(track.loopStart) + "\" End=\"" + std::to_string(track.loopEnd) + "\" Count=\"" +
-                    (track.once ? "0" : "-1") + "\"/>\n</Sample>\n";
-                fontXml += "<Instrument IsValid=\"true\" Loaded=\"false\" NormalRangeLo=\"0\" NormalRangeHi=\"127\" "
-                           "ReleaseRate=\"239\">\n<Envelopes>\n<Envelope Delay=\"1\" Arg=\"32000\"/>\n"
-                           "<Envelope Delay=\"1000\" Arg=\"32000\"/>\n<Envelope Delay=\"-1\" Arg=\"0\"/>\n"
-                           "<Envelope Delay=\"0\" Arg=\"0\"/>\n</Envelopes>\n<NormalNotesSound SampleRef=\"" +
-                           Escape(samplePath) + "\" Tuning=\"1.5\"/>\n</Instrument>\n";
-                IndexFile(dataPath);
-                IndexFile(samplePath);
-            }
-            fontXml += "</Instruments>\n</SoundFont>\n";
-            mXml[fontPath] = fontXml;
-            IndexFile(fontPath);
-
-            // A streamed sequence names its font by the CRC64 of the font's path, stored byte by byte.
-            uint64_t crc = CRC64(fontPath.c_str());
-            std::string fonts;
-            for (int i = 0; i < 8; i++) {
-                fonts += "<FontIndex FontIdx=\"" + std::to_string(reinterpret_cast<uint8_t*>(&crc)[i]) + "\"/>\n";
-            }
-            const std::string seqPath = "custom/music/" + track.name + "_SEQ.xml" + (track.once ? "_fanfare" : "");
-            mXml[seqPath] = "<Sequence Index=\"0\" Medium=\"Cart\" CachePolicy=\"Temporary\" Size=\"0\" "
-                            "Streamed=\"true\" Length=\"" +
-                            std::to_string((track.frames + kRate - 1) / kRate) + "\" Looped=\"" +
-                            (track.once ? "false" : "true") + "\" Stereo=\"" +
-                            (track.channels == 2 ? "true" : "false") + "\">\n<FontIndicies>\n" + fonts +
-                            "</FontIndicies>\n</Sequence>\n";
-            IndexFile(seqPath);
+        LibraryFiles files = BuildLibraryFiles(mFolder);
+        mXml = std::move(files.xml);
+        mData = std::move(files.data);
+        for (const std::string& path : files.order) {
+            IndexFile(path);
         }
         return !mXml.empty();
     }
@@ -238,32 +280,9 @@ class MusicLibraryArchive final : public Ship::Archive {
     }
 
   private:
-    static std::string Escape(const std::string& text) {
-        std::string out;
-        for (char c : text) {
-            switch (c) {
-                case '&':
-                    out += "&amp;";
-                    break;
-                case '"':
-                    out += "&quot;";
-                    break;
-                case '<':
-                    out += "&lt;";
-                    break;
-                case '>':
-                    out += "&gt;";
-                    break;
-                default:
-                    out += c;
-            }
-        }
-        return out;
-    }
-
     std::string mFolder;
     std::map<std::string, std::string> mXml;
-    std::map<std::string, std::string> mData; // archive path -> file name in the library folder
+    std::map<std::string, std::string> mData;
 };
 
 void Mount() {
@@ -278,6 +297,74 @@ void Mount() {
     if (archive->IsLoaded()) {
         Ship::Context::GetInstance()->GetResourceManager()->GetArchiveManager()->AddArchive(archive);
     }
+}
+
+std::string GetModPath() {
+    return Ship::Context::GetPathRelativeToAppDirectory("musicas-mod", appShortName) + "/Minhas musicas.o2r";
+}
+
+bool ExportMod(std::string* message) {
+    const std::string folder = GetLibraryFolder();
+    LibraryFiles files = BuildLibraryFiles(folder);
+    if (files.xml.empty()) {
+        *message = Tr("The music folder is empty.");
+        return false;
+    }
+    const fs::path out(GetModPath());
+    const fs::path partial = out.string() + ".part";
+    std::error_code ec;
+    fs::create_directories(out.parent_path(), ec);
+    fs::remove(partial, ec);
+
+    int error = 0;
+    zip_t* zip = zip_open(partial.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
+    if (zip == nullptr) {
+        *message = Tr("Could not create the mod file.");
+        return false;
+    }
+    bool ok = true;
+    for (const std::string& path : files.order) {
+        zip_source_t* source = nullptr;
+        bool stored = false;
+        if (auto xml = files.xml.find(path); xml != files.xml.end()) {
+            // zip_close reads the sources, so the text has to outlive this loop: it stays in `files`.
+            source = zip_source_buffer(zip, xml->second.data(), xml->second.size(), 0);
+        } else if (auto data = files.data.find(path); data != files.data.end()) {
+            source = zip_source_file(zip, (fs::path(folder) / data->second).string().c_str(), 0, -1);
+            stored = true; // Opus does not compress any further
+        }
+        zip_int64_t index = source != nullptr ? zip_file_add(zip, path.c_str(), source, ZIP_FL_OVERWRITE) : -1;
+        if (index < 0) {
+            if (source != nullptr) {
+                zip_source_free(source);
+            }
+            ok = false;
+            break;
+        }
+        if (stored) {
+            zip_set_file_compression(zip, (zip_uint64_t)index, ZIP_CM_STORE, 0);
+        }
+    }
+    if (!ok) {
+        zip_discard(zip);
+        fs::remove(partial, ec);
+        *message = Tr("Could not create the mod file.");
+        return false;
+    }
+    if (zip_close(zip) != 0) {
+        zip_discard(zip);
+        fs::remove(partial, ec);
+        *message = Tr("Could not create the mod file.");
+        return false;
+    }
+    fs::rename(partial, out, ec);
+    if (ec) {
+        fs::remove(partial, ec);
+        *message = Tr("Could not create the mod file.");
+        return false;
+    }
+    *message = std::string(Tr("Mod saved to")) + " " + out.string();
+    return true;
 }
 
 // ------------------------------------------------------------------ decoding

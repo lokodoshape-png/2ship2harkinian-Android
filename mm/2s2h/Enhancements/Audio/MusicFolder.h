@@ -50,6 +50,11 @@ void PickFolder();
 // Empties the library. Takes effect on the next launch, like an import.
 void Clear();
 
+// Packs the library into one .o2r with the same songs, names and loop points, to install through Settings > Mods on
+// another device or to share. Writes GetModPath() and returns a message for the menu.
+std::string GetModPath();
+bool ExportMod(std::string* message);
+
 // The original track (label) a song name replaces, and whether that track plays once. Empty if none.
 std::string FindOriginal(const std::string& songName, bool* once);
 

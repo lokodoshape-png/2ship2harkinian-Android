@@ -27,6 +27,15 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
   - Um `loops.txt` na pasta define o ponto de loop, em segundos. Fanfarras e músicas de ocarina tocam uma vez só.
   - No Android a pasta é escolhida pelo seletor do sistema.
   - As músicas ficam em Opus, comprimidas na memória, então dá para usar uma trilha inteira sem pesar.
+- **Músicas do jogo em MIDI** (Melhorias > Editor de Áudio > Músicas > "Exportar músicas do jogo (MIDI)"). Salva cada
+  música do jogo na pasta `musicas-midi` como um `.mid`, já com o nome que a pasta de músicas reconhece.
+  - Cada canal vira uma faixa com o nome do instrumento e um instrumento General MIDI parecido. A percussão vai no
+    canal 10. O andamento é o do jogo.
+  - Junto vai um `loops.txt` com os pontos de loop em segundos. As marcas `loopStart` e `loopEnd` também ficam no MIDI.
+  - Os MIDIs saem da sua própria cópia do jogo e não vêm no download.
+- **Exportar como mod (.o2r)** (na mesma tela). Junta as músicas convertidas, com nomes e loops, num único
+  `Minhas musicas.o2r` na pasta `musicas-mod`. Serve para levar a outro aparelho ou compartilhar as suas gravações,
+  e se instala em Configurações > Mods.
 
 ### 2026-10-28
 - **Renderizador Vulkan (PC)**, escolhido como "Vulkan" na lista de renderizadores.
