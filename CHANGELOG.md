@@ -11,6 +11,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ### 2026-10-29
 - **Android: controle físico navega nos menus.** Os menus liam só o primeiro controle, que era o virtual dos botões de
   toque; agora leem todos. Ao usar um controle físico os botões de toque somem sozinhos e voltam ao tocar na tela.
+- **Android: menu do 2Ship sem os botões de toque por cima.** Enquanto o menu está aberto os botões de toque somem, então
+  todo toque vai para o menu.
 - **Relógio estilo MM3D: número do dia (1, 2, 3) de volta embaixo da barra**, com o dia atual aceso.
 - **Android: barra de porcentagem ao criar o `mm.o2r`.** Mostra quantos arquivos já foram extraídos e avisa quando está
   gravando o arquivo final.

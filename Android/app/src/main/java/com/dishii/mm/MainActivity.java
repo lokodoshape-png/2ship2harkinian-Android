@@ -942,8 +942,12 @@ public class MainActivity extends SDLActivity{
         if (touchButtonGroup == null) {
             return;
         }
-        boolean hidden = controlsHiddenByUser || controlsHiddenForGamepad;
+        boolean menuOpen = !TouchAreaEnabled;
+        boolean hidden = controlsHiddenByUser || controlsHiddenForGamepad || menuOpen;
         touchButtonGroup.setVisibility(hidden ? View.INVISIBLE : View.VISIBLE);
+        if (buttonToggle != null) {
+            buttonToggle.setVisibility(menuOpen ? View.INVISIBLE : View.VISIBLE);
+        }
         // Clear anything the overlay was holding so the game does not see a stuck button or stick.
         if (hidden) {
             for (int button : new int[] { ControllerButtons.BUTTON_A, ControllerButtons.BUTTON_B,
@@ -1029,13 +1033,17 @@ public class MainActivity extends SDLActivity{
         });
     }
 
-    boolean TouchAreaEnabled = true;
+    volatile boolean TouchAreaEnabled = true;
 
+    // Called from the game thread when the 2Ship menu opens or closes. While it is open, the touch controls are
+    // hidden so every tap reaches the menu instead of the buttons drawn over it.
     void DisableTouchArea(){
         TouchAreaEnabled = false;
+        runOnUiThread(this::updateTouchControlsVisibility);
     }
     void EnableTouchArea(){
         TouchAreaEnabled = true;
+        runOnUiThread(this::updateTouchControlsVisibility);
     }
 
     private void setupLookAround(FrameLayout rightScreenArea) {
