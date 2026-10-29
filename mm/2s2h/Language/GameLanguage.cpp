@@ -1,4 +1,5 @@
 #include "GameLanguage.h"
+#include "2s2h/BenPort.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -90,3 +91,14 @@ void OpenPackPicker() {
 #endif
 
 } // namespace GameLanguage
+
+// Whether the game text comes from a Portuguese pack this session (the choice and the packs are read at startup).
+extern "C" int GameLanguage_UsingPortuguese() {
+    static int sUsing = -1;
+    if (sUsing < 0) {
+        sUsing = GameLanguage::GetSaved(appShortName) == GameLanguage::LANGUAGE_PORTUGUESE_BR &&
+                 !GameLanguage::GetPackArchives(appShortName).empty();
+    }
+    return sUsing;
+}
+

@@ -6,6 +6,10 @@
 #include <libultraship/bridge/consolevariablebridge.h>
 #include "2s2h/GameInteractor/GameInteractor.h"
 
+// True when the Brazilian Portuguese language pack is loaded (2s2h/Language/GameLanguage.cpp). The strings the game
+// builds in code (owl statue names, ordinals, mask colors, hours) then use the pack's own spelling and font bytes.
+int GameLanguage_UsingPortuguese(void);
+
 f32 sNESFontWidths[160] = {
     8.0f,  8.0f,  6.0f,  9.0f,  9.0f,  14.0f, 12.0f, 3.0f,  7.0f,  7.0f,  7.0f,  9.0f,  4.0f,  6.0f,  4.0f,  9.0f,
     10.0f, 5.0f,  9.0f,  9.0f,  10.0f, 9.0f,  9.0f,  9.0f,  9.0f,  9.0f,  6.0f,  6.0f,  9.0f,  11.0f, 9.0f,  11.0f,
@@ -271,6 +275,20 @@ char sOwlWarpTextENG[OWL_WARP_MAX][16] = {
     ENTRANCE_STR,         // OWL_WARP_ENTRANCE
 };
 
+// Same order as above. \xA1 = í, \xA6 = ó and \x99 = â in the pack's font.
+#define OWL_WARP_TEXT_POR(str) { str, sizeof(str) - 1 }
+static const struct {
+    char text[24];
+    s16 length;
+} sOwlWarpTextPOR[OWL_WARP_MAX] = {
+    OWL_WARP_TEXT_POR("Costa da Grande Ba\xA1" "a"), OWL_WARP_TEXT_POR("Cabo Zora"),
+    OWL_WARP_TEXT_POR("Pico Nevado"),                 OWL_WARP_TEXT_POR("Vilarejo da Montanha"),
+    OWL_WARP_TEXT_POR("Cidade do Rel\xA6gio"),        OWL_WARP_TEXT_POR("Estrada do Leite"),
+    OWL_WARP_TEXT_POR("Floresta Ca\xA1" "da"),        OWL_WARP_TEXT_POR("P\x99ntano do Sul"),
+    OWL_WARP_TEXT_POR("Desfiladeiro de Ikana"),       OWL_WARP_TEXT_POR("Torre de Pedra"),
+    OWL_WARP_TEXT_POR("Entrada"),
+};
+
 s16 sOwlWarpTextLengthENG[OWL_WARP_MAX] = {
     sizeof(GREAT_BAY_COAST_STR) - 1,  // OWL_WARP_GREAT_BAY_COAST
     sizeof(ZORA_CAPE_STR) - 1,        // OWL_WARP_ZORA_CAPE
@@ -294,19 +312,26 @@ void Message_LoadOwlWarpTextNES(PlayState* play, s32* offset, f32* arg2, s16* de
     u8 curChar;
     s16 owlWarpId;
     s16 stringLimit;
+    const char* text;
 
     if (Map_CurRoomHasMapI(play) || (play->sceneId == SCENE_SECOM)) {
         owlWarpId = OWL_WARP_ENTRANCE;
     } else {
         owlWarpId = play->pauseCtx.cursorPoint[PAUSE_WORLD_MAP];
     }
-    stringLimit = sOwlWarpTextLengthENG[owlWarpId];
+    if (GameLanguage_UsingPortuguese()) {
+        text = sOwlWarpTextPOR[owlWarpId].text;
+        stringLimit = sOwlWarpTextPOR[owlWarpId].length;
+    } else {
+        text = sOwlWarpTextENG[owlWarpId];
+        stringLimit = sOwlWarpTextLengthENG[owlWarpId];
+    }
 
     for (i = 0; i < stringLimit; i++) {
-        msgCtx->decodedBuffer.schar[p] = sOwlWarpTextENG[owlWarpId][i];
+        msgCtx->decodedBuffer.schar[p] = text[i];
         curChar = msgCtx->decodedBuffer.schar[p];
         if (curChar != ' ') {
-            Font_LoadCharNES(play, sOwlWarpTextENG[owlWarpId][i], o);
+            Font_LoadCharNES(play, text[i], o);
             o += FONT_CHAR_TEX_SIZE;
         }
         curChar = msgCtx->decodedBuffer.schar[p];
@@ -1025,6 +1050,8 @@ char sMaskCodeTextENG[][6] = {
     GREEN_STR,
 };
 
+static const char sMaskCodeTextPOR[][9] = { "VERMELHO", "AZUL", "AMARELO", "VERDE" };
+
 u8 sMaskCodeTextLengthENG[] = {
     sizeof(RED_STR) - 1,
     sizeof(BLUE_STR) - 1,
@@ -1381,7 +1408,10 @@ void Message_DecodeNES(PlayState* play) {
                 }
             }
 
-            if ((gSaveContext.save.saveInfo.inventory.strayFairies[(void)0, gSaveContext.dungeonSceneSharedIndex] ==
+            if (GameLanguage_UsingPortuguese()) {
+                // The font has no ª/º, so "3a fada".
+                Message_LoadCharNES(play, 'a', &charTexIndex, &spA4, decodedBufPos);
+            } else if ((gSaveContext.save.saveInfo.inventory.strayFairies[(void)0, gSaveContext.dungeonSceneSharedIndex] ==
                  1) ||
                 (gSaveContext.save.saveInfo.inventory.strayFairies[(void)0, gSaveContext.dungeonSceneSharedIndex] ==
                  21)) {
@@ -1431,7 +1461,10 @@ void Message_DecodeNES(PlayState* play) {
                 }
             }
 
-            if ((Inventory_GetSkullTokenCount(play->sceneId) == 1) ||
+            if (GameLanguage_UsingPortuguese()) {
+                // The font has no ª/º, so "3a Skulltula".
+                Message_LoadCharNES(play, 'o', &charTexIndex, &spA4, decodedBufPos);
+            } else if ((Inventory_GetSkullTokenCount(play->sceneId) == 1) ||
                 (Inventory_GetSkullTokenCount(play->sceneId) == 21)) {
                 Message_LoadCharNES(play, 's', &charTexIndex, &spA4, decodedBufPos);
                 decodedBufPos++;
@@ -1704,14 +1737,15 @@ void Message_DecodeNES(PlayState* play) {
             msgCtx->decodedBuffer.schar[decodedBufPos++] = sMaskCodeColorCmdENG[(
                 (void)0,
                 gSaveContext.save.saveInfo.spiderHouseMaskOrder[(s16)(curChar - MESSAGE_SPIDER_HOUSE_MASK_CODE_1)])];
-            index = sMaskCodeTextLengthENG[((void)0, gSaveContext.save.saveInfo.spiderHouseMaskOrder[(
-                                                         s16)(curChar - MESSAGE_SPIDER_HOUSE_MASK_CODE_1)])];
-            for (playerNameLen = 0; playerNameLen < index; playerNameLen++, decodedBufPos++) {
-                Message_LoadCharNES(
-                    play,
-                    sMaskCodeTextENG[((void)0, gSaveContext.save.saveInfo.spiderHouseMaskOrder[(
-                                                   s16)(curChar - MESSAGE_SPIDER_HOUSE_MASK_CODE_1)])][playerNameLen],
-                    &charTexIndex, &spA4, decodedBufPos);
+            {
+                s32 color =
+                    gSaveContext.save.saveInfo.spiderHouseMaskOrder[(s16)(curChar - MESSAGE_SPIDER_HOUSE_MASK_CODE_1)];
+                const char* text = GameLanguage_UsingPortuguese() ? sMaskCodeTextPOR[color] : sMaskCodeTextENG[color];
+
+                index = GameLanguage_UsingPortuguese() ? strlen(text) : sMaskCodeTextLengthENG[color];
+                for (playerNameLen = 0; playerNameLen < index; playerNameLen++, decodedBufPos++) {
+                    Message_LoadCharNES(play, text[playerNameLen], &charTexIndex, &spA4, decodedBufPos);
+                }
             }
 
             msgCtx->decodedBuffer.schar[decodedBufPos] = 0;
@@ -1739,13 +1773,23 @@ void Message_DecodeNES(PlayState* play) {
             }
             msgCtx->decodedBuffer.schar[decodedBufPos] = ' ';
             decodedBufPos++;
-            Message_LoadCharNES(play, 'h', &charTexIndex, &spA4, decodedBufPos);
-            decodedBufPos++;
-            Message_LoadCharNES(play, 'o', &charTexIndex, &spA4, decodedBufPos);
-            decodedBufPos++;
-            Message_LoadCharNES(play, 'u', &charTexIndex, &spA4, decodedBufPos);
-            decodedBufPos++;
-            Message_LoadCharNES(play, 'r', &charTexIndex, &spA4, decodedBufPos);
+            if (GameLanguage_UsingPortuguese()) {
+                Message_LoadCharNES(play, 'h', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'o', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'r', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'a', &charTexIndex, &spA4, decodedBufPos);
+            } else {
+                Message_LoadCharNES(play, 'h', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'o', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'u', &charTexIndex, &spA4, decodedBufPos);
+                decodedBufPos++;
+                Message_LoadCharNES(play, 'r', &charTexIndex, &spA4, decodedBufPos);
+            }
             if ((digits[0] != 0) || (digits[1] != 1)) {
                 decodedBufPos++;
                 Message_LoadCharNES(play, 's', &charTexIndex, &spA4, decodedBufPos);
