@@ -605,8 +605,16 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     std::string curdir = std::filesystem::current_path().string();
 #if defined(_WIN32) || defined(__ANDROID__)
     // Shared storage on Android does not allow symlinks.
+    std::error_code copyError;
     std::filesystem::copy(installPath + "/assets", tempdir + "/assets",
-                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::update_existing);
+                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::update_existing,
+                          copyError);
+    if (copyError) {
+        std::string message = "Não foi possível copiar os arquivos do extrator (" + installPath +
+                              "/assets): " + copyError.message();
+        ShowErrorBox("Erro na extração", message.c_str());
+        exit(1);
+    }
 #else
     std::filesystem::create_symlink(installPath + "/assets", tempdir + "/assets");
 #endif
@@ -653,14 +661,56 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     mbThread.detach();
 #endif
 
-    zapd_main(argc, (char**)argv.data());
+#ifdef __ANDROID__
+    // Android has no console: ZAPD's output goes to a file in the data folder, unbuffered so it is complete even if
+    // the extraction stops halfway.
+    const std::string logPath = exportdir + "/extracao.log";
+    if (freopen(logPath.c_str(), "w", stdout) != nullptr) {
+        setvbuf(stdout, nullptr, _IONBF, 0);
+        dup2(fileno(stdout), fileno(stderr));
+    }
+    printf("ROM: %s\nAssets: %s\nVersion: %s\n", romPath.c_str(), installPath.c_str(), version);
+#endif
+
+    // ZAPD reports a failure by throwing. Uncaught, that closes the app without a word.
+    std::string failure;
+    try {
+        if (zapd_main(argc, (char**)argv.data()) != 0) {
+            failure = "O ZAPD terminou com erro.";
+        }
+    } catch (const std::exception& e) {
+        failure = e.what();
+    } catch (...) {
+        failure = "Erro desconhecido no ZAPD.";
+    }
 
 #ifdef _WIN32
     // Hide the command window again.
     ShowWindow(cmdWindow, SW_HIDE);
 #endif
 
-    std::filesystem::copy(otrFile, exportdir + "/" + otrFile, std::filesystem::copy_options::overwrite_existing);
+    std::error_code ec;
+    if (failure.empty() && !std::filesystem::exists(otrFile, ec)) {
+        failure = "O ZAPD terminou sem criar o mm.o2r.";
+    }
+    if (failure.empty()) {
+        std::filesystem::copy(otrFile, exportdir + "/" + otrFile, std::filesystem::copy_options::overwrite_existing,
+                              ec);
+        if (ec) {
+            failure = "Não foi possível copiar o mm.o2r para " + exportdir + ": " + ec.message();
+        }
+    }
+    if (!failure.empty()) {
+        printf("Falha: %s\n", failure.c_str());
+        std::filesystem::current_path(curdir, ec);
+        std::filesystem::remove_all(tempdir, ec);
+        std::string message = "A criação do mm.o2r falhou:\n\n" + failure;
+#ifdef __ANDROID__
+        message += "\n\nO registro completo está em " + logPath;
+#endif
+        ShowErrorBox("Erro na extração", message.c_str());
+        exit(1);
+    }
 
     // Go back to where this game was executed from
     std::filesystem::current_path(curdir);

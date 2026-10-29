@@ -203,9 +203,10 @@ public class MainActivity extends SDLActivity{
         File sohOtrFile = new File(targetRootFolder, "2ship.o2r");
 
         // Extractor assets from before the 4.0 base have no xml folder; the 4.0 extractor cannot use them.
-        boolean isMissingAssets = !new File(assetsFolder, "xml").isDirectory() || assetsFolder.listFiles() == null
-                || assetsFolder.listFiles().length == 0;
-        boolean isMissingSohOtr = !sohOtrFile.exists();
+        boolean isMissingAssets = !new File(assetsFolder, "xml").isDirectory()
+                || !new File(assetsFolder, "filelists").isDirectory()
+                || !new File(assetsFolder, "Config_N64_US.xml").isFile();
+        boolean isMissingSohOtr = !sohOtrFile.isFile() || sohOtrFile.length() == 0;
 
         if (!targetRootFolder.exists() || isMissingAssets || isMissingSohOtr) {
             new AlertDialog.Builder(this)
@@ -279,9 +280,9 @@ public class MainActivity extends SDLActivity{
         // Copy assets/ from internal
         File targetAssetsDir = new File(targetRootFolder, "assets");
         try {
-            if (!targetAssetsDir.exists()) {
-                targetAssetsDir.mkdirs();
-            }
+            // Start from an empty folder, so nothing from an older version is mixed in.
+            deleteRecursiveIfExists(targetAssetsDir);
+            targetAssetsDir.mkdirs();
             AssetCopyUtil.copyAssetsToExternal(this, "assets", targetAssetsDir.getAbsolutePath());
             runOnUiThread(() -> Toast.makeText(this, "Arquivos copiados", Toast.LENGTH_SHORT).show());
         } catch (IOException e) {
