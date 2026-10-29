@@ -49,6 +49,10 @@ class AudioCollection {
 
     std::map<SeqType, size_t> mSequenceTypeCounts;
 
+    // Custom sequences named after an original one ("Clock Town Day 1" or "NA_BGM_CLOCK_TOWN_DAY_1") replace it
+    // unless the player picked something else in the audio editor. Original id -> custom id.
+    std::map<uint16_t, uint16_t> mAutoReplacements;
+
   public:
     static AudioCollection* Instance;
     AudioCollection();
@@ -65,6 +69,7 @@ class AudioCollection {
     void RemoveFromShufflePool(SequenceInfo*);
     void AddToCollection(char* otrPath, uint16_t seqNum);
     uint16_t GetReplacementSequence(uint16_t seqId);
+    uint16_t GetDefaultReplacement(uint16_t seqId);
     uint16_t GetOriginalSequence(uint16_t seqId);
     void InitializeShufflePool();
     const char* GetSequenceName(uint16_t seqId);

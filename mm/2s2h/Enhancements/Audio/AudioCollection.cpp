@@ -4,6 +4,7 @@
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <ship/window/Window.h>
 #include <2s2h/BenPort.h>
+#include <cctype>
 #include <locale>
 #include <filesystem>
 
@@ -260,6 +261,32 @@ void AudioCollection::AddToCollection(char* otrPath, uint16_t seqNum) {
                           false,
                           true };
     mSequenceMap.emplace(seqNum, info);
+
+    auto normalize = [](const std::string& name) {
+        std::string out;
+        for (char c : name) {
+            if (std::isalnum(static_cast<unsigned char>(c))) {
+                out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+        }
+        return out;
+    };
+    const std::string wanted = normalize(sequenceName);
+    for (const auto& [seqId, original] : mSequenceMap) {
+        if (seqId > GetMaxOriginalSeqId() || !original.canBeReplaced) {
+            continue;
+        }
+        bool sameKind = (type == SEQ_BGM_CUSTOM_FANFARE) == ((original.category & SEQ_BGM_CUSTOM_FANFARE) != 0);
+        if (sameKind && (normalize(original.label) == wanted || normalize(original.sfxKey) == wanted)) {
+            mAutoReplacements.try_emplace(seqId, seqNum);
+            break;
+        }
+    }
+}
+
+uint16_t AudioCollection::GetDefaultReplacement(uint16_t seqId) {
+    auto it = mAutoReplacements.find(seqId);
+    return it != mAutoReplacements.end() ? it->second : seqId;
 }
 
 uint16_t AudioCollection::GetReplacementSequence(uint16_t seqId) {
@@ -269,7 +296,7 @@ uint16_t AudioCollection::GetReplacementSequence(uint16_t seqId) {
 
     const auto& sequenceInfo = mSequenceMap.at(seqId);
     const std::string cvarKey = GetCvarKey(sequenceInfo.sfxKey);
-    int replacementSeq = CVarGetInteger(cvarKey.c_str(), seqId);
+    int replacementSeq = CVarGetInteger(cvarKey.c_str(), GetDefaultReplacement(seqId));
     if (!mSequenceMap.contains(replacementSeq)) {
         replacementSeq = seqId;
     }
@@ -287,7 +314,9 @@ uint16_t AudioCollection::GetOriginalSequence(uint16_t seqId) {
 
     for (const auto& a : mSequenceMap) {
         const std::string cvarKey = GetCvarKey(a.second.sfxKey);
-        int replacementSeq = CVarGetInteger(cvarKey.c_str(), NA_BGM_DISABLED);
+        auto autoIt = mAutoReplacements.find(a.first);
+        int replacementSeq =
+            CVarGetInteger(cvarKey.c_str(), autoIt != mAutoReplacements.end() ? autoIt->second : NA_BGM_DISABLED);
         if (replacementSeq == seqId) {
             return a.first;
         }

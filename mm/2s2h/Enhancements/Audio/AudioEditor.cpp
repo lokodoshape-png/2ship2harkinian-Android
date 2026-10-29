@@ -387,7 +387,8 @@ void Draw_SfxTab(const std::string& tabId, SeqType type) {
         const std::string randomizeButton = ICON_FA_RANDOM + hiddenKey;
         const std::string lockedButton = ICON_FA_LOCK + hiddenKey;
         const std::string unlockedButton = ICON_FA_UNLOCK + hiddenKey;
-        const int currentValue = CVarGetInteger(cvarKey.c_str(), defaultValue);
+        const int currentValue =
+            CVarGetInteger(cvarKey.c_str(), AudioCollection::Instance->GetDefaultReplacement(defaultValue));
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
