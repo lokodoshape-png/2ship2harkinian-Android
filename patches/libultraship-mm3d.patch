@@ -489,6 +489,31 @@ index de38dd2f..b0871f74 100644
 +#endif
  };
  }; // namespace Ship
+diff --git a/include/ship/resource/ResourceManager.h b/include/ship/resource/ResourceManager.h
+index aed8d59c..6c965125 100644
+--- a/include/ship/resource/ResourceManager.h
++++ b/include/ship/resource/ResourceManager.h
+@@ -130,6 +130,7 @@ class ResourceManager {
+     std::shared_ptr<IResource> GetCachedResource(std::variant<ResourceLoadError, std::shared_ptr<IResource>> cacheLine);
+ 
+   private:
++    bool AltAssetWins(const std::string& path);
+     std::unordered_map<ResourceIdentifier, std::variant<ResourceLoadError, std::shared_ptr<IResource>>,
+                        ResourceIdentifierHash>
+         mResourceCache;
+diff --git a/include/ship/resource/archive/ArchiveManager.h b/include/ship/resource/archive/ArchiveManager.h
+index 813b0338..f01701d7 100644
+--- a/include/ship/resource/archive/ArchiveManager.h
++++ b/include/ship/resource/archive/ArchiveManager.h
+@@ -35,6 +35,8 @@ class ArchiveManager {
+     bool HasFile(uint64_t hash);
+     std::shared_ptr<Archive>
+     GetArchiveFromFile(const std::string& filePath); // Retrieves a ptr to the archive that the asset is inside of
++    // Position, in load order, of the archive that serves the file; -1 when no archive has it.
++    int32_t GetArchiveOrder(const std::string& filePath);
+     std::shared_ptr<std::vector<std::string>> ListFiles(const std::string& searchMask = "");
+     std::shared_ptr<std::vector<std::string>> ListFiles(const std::list<std::string>& includes,
+                                                         const std::list<std::string>& excludes);
 diff --git a/include/ship/window/Window.h b/include/ship/window/Window.h
 index b7dca53e..6998b9fe 100644
 --- a/include/ship/window/Window.h
@@ -4919,6 +4944,75 @@ index 34391d1b..c6e573fc 100644
 +    SDL_JoystickSetVirtualAxis(sVirtualJoystick, axis, value);
 +}
 +#endif
+diff --git a/src/ship/resource/ResourceManager.cpp b/src/ship/resource/ResourceManager.cpp
+index 5c76ac33..0b04231f 100644
+--- a/src/ship/resource/ResourceManager.cpp
++++ b/src/ship/resource/ResourceManager.cpp
+@@ -79,6 +79,16 @@ std::shared_ptr<File> ResourceManager::LoadFileProcess(const std::string& filePa
+     return file;
+ }
+ 
++// An alternate (alt/) asset is used unless a later archive replaces the standard one: a translation or other mod
++// loaded after an HD pack keeps its own version of the textures it changes.
++bool ResourceManager::AltAssetWins(const std::string& path) {
++    int32_t standard = mArchiveManager->GetArchiveOrder(path);
++    if (standard < 0) {
++        return true;
++    }
++    return mArchiveManager->GetArchiveOrder(IResource::gAltAssetPrefix + path) >= standard;
++}
++
+ std::shared_ptr<File> ResourceManager::LoadFileProcess(const ResourceIdentifier& identifier) {
+     if (identifier.Parent == nullptr) {
+         return LoadFileProcess(identifier.Path);
+@@ -103,7 +113,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResourceProcess(const ResourceId
+ 
+     // Attempt to load the alternate version of the asset, if we fail then we continue trying to load the standard
+     // asset.
+-    if (!loadExact && mAltAssetsEnabled && !identifier.Path.starts_with(IResource::gAltAssetPrefix)) {
++    if (!loadExact && mAltAssetsEnabled && !identifier.Path.starts_with(IResource::gAltAssetPrefix) &&
++        AltAssetWins(identifier.Path)) {
+         const auto altPath = IResource::gAltAssetPrefix + identifier.Path;
+         auto altResource = LoadResourceProcess({ altPath, identifier.Owner, identifier.Parent }, loadExact, initData);
+ 
+@@ -240,7 +251,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResource(uint64_t crc, bool load
+ 
+ std::variant<ResourceManager::ResourceLoadError, std::shared_ptr<IResource>>
+ ResourceManager::CheckCache(const ResourceIdentifier& identifier, bool loadExact) {
+-    if (!loadExact && mAltAssetsEnabled && !identifier.Path.starts_with(IResource::gAltAssetPrefix)) {
++    if (!loadExact && mAltAssetsEnabled && !identifier.Path.starts_with(IResource::gAltAssetPrefix) &&
++        AltAssetWins(identifier.Path)) {
+         const auto altPath = IResource::gAltAssetPrefix + identifier.Path;
+         auto altCacheResult = CheckCache({ altPath, identifier.Owner, identifier.Parent }, loadExact);
+ 
+diff --git a/src/ship/resource/archive/ArchiveManager.cpp b/src/ship/resource/archive/ArchiveManager.cpp
+index 80a38853..7a1d5170 100644
+--- a/src/ship/resource/archive/ArchiveManager.cpp
++++ b/src/ship/resource/archive/ArchiveManager.cpp
+@@ -1,5 +1,7 @@
+ #include "ship/resource/archive/ArchiveManager.h"
+ 
++#include <algorithm>
++
+ #include <filesystem>
+ #include "spdlog/spdlog.h"
+ 
+@@ -64,6 +66,15 @@ bool ArchiveManager::HasFile(uint64_t hash) {
+     return mFileToArchive.count(hash) > 0;
+ }
+ 
++int32_t ArchiveManager::GetArchiveOrder(const std::string& filePath) {
++    auto it = mFileToArchive.find(CRC64(filePath.c_str()));
++    if (it == mFileToArchive.end() || it->second == nullptr) {
++        return -1;
++    }
++    auto pos = std::find(mArchives.begin(), mArchives.end(), it->second);
++    return pos == mArchives.end() ? -1 : (int32_t)(pos - mArchives.begin());
++}
++
+ std::shared_ptr<Archive> ArchiveManager::GetArchiveFromFile(const std::string& filePath) {
+     return mFileToArchive[CRC64(filePath.c_str())];
+ }
 diff --git a/src/ship/window/gui/GameOverlay.cpp b/src/ship/window/gui/GameOverlay.cpp
 index 8819c392..01bee2f2 100644
 --- a/src/ship/window/gui/GameOverlay.cpp
@@ -4935,10 +5029,19 @@ index 8819c392..01bee2f2 100644
              const float textWidth = GetStringWidth(overlay.Value.c_str());
              const float textOffset = 40.0f;
 diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
-index 17f0c2b0..d114b096 100644
+index 17f0c2b0..b5bf96ae 100644
 --- a/src/ship/window/gui/Gui.cpp
 +++ b/src/ship/window/gui/Gui.cpp
-@@ -31,7 +31,7 @@
+@@ -2,6 +2,8 @@
+ 
+ #include "ship/window/gui/Gui.h"
+ 
++#include <algorithm>
++
+ #include <cstring>
+ #include <utility>
+ #include <string>
+@@ -31,7 +33,7 @@
  #endif
  
  #if defined(__ANDROID__) || defined(__IOS__)
@@ -4947,7 +5050,7 @@ index 17f0c2b0..d114b096 100644
  #endif
  
  #ifdef ENABLE_OPENGL
-@@ -40,6 +40,11 @@
+@@ -40,6 +42,11 @@
  
  #endif
  
@@ -4959,21 +5062,31 @@ index 17f0c2b0..d114b096 100644
  #if defined(ENABLE_DX11) || defined(ENABLE_DX12)
  #include <imgui_impl_dx11.h>
  #include <imgui_impl_win32.h>
-@@ -128,9 +133,10 @@ void Gui::Init(GuiWindowInitData windowImpl) {
+@@ -128,9 +135,20 @@ void Gui::Init(GuiWindowInitData windowImpl) {
                                                            &iconsConfig, sIconsRanges);
  
  #if defined(__ANDROID__)
 -    // Scale everything by 2 for Android
 -    ImGui::GetStyle().ScaleAllSizes(2.0f);
 -    mImGuiIo->FontGlobalScale = 2.0f;
-+    // Scale everything by 3 for Android phones, and let the touch overlay's controller drive the menus.
-+    ImGui::GetStyle().ScaleAllSizes(3.0f);
-+    mImGuiIo->FontGlobalScale = 3.0f;
++    // Scale the UI for the phone's screen density (about 2.2 on a typical phone), and let the touch overlay's
++    // controller drive the menus. gSettings.Android.UISize (0 automatic, 1 to 4 from small to very large)
++    // overrides it; it applies on the next launch.
++    static const float kSizes[] = { 0.0f, 1.5f, 2.0f, 2.5f, 3.0f };
++    int32_t size = Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger("gSettings.Android.UISize", 0);
++    float uiScale = kSizes[std::clamp(size, 0, 4)];
++    if (uiScale <= 0.0f) {
++        float ddpi = 0.0f;
++        uiScale = SDL_GetDisplayDPI(0, &ddpi, nullptr, nullptr) == 0 && ddpi > 0.0f ? ddpi / 160.0f * 0.8f : 2.2f;
++        uiScale = std::clamp(uiScale, 1.5f, 3.0f);
++    }
++    ImGui::GetStyle().ScaleAllSizes(uiScale);
++    mImGuiIo->FontGlobalScale = uiScale;
 +    Ship::Context::GetInstance()->GetConsoleVariables()->SetInteger(CVAR_IMGUI_CONTROLLER_NAV, 1);
  #endif
  
      auto imguiIniPath = Context::GetPathRelativeToAppDirectory("imgui.ini");
-@@ -174,6 +180,13 @@ void Gui::ImGuiWMInit() {
+@@ -174,6 +192,13 @@ void Gui::ImGuiWMInit() {
              SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
              ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mImpl.Opengl.Window), mImpl.Opengl.Context);
              break;
@@ -4987,7 +5100,7 @@ index 17f0c2b0..d114b096 100644
  #if __APPLE__
          case WindowBackend::FAST3D_SDL_METAL:
              SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
-@@ -205,6 +218,12 @@ void Gui::ShutDownImGui(Ship::Window* window) {
+@@ -205,6 +230,12 @@ void Gui::ShutDownImGui(Ship::Window* window) {
              ImGui_ImplMetal_Shutdown();
              break;
  #endif
@@ -5000,7 +5113,7 @@ index 17f0c2b0..d114b096 100644
  #if defined(ENABLE_DX11) || defined(ENABLE_DX12)
          case WindowBackend::FAST3D_DXGI_DX11:
              ImGui_ImplWin32_Shutdown();
-@@ -288,6 +307,9 @@ bool Gui::SupportsViewports() {
+@@ -288,6 +319,9 @@ bool Gui::SupportsViewports() {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
              return true;
@@ -5010,7 +5123,7 @@ index 17f0c2b0..d114b096 100644
          default:
              return false;
      }
-@@ -297,6 +319,7 @@ void Gui::HandleWindowEvents(WindowEvent event) {
+@@ -297,6 +331,7 @@ void Gui::HandleWindowEvents(WindowEvent event) {
      switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
@@ -5018,7 +5131,7 @@ index 17f0c2b0..d114b096 100644
              ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(event.Sdl.Event));
  #if defined(__ANDROID__) || defined(__IOS__)
              Mobile::ImGuiProcessEvent(mImGuiIo->WantTextInput);
-@@ -355,6 +378,12 @@ void Gui::ImGuiBackendNewFrame() {
+@@ -355,6 +390,12 @@ void Gui::ImGuiBackendNewFrame() {
              break;
  #endif
  
@@ -5031,7 +5144,7 @@ index 17f0c2b0..d114b096 100644
  #ifdef __APPLE__
          case WindowBackend::FAST3D_SDL_METAL: {
              Fast::GfxRenderingAPIMetal* api =
-@@ -373,6 +402,7 @@ void Gui::ImGuiWMNewFrame() {
+@@ -373,6 +414,7 @@ void Gui::ImGuiWMNewFrame() {
      switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
@@ -5039,7 +5152,7 @@ index 17f0c2b0..d114b096 100644
              ImGui_ImplSDL2_NewFrame();
              break;
  #ifdef ENABLE_DX11
-@@ -540,6 +570,12 @@ void Gui::DrawMenu() {
+@@ -540,6 +582,12 @@ void Gui::DrawMenu() {
  
      ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_NoDockingInCentralNode);
  
@@ -5052,7 +5165,7 @@ index 17f0c2b0..d114b096 100644
      if (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
          (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
           Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0))) {
-@@ -565,6 +601,18 @@ void Gui::DrawMenu() {
+@@ -565,6 +613,18 @@ void Gui::DrawMenu() {
          }
      }
  
@@ -5071,7 +5184,7 @@ index 17f0c2b0..d114b096 100644
      // Mac interprets this as cmd+r when io.ConfigMacOSXBehavior is on (on by default)
      if ((ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) &&
          ImGui::IsKeyPressed(ImGuiKey_R, false)) {
-@@ -872,6 +920,13 @@ void Gui::ImGuiRenderDrawData(ImDrawData* data) {
+@@ -872,6 +932,13 @@ void Gui::ImGuiRenderDrawData(ImDrawData* data) {
              ImGui_ImplDX11_RenderDrawData(data);
              break;
  #endif

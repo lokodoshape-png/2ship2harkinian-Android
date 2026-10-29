@@ -20,3 +20,36 @@ index 6c05733..a455b29 100644
  void ErrorHandler(int sig)
  {
  	std::array<void*, 4096> arr;
+diff --git a/ZAPD/Main.cpp b/ZAPD/Main.cpp
+index 4598da9..74d9376 100644
+--- a/ZAPD/Main.cpp
++++ b/ZAPD/Main.cpp
+@@ -137,6 +137,12 @@ int ExtractFunc(int workerID, int fileListSize, std::string fileListItem, ZFileM
+ 
+ std::atomic<unsigned int> numWorkersLeft = 0;
+ 
++// Progress of an extraction, read by the game's extractor to show a progress bar.
++extern "C" {
++volatile int gZapdFilesDone = 0;
++volatile int gZapdFilesTotal = 0;
++}
++
+ extern const char gBuildHash[];
+ 
+ extern void ImportExporters();
+@@ -666,12 +672,15 @@ int HandleExtract(ZFileMode fileMode, ExporterSet* exporterSet)
+ 					Globals::Instance->workerData[i] = new FileWorker();
+ 
+ 				numWorkersLeft = fileListSize;
++				gZapdFilesDone = 0;
++				gZapdFilesTotal = (int)fileListSize;
+ 
+ 				for (size_t i = 0; i < fileListSize; i++)
+ 				{
+ 					if (Globals::Instance->singleThreaded)
+ 					{
+ 						ExtractFunc(i, fileList.size(), fileList[i], fileMode);
++						gZapdFilesDone = (int)i + 1;
+ 					}
+ 					else
+ 					{

@@ -18,6 +18,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
@@ -37,6 +43,10 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.view.Gravity;
 
 //This class is the main SDLActivity and just sets up a bunch of default files and the input overlay
 public class MainActivity extends SDLActivity{
@@ -52,6 +62,7 @@ public class MainActivity extends SDLActivity{
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
+        startStartupLog();
         preferences = getSharedPreferences("com.dishii.mm.prefs",Context.MODE_PRIVATE);
 
         // Check if storage permissions are granted
@@ -65,6 +76,95 @@ public class MainActivity extends SDLActivity{
 
         setupControllerOverlay();
         attachController();
+    }
+
+    // <data folder>/inicio.log: each launch starts it, the native side (mm/2s2h/Android/StartupLog.cpp) adds to it.
+    // Without it, a crash before the game's own log opens leaves nothing to look at.
+    private static final String STARTUP_LOG = "inicio.log";
+
+    private void startStartupLog() {
+        File log = new File(new File(Environment.getExternalStorageDirectory(), DATA_FOLDER), STARTUP_LOG);
+        log.delete();
+        startupLog("App aberto: versão " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + "), Android "
+                + Build.VERSION.RELEASE + ", " + Build.MANUFACTURER + " " + Build.MODEL);
+        Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            StringWriter trace = new StringWriter();
+            error.printStackTrace(new PrintWriter(trace));
+            startupLog("FECHOU (Java, " + thread.getName() + "): " + trace);
+            if (previous != null) {
+                previous.uncaughtException(thread, error);
+            }
+        });
+    }
+
+    static synchronized void startupLog(String line) {
+        Log.i("2ShipStartup", line);
+        File folder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
+        try (FileWriter out = new FileWriter(new File(folder, STARTUP_LOG), true)) {
+            String time = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+            out.write("[" + time + "] " + line + "\n");
+        } catch (IOException e) {
+            // The folder may not exist or be writable yet (no storage permission on the first launch).
+        }
+    }
+
+    // Bar shown while the game makes mm.o2r (Extract.cpp calls this a few times a second).
+    // total 0: starting; done == total: writing the file; -1: finished.
+    private static AlertDialog sExtractionDialog;
+    private static ProgressBar sExtractionBar;
+    private static TextView sExtractionText;
+
+    public static void showExtractionProgress(final int done, final int total) {
+        final MainActivity activity = (MainActivity) mSingleton;
+        if (activity == null) {
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            if (done < 0) {
+                if (sExtractionDialog != null) {
+                    sExtractionDialog.dismiss();
+                    sExtractionDialog = null;
+                }
+                startupLog("Extração: barra fechada");
+                return;
+            }
+            if (sExtractionDialog == null) {
+                float density = activity.getResources().getDisplayMetrics().density;
+                int pad = (int) (24 * density);
+                LinearLayout layout = new LinearLayout(activity);
+                layout.setOrientation(LinearLayout.VERTICAL);
+                layout.setPadding(pad, pad / 2, pad, pad / 2);
+                sExtractionText = new TextView(activity);
+                sExtractionText.setTextSize(16);
+                sExtractionText.setGravity(Gravity.CENTER_HORIZONTAL);
+                sExtractionBar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
+                sExtractionBar.setMax(100);
+                layout.addView(sExtractionText);
+                layout.addView(sExtractionBar, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                sExtractionDialog = new AlertDialog.Builder(activity)
+                        .setTitle("Criando o mm.o2r")
+                        .setMessage("Pode levar alguns minutos. Não feche o app.")
+                        .setView(layout)
+                        .setCancelable(false)
+                        .create();
+                sExtractionDialog.show();
+                startupLog("Extração: barra aberta");
+            }
+            if (total <= 0) {
+                sExtractionBar.setIndeterminate(true);
+                sExtractionText.setText("Preparando...");
+            } else if (done >= total) {
+                sExtractionBar.setIndeterminate(true);
+                sExtractionText.setText("100% - gravando o mm.o2r...");
+            } else {
+                int percent = done * 100 / total;
+                sExtractionBar.setIndeterminate(false);
+                sExtractionBar.setProgress(percent);
+                sExtractionText.setText(percent + "% (" + done + " de " + total + " arquivos)");
+            }
+        });
     }
 
     public static void waitForSetupFromNative() {
@@ -90,8 +190,10 @@ public class MainActivity extends SDLActivity{
         long storedInstalledAt = preferences.getLong("appInstalledAt", 0);
 
         if (currentVersion > storedVersion) {
+            startupLog("Versão nova (" + storedVersion + " -> " + currentVersion + "): apagando arquivos antigos e o mm.o2r");
             deleteOutdatedAssets();
         } else if (installedAt != storedInstalledAt) {
+            startupLog("App atualizado: trocando 2ship.o2r e assets");
             deletePortFiles();
         }
         preferences.edit().putInt("appVersion", currentVersion).putLong("appInstalledAt", installedAt).apply();
@@ -197,6 +299,7 @@ public class MainActivity extends SDLActivity{
     }
 
     public void checkAndSetupFiles() {
+        startupLog("Conferindo os arquivos");
         doVersionCheck();
         File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
         File assetsFolder = new File(targetRootFolder, "assets");
@@ -208,6 +311,7 @@ public class MainActivity extends SDLActivity{
                 || !new File(assetsFolder, "Config_N64_US.xml").isFile();
         boolean isMissingSohOtr = !sohOtrFile.isFile() || sohOtrFile.length() == 0;
 
+        startupLog("Faltando: assets=" + isMissingAssets + ", 2ship.o2r=" + isMissingSohOtr);
         if (!targetRootFolder.exists() || isMissingAssets || isMissingSohOtr) {
             new AlertDialog.Builder(this)
                     .setTitle("Configuração inicial")
@@ -285,8 +389,10 @@ public class MainActivity extends SDLActivity{
             targetAssetsDir.mkdirs();
             AssetCopyUtil.copyAssetsToExternal(this, "assets", targetAssetsDir.getAbsolutePath());
             runOnUiThread(() -> Toast.makeText(this, "Arquivos copiados", Toast.LENGTH_SHORT).show());
+            startupLog("assets copiados");
         } catch (IOException e) {
             e.printStackTrace();
+            startupLog("Erro ao copiar os assets: " + e);
             runOnUiThread(() -> Toast.makeText(this, "Erro ao copiar os arquivos", Toast.LENGTH_LONG).show());
         }
 
@@ -302,9 +408,11 @@ public class MainActivity extends SDLActivity{
             }
 
             runOnUiThread(() -> Toast.makeText(this, "2ship.o2r copiado", Toast.LENGTH_SHORT).show());
+            startupLog("2ship.o2r copiado (" + targetOtrFile.length() + " bytes)");
 
         } catch (IOException e) {
             e.printStackTrace();
+            startupLog("Erro ao copiar o 2ship.o2r: " + e);
             runOnUiThread(() -> Toast.makeText(this, "Erro ao copiar o 2ship.o2r", Toast.LENGTH_LONG).show());
         }
 

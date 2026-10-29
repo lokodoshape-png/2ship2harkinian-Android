@@ -5,6 +5,7 @@
 #pragma comment(lib, "Shlwapi.lib")
 #endif
 #include "Extract.h"
+#include "2s2h/Android/StartupLog.h"
 #include "portable-file-dialogs.h"
 #include <ship/utils/binarytools/BitConverter.h>
 #include "build.h"
@@ -24,10 +25,10 @@
 #define BSWAP32 bswap_32
 #define BSWAP16 bswap_16
 #else
-#define BSWAP16(value) ((((value)&0xff) << 8) | ((value) >> 8))
+#define BSWAP16(value) ((((value) & 0xff) << 8) | ((value) >> 8))
 
 #define BSWAP32(value) \
-    (((uint32_t)BSWAP16((uint16_t)((value)&0xffff)) << 16) | (uint32_t)BSWAP16((uint16_t)((value) >> 16)))
+    (((uint32_t)BSWAP16((uint16_t)((value) & 0xffff)) << 16) | (uint32_t)BSWAP16((uint16_t)((value) >> 16)))
 #endif
 
 #if defined(_MSC_VER)
@@ -48,6 +49,8 @@
 #endif
 
 #include <array>
+#include <atomic>
+#include <thread>
 #include <fstream>
 #include <filesystem>
 #include <unordered_map>
@@ -326,6 +329,7 @@ bool Extractor::GetRomPathFromBox() {
         return false;
     }
     mCurrentRomPath = picked;
+    StartupLog_Step("ROM escolhida: %s", picked.c_str());
 #else
     auto selection = pfd::open_file("Select a file", mSearchPath, { "N64 Roms", "*.z64 *.n64 *.v64" }).result();
 
@@ -433,10 +437,8 @@ bool Extractor::ManuallySearchForRomMatchingType(RomSearchMode searchMode) {
     }
 
     char msgBuf[150];
-    snprintf(
-        msgBuf, 150,
-        "A ROM escolhida não é do tipo esperado\nTipo esperado: %s.\n\nQuer procurar de novo?",
-        searchMode == RomSearchMode::MQ ? "Master Quest" : "Vanilla");
+    snprintf(msgBuf, 150, "A ROM escolhida não é do tipo esperado\nTipo esperado: %s.\n\nQuer procurar de novo?",
+             searchMode == RomSearchMode::MQ ? "Master Quest" : "Vanilla");
 
     while ((searchMode == RomSearchMode::Vanilla && IsMasterQuest()) ||
            (searchMode == RomSearchMode::MQ && !IsMasterQuest())) {
@@ -588,6 +590,69 @@ std::string Extractor::Mkdtemp() {
 extern "C" int zapd_main(int argc, char** argv);
 static void MessageboxWorker();
 
+#ifdef __ANDROID__
+// ZAPD counts the files it has extracted (patches/zapdtr-android.patch). A thread passes the count to
+// MainActivity.showExtractionProgress, which shows a bar with the percentage over the app.
+extern "C" volatile int gZapdFilesDone;
+extern "C" volatile int gZapdFilesTotal;
+static std::atomic<bool> sProgressRunning = false;
+static std::thread sProgressThread;
+
+static void CallProgress(JNIEnv* env, int done, int total) {
+    jclass activityClass = env->FindClass("com/dishii/mm/MainActivity");
+    if (activityClass == nullptr) {
+        env->ExceptionClear();
+        return;
+    }
+    jmethodID method = env->GetStaticMethodID(activityClass, "showExtractionProgress", "(II)V");
+    if (method != nullptr) {
+        env->CallStaticVoidMethod(activityClass, method, done, total);
+    }
+    env->ExceptionClear();
+    env->DeleteLocalRef(activityClass);
+}
+
+static void StartAndroidProgress() {
+    gZapdFilesDone = 0;
+    gZapdFilesTotal = 0;
+    sProgressRunning = true;
+    // FindClass from a native thread only sees system classes, so the class is looked up here, on the SDL thread.
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jclass local = env->FindClass("com/dishii/mm/MainActivity");
+    jclass activityClass = local != nullptr ? (jclass)env->NewGlobalRef(local) : nullptr;
+    env->ExceptionClear();
+    if (local != nullptr) {
+        env->DeleteLocalRef(local);
+    }
+    if (activityClass == nullptr) {
+        return;
+    }
+    jmethodID method = env->GetStaticMethodID(activityClass, "showExtractionProgress", "(II)V");
+    env->ExceptionClear();
+    if (method == nullptr) {
+        return;
+    }
+    env->CallStaticVoidMethod(activityClass, method, 0, 0);
+    sProgressThread = std::thread([activityClass, method]() {
+        JNIEnv* threadEnv = (JNIEnv*)SDL_AndroidGetJNIEnv(); // attaches this thread
+        while (sProgressRunning) {
+            threadEnv->CallStaticVoidMethod(activityClass, method, (jint)gZapdFilesDone, (jint)gZapdFilesTotal);
+            threadEnv->ExceptionClear();
+            SDL_Delay(250);
+        }
+    });
+}
+
+static void StopAndroidProgress() {
+    sProgressRunning = false;
+    if (sProgressThread.joinable()) {
+        sProgressThread.join();
+    }
+    // -1 closes the bar.
+    CallProgress((JNIEnv*)SDL_AndroidGetJNIEnv(), -1, -1);
+}
+#endif
+
 bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     constexpr int argc = 22;
     char xmlPath[1024];
@@ -610,8 +675,8 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::update_existing,
                           copyError);
     if (copyError) {
-        std::string message = "Não foi possível copiar os arquivos do extrator (" + installPath +
-                              "/assets): " + copyError.message();
+        std::string message =
+            "Não foi possível copiar os arquivos do extrator (" + installPath + "/assets): " + copyError.message();
         ShowErrorBox("Erro na extração", message.c_str());
         exit(1);
     }
@@ -656,6 +721,8 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     // extraction.
     ShowWindow(cmdWindow, SW_SHOW);
     SetWindowPos(cmdWindow, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+#elif defined(__ANDROID__)
+    StartAndroidProgress();
 #else
     std::thread mbThread(MessageboxWorker);
     mbThread.detach();
@@ -672,15 +739,14 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     printf("ROM: %s\nAssets: %s\nVersion: %s\n", romPath.c_str(), installPath.c_str(), version);
 #endif
 
+    StartupLog_Step("ZAPD começou (ROM %s, pasta %s)", romPath.c_str(), tempdir.c_str());
     // ZAPD reports a failure by throwing. Uncaught, that closes the app without a word.
     std::string failure;
     try {
         if (zapd_main(argc, (char**)argv.data()) != 0) {
             failure = "O ZAPD terminou com erro.";
         }
-    } catch (const std::exception& e) {
-        failure = e.what();
-    } catch (...) {
+    } catch (const std::exception& e) { failure = e.what(); } catch (...) {
         failure = "Erro desconhecido no ZAPD.";
     }
 
@@ -689,6 +755,10 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir) {
     ShowWindow(cmdWindow, SW_HIDE);
 #endif
 
+#ifdef __ANDROID__
+    StopAndroidProgress();
+#endif
+    StartupLog_Step("ZAPD terminou%s%s", failure.empty() ? "" : ": ", failure.c_str());
     std::error_code ec;
     if (failure.empty() && !std::filesystem::exists(otrFile, ec)) {
         failure = "O ZAPD terminou sem criar o mm.o2r.";

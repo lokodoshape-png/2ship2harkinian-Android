@@ -113,6 +113,7 @@ CrowdControl* CrowdControl::Instance;
 #include <ship/window/gui/resource/FontFactory.h>
 #include "2s2h/Enhancements/Audio/AudioCollection.h"
 #include "BenGui/BenInputEditorWindow.h"
+#include "2s2h/Android/StartupLog.h"
 
 OTRGlobals* OTRGlobals::Instance;
 GameInteractor* GameInteractor::Instance;
@@ -194,7 +195,9 @@ OTRGlobals::OTRGlobals() {
     Ship::Context::GetInstance()->GetLogger()->set_pattern("[%H:%M:%S.%e] [%s:%#] [%^%l%$] %v");
 
     // tell LUS to reserve 3 SoH specific threads (Game, Audio, Save)
+    StartupLog_Step("Carregando %zu arquivos .o2r", archiveFiles.size());
     context->InitResourceManager(archiveFiles, {}, 3);
+    StartupLog_Step("Recursos carregados");
     // Songs from the player's music folder, ahead of the audio engine reading the custom sequences.
     MusicFolder::Mount();
     ButtonPrompts::Mount();
@@ -213,7 +216,9 @@ OTRGlobals::OTRGlobals() {
     auto benInputEditorWindow = std::make_shared<BenInputEditorWindow>("gWindows.BenInputEditor", "2S2H Input Editor");
     auto benFast3dWindow =
         std::make_shared<Fast::Fast3dWindow>(std::vector<std::shared_ptr<Ship::GuiWindow>>({ benInputEditorWindow }));
+    StartupLog_Step("Abrindo a janela");
     context->InitWindow(benFast3dWindow);
+    StartupLog_Step("Janela aberta");
 
     // Override LUS defaults
     auto overlay = context->GetInstance()->GetWindow()->GetGui()->GetGameOverlay();
@@ -617,7 +622,9 @@ void DetectArchiveVersion(std::string fileName, bool isO2rType) {
                  "Would you like to regenerate it now?",
                  fileName.c_str(), version);
 
+        StartupLog_Step("mm.o2r antigo (versão %s)", version);
         if (Extractor::ShowYesNoBox("Old O2R File Found", msgBuf) == IDYES) {
+            StartupLog_Step("Criando mm.o2r de novo");
             std::string installPath = Ship::Context::GetAppBundlePath();
             if (!ExtractorAssetsPresent(installPath)) {
                 Extractor::ShowErrorBox(
@@ -690,6 +697,7 @@ extern "C" void InitOTR() {
     std::string mmPathO2R = Ship::Context::LocateFileAcrossAppDirs("mm.o2r", appShortName);
     std::string mmPathZIP = Ship::Context::LocateFileAcrossAppDirs("mm.zip", appShortName);
     std::string mmPathOtr = Ship::Context::LocateFileAcrossAppDirs("mm.otr", appShortName);
+    StartupLog_Step("mm.o2r: %s (%s)", mmPathO2R.c_str(), std::filesystem::exists(mmPathO2R) ? "existe" : "não existe");
 
     // Check game archives in preferred order
     if (std::filesystem::exists(mmPathO2R)) {
@@ -713,6 +721,7 @@ extern "C" void InitOTR() {
         }
 
         if (Extractor::ShowYesNoBox("No O2R File", "No O2R files found. Generate one now?") == IDYES) {
+            StartupLog_Step("Criando mm.o2r");
             Extractor extract;
             if (!extract.Run(Ship::Context::GetAppDirectoryPath(appShortName))) {
                 Extractor::ShowErrorBox("Error", "An error occurred, no O2R file was generated. Exiting...");
@@ -725,7 +734,9 @@ extern "C" void InitOTR() {
     }
 #endif
 
+    StartupLog_Step("Abrindo os arquivos do jogo");
     OTRGlobals::Instance = new OTRGlobals();
+    StartupLog_Step("Arquivos do jogo abertos");
     GameInteractor::Instance = new GameInteractor();
     AudioCollection::Instance = new AudioCollection();
     LoadGuiTextures();

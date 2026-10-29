@@ -14,6 +14,7 @@
 #include "stack.h"
 #include "stackcheck.h"
 #include "BenPort.h"
+#include "2s2h/Android/StartupLog.h"
 #include <libultraship/bridge/crashhandlerbridge.h>
 
 // Variables are put before most headers as a hacky way to bypass bss reordering
@@ -70,7 +71,10 @@ static void WaitForJavaSetup(void) {
 #ifdef __ANDROID__
 // SDLActivity looks up SDL_main (SDL_main.h maps main back to it) and expects an int result.
 int SDL_main(int argc, char** argv /* void* arg*/) {
+    StartupLog_Init();
+    StartupLog_Step("Esperando a preparação dos arquivos (Java)");
     WaitForJavaSetup();
+    StartupLog_Step("Arquivos prontos");
 #else
 void SDL_main(int argc, char** argv /* void* arg*/) {
 #endif
@@ -93,6 +97,7 @@ void SDL_main(int argc, char** argv /* void* arg*/) {
 #endif // _WIN32
 
     InitOTR();
+    StartupLog_Step("InitOTR terminou");
     CrashHandlerRegisterCallback(CrashHandler_PrintExt);
     Heaps_Alloc();
 

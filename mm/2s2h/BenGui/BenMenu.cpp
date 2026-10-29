@@ -52,6 +52,9 @@ static const std::unordered_map<int32_t, const char*> menuThemeOptions = {
     { UIWidgets::Colors::DarkGray, "Dark Gray" },
 };
 
+#ifdef __ANDROID__
+static const std::vector<const char*> interfaceSizeOptions = { "Automatic", "Small", "Medium", "Large", "Very Large" };
+#endif
 static const std::vector<const char*> menuLanguageOptions = {
     "Português (Brasil)", // MENU_LANGUAGE_PORTUGUESE_BR
     "English",            // MENU_LANGUAGE_ENGLISH
@@ -328,6 +331,14 @@ void BenMenu::AddSettings() {
                      .Tooltip("Language of the 2Ship menus. / Idioma dos menus do 2Ship.")
                      .ComboVec(&menuLanguageOptions)
                      .DefaultIndex(BenGui::MENU_LANGUAGE_PORTUGUESE_BR));
+#ifdef __ANDROID__
+    AddWidget(path, "Interface Size (needs restart)", WIDGET_CVAR_COMBOBOX)
+        .CVar("gSettings.Android.UISize")
+        .Options(ComboboxOptions()
+                     .Tooltip("Size of the menus and windows. Automatic follows the screen of the phone.")
+                     .ComboVec(&interfaceSizeOptions)
+                     .DefaultIndex(0));
+#endif
     AddWidget(path, "Menu Theme", WIDGET_CVAR_COMBOBOX)
         .CVar("gSettings.Menu.Theme")
         .Options(ComboboxOptions()

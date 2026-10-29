@@ -9,6 +9,18 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-10-29
+- **Android: barra de porcentagem ao criar o `mm.o2r`.** Mostra quantos arquivos já foram extraídos e avisa quando está
+  gravando o arquivo final.
+- **Android: menu reformulado para o celular.** O tamanho da interface agora segue a densidade da tela (antes era sempre
+  3x) e pode ser escolhido em Configurações > Geral > Tamanho da interface. As abas de cima usam uma fonte menor
+  quando não cabem, a barra lateral se ajusta ao nome mais longo, o texto usa uma fonte proporcional e as colunas viram
+  uma só quando ficariam estreitas demais.
+- **Tradução e texturas HD juntas.** Com "Usar assets alternativos" ligado, as texturas HD (alt/) de um pacote como o MM
+  Reloaded passavam por cima de qualquer mod, inclusive da tradução, e menus e telas voltavam ao inglês. Agora um mod
+  carregado depois do pacote HD ganha nas texturas que ele mesmo troca.
+- **Android: registro da abertura em `2S2H-MM3D/inicio.log`.** Registra cada etapa da inicialização desde o primeiro
+  instante, e qualquer fechamento (Java ou nativo) com o rastro. Ajuda a achar problemas que acontecem antes do log do
+  jogo começar.
 - **Android: correção do app fechando ao criar o `mm.o2r`** depois de atualizar de uma versão antiga. O app agora troca
   o `2ship.o2r` e os arquivos do extrator a cada atualização, mesmo com a permissão de "todos os arquivos" do Android 11+.
   Antes ficavam os arquivos da versão antiga, e o extrator novo fechava ao ler esses arquivos.

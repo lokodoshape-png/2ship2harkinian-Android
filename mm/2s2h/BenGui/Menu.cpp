@@ -597,14 +597,15 @@ void Menu::DrawElement() {
         ImGui::End();
         return;
     }
-    ImGui::PushFont(OTRGlobals::Instance->fontStandardLargest);
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
     ImGuiStyle& style = ImGui::GetStyle();
     windowHeight = window->WorkRect.GetHeight();
     windowWidth = window->WorkRect.GetWidth();
+    // Sizes below were written for a scale of 1; phones run the UI scaled up (see Gui.cpp).
+    const float uiScale = ImGui::GetIO().FontGlobalScale;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f * uiScale, 8.0f * uiScale));
     const char* headerCvar = "gSettings.Menu.ActiveHeader";
     std::string headerIndex = CVarGetString(headerCvar, "Settings");
     if (GetVectorIndexOf(menuOrder, headerIndex) == menuOrder.size()) {
@@ -612,29 +613,45 @@ void Menu::DrawElement() {
     }
     ImVec2 pos = window->DC.CursorPos;
     float centerX = pos.x + windowWidth / 2 - (style.ItemSpacing.x * (menuEntries.size() + 1));
-    std::vector<ImVec2> headerSizes;
-    float headerWidth = style.ItemSpacing.x;
-    bool headerSearch = !CVarGetInteger("gSettings.Menu.SidebarSearch", 0);
-    if (headerSearch) {
-        headerWidth += 200.0f + style.ItemSpacing.x + style.FramePadding.x;
-    }
-    for (auto& label : menuOrder) {
-        ImVec2 size = ImGui::CalcTextSize(Tr(label.c_str()));
-        headerSizes.push_back(size);
-        headerWidth += size.x + style.FramePadding.x * 2;
-        if (label == headerIndex) {
-            headerWidth += style.ItemSpacing.x;
-        }
-    }
     // Full screen menu with widths below 1280, heights below 800.
     // 5% of screen width/height padding on both sides above those resolutions.
     // Menu width will never exceed a 16:9 aspect ratio.
     ImVec2 menuSize = { windowWidth, windowHeight };
-    if (windowWidth > 1280) {
+    if (windowWidth > 1280 * uiScale) {
         menuSize.x = std::fminf(windowWidth * 0.9f, (windowHeight * 1.77f));
     }
-    if (windowHeight > 800) {
+    if (windowHeight > 800 * uiScale) {
         menuSize.y = windowHeight * 0.9f;
+    }
+
+    bool headerSearch = !CVarGetInteger("gSettings.Menu.SidebarSearch", 0);
+    float searchWidth = 200.0f * uiScale;
+    ImGui::PushFont(OTRGlobals::Instance->fontStandardLargest);
+    ImVec2 closeButtonSize = ImGui::CalcTextSize(ICON_FA_TIMES_CIRCLE) + style.FramePadding * 2;
+    ImGui::PopFont();
+    float headerRoom = menuSize.x - closeButtonSize.x * 3 - style.ItemSpacing.x * 3;
+    // The header tabs take the largest font that fits them on one line, so no tab is cut off on a small screen.
+    std::vector<ImVec2> headerSizes;
+    float headerWidth = 0.0f;
+    ImFont* headerFonts[] = { OTRGlobals::Instance->fontStandardLargest, OTRGlobals::Instance->fontStandardLarger,
+                              OTRGlobals::Instance->fontStandard };
+    for (ImFont* font : headerFonts) {
+        ImGui::PushFont(font);
+        searchWidth = std::fminf(200.0f * uiScale, ImGui::GetFontSize() * 8.0f);
+        headerSizes.clear();
+        headerWidth = style.ItemSpacing.x;
+        if (headerSearch) {
+            headerWidth += searchWidth + style.ItemSpacing.x + style.FramePadding.x;
+        }
+        for (auto& label : menuOrder) {
+            ImVec2 size = ImGui::CalcTextSize(Tr(label.c_str()));
+            headerSizes.push_back(size);
+            headerWidth += size.x + style.FramePadding.x * 2 + style.ItemSpacing.x;
+        }
+        if (headerWidth <= headerRoom || font == OTRGlobals::Instance->fontStandard) {
+            break;
+        }
+        ImGui::PopFont();
     }
     pos += window->WorkRect.GetSize() / 2 - menuSize / 2;
     ImGui::SetNextWindowPos(pos);
@@ -646,7 +663,7 @@ void Menu::DrawElement() {
     float headerHeight = headerSizes.at(0).y + style.FramePadding.y * 2;
     ImVec2 buttonSize = ImGui::CalcTextSize(ICON_FA_TIMES_CIRCLE) + style.FramePadding * 2;
     bool scrollbar = false;
-    if (headerWidth > menuSize.x - buttonSize.x * 3 - style.ItemSpacing.x * 3) {
+    if (headerWidth > headerRoom) {
         headerHeight += style.ScrollbarSize;
         scrollbar = true;
     }
@@ -701,11 +718,12 @@ void Menu::DrawElement() {
         color.w = 0.6f;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, color);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-        menuSearch.Draw("##search", 200.0f);
+        float searchX = ImGui::GetCursorPosX();
+        menuSearch.Draw("##search", searchWidth);
         menuSearchText = menuSearch.InputBuf;
         menuSearchText.erase(std::remove(menuSearchText.begin(), menuSearchText.end(), ' '), menuSearchText.end());
         if (menuSearchText.length() < 1) {
-            ImGui::SameLine(headerWidth - 200.0f + style.ItemSpacing.x);
+            ImGui::SameLine(searchX + style.FramePadding.x);
             ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.4f), Tr("Search..."));
         }
         ImGui::PopStyleVar();
@@ -774,9 +792,26 @@ void Menu::DrawElement() {
     float sectionHeight = menuSize.y - headerHeight - 4 - style.ItemSpacing.y * 2;
     float columnHeight = sectionHeight - style.ItemSpacing.y * 4;
     ImGui::SetNextWindowPos(pos + style.ItemSpacing * 2);
-    float sidebarWidth = 200 - style.ItemSpacing.x;
-
     const char* sidebarCvar = menuEntries.at(headerIndex).sidebarCvar;
+
+    // The sidebar is as wide as its longest entry (up to a third of the menu), so entries are not cut off. If even
+    // that is not enough, its entries use a smaller font.
+    float sidebarWidth = 200.0f * uiScale - style.ItemSpacing.x;
+    ImFont* sidebarFont = headerFonts[0];
+    for (ImFont* font : headerFonts) {
+        ImGui::PushFont(font);
+        float widest = 0.0f;
+        for (auto& sidebarLabel : menuEntries.at(headerIndex).sidebarOrder) {
+            widest = std::fmaxf(widest, ImGui::CalcTextSize(Tr(sidebarLabel.c_str())).x);
+        }
+        ImGui::PopFont();
+        sidebarFont = font;
+        float needed = widest + style.FramePadding.x * 4 + style.ScrollbarSize;
+        if (needed <= menuSize.x / 3 || font == OTRGlobals::Instance->fontStandard) {
+            sidebarWidth = std::fminf(std::fmaxf(sidebarWidth, needed), menuSize.x / 3);
+            break;
+        }
+    }
 
     std::string sectionIndex = CVarGetString(sidebarCvar, "");
     if (GetVectorIndexOf(menuEntries[headerIndex].sidebarOrder, sectionIndex) ==
@@ -788,6 +823,7 @@ void Menu::DrawElement() {
     ImGui::SetNextWindowSizeConstraints({ sidebarWidth, 0 }, { sidebarWidth, columnHeight });
     ImGui::BeginChild((menuEntries.at(headerIndex).label + " Section").c_str(), { sidebarWidth, columnHeight * 3 },
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysAutoResize, ImGuiWindowFlags_NoTitleBar);
+    ImGui::PushFont(sidebarFont);
     for (auto& sidebarLabel : menuEntries.at(headerIndex).sidebarOrder) {
         std::string nextIndex = "";
         UIWidgets::PushStyleButton(menuThemeIndex);
@@ -810,9 +846,15 @@ void Menu::DrawElement() {
             sectionIndex = nextIndex;
         }
     }
+    ImGui::PopFont();
     ImGui::EndChild();
 
+#ifdef __ANDROID__
+    // A proportional font fits about a third more text per line than the monospaced one on a phone.
+    ImGui::PushFont(OTRGlobals::Instance->fontStandardLarger);
+#else
     ImGui::PushFont(OTRGlobals::Instance->fontMonoLarger);
+#endif
     pos = ImVec2{ sectionCenterX + (sidebarWidth / 2), topY } + style.ItemSpacing * 2;
     window->DrawList->AddRectFilled(pos, pos + ImVec2{ 4, sectionHeight - style.FramePadding.y * 2 },
                                     ImGui::GetColorU32({ 255, 255, 255, 255 }), true, style.WindowRounding);
@@ -822,8 +864,9 @@ void Menu::DrawElement() {
     std::string sectionMenuId = sectionIndex + " Settings";
     int columns = sidebar->at(sectionIndex).columnCount;
     size_t columnFuncs = sidebar->at(sectionIndex).columnWidgets.size();
-    if (windowWidth < 800) {
-        columns = 1;
+    // Fewer columns when they would be too narrow for their text.
+    while (columns > 1 && (sectionWidth - style.ItemSpacing.x * columns) / columns < ImGui::GetFontSize() * 18.0f) {
+        columns--;
     }
     float columnWidth = (sectionWidth - style.ItemSpacing.x * columns) / columns;
     bool useColumns = columns > 1;
