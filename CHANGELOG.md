@@ -9,6 +9,9 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-10-29
+- **Android: correção do app fechando ao criar o `mm.o2r`** depois de atualizar de uma versão antiga. O app agora troca
+  o `2ship.o2r` e os arquivos do extrator a cada atualização, mesmo com a permissão de "todos os arquivos" do Android 11+.
+  Antes ficavam os arquivos da versão antiga, e o extrator novo fechava ao ler esses arquivos.
 - **Ícones de botão conforme o controle** (Configurações > Controles > Ícones dos botões). Os botões aparecem como os do
   controle usado por último (Xbox, PlayStation, Nintendo Switch ou teclado), e cada botão do N64 é mostrado como o botão
   a que está ligado no mapeamento.

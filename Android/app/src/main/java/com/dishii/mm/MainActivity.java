@@ -56,7 +56,6 @@ public class MainActivity extends SDLActivity{
 
         // Check if storage permissions are granted
         if (hasStoragePermission()) {
-            doVersionCheck();
             checkAndSetupFiles();
         } else {
             requestStoragePermission();
@@ -76,14 +75,32 @@ public class MainActivity extends SDLActivity{
         }
     }
 
+    // Runs before every setup check, whichever way the storage permission was granted. A new versionCode means a new
+    // port version, so the game's mm.o2r has to be made again too. Any other update (a new build of the same version)
+    // only replaces the port's own files, so a new 2ship.o2r and extractor assets are not left behind by an old copy.
     private void doVersionCheck(){
         int currentVersion = BuildConfig.VERSION_CODE;
         int storedVersion = preferences.getInt("appVersion", 1);
+        long installedAt = 0;
+        try {
+            installedAt = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.w("versionCheck", "No package info", e);
+        }
+        long storedInstalledAt = preferences.getLong("appInstalledAt", 0);
 
         if (currentVersion > storedVersion) {
             deleteOutdatedAssets();
-            preferences.edit().putInt("appVersion", currentVersion).apply();
+        } else if (installedAt != storedInstalledAt) {
+            deletePortFiles();
         }
+        preferences.edit().putInt("appVersion", currentVersion).putLong("appInstalledAt", installedAt).apply();
+    }
+
+    private void deletePortFiles() {
+        File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
+        deleteIfExists(new File(targetRootFolder, "2ship.o2r"));
+        deleteRecursiveIfExists(new File(targetRootFolder, "assets"));
     }
 
     private void deleteOutdatedAssets() {
@@ -180,11 +197,14 @@ public class MainActivity extends SDLActivity{
     }
 
     public void checkAndSetupFiles() {
+        doVersionCheck();
         File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);
         File assetsFolder = new File(targetRootFolder, "assets");
         File sohOtrFile = new File(targetRootFolder, "2ship.o2r");
 
-        boolean isMissingAssets = !assetsFolder.exists() || assetsFolder.listFiles() == null || assetsFolder.listFiles().length == 0;
+        // Extractor assets from before the 4.0 base have no xml folder; the 4.0 extractor cannot use them.
+        boolean isMissingAssets = !new File(assetsFolder, "xml").isDirectory() || assetsFolder.listFiles() == null
+                || assetsFolder.listFiles().length == 0;
         boolean isMissingSohOtr = !sohOtrFile.exists();
 
         if (!targetRootFolder.exists() || isMissingAssets || isMissingSohOtr) {

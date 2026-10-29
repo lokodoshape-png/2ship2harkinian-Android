@@ -573,6 +573,14 @@ void Check2ShipArchiveVersion(std::string archivePath) {
     }
 }
 
+// The extractor reads its XML and config from <install>/assets. A folder left over from an older version has no xml
+// folder, and ZAPD would crash on it instead of reporting the problem.
+static bool ExtractorAssetsPresent(const std::string& installPath) {
+    std::error_code ec;
+    return std::filesystem::is_directory(installPath + "/assets/xml", ec) &&
+           std::filesystem::is_directory(installPath + "/assets/filelists", ec);
+}
+
 // Checks the program version stored in the o2r and compares the major/minor value to 2ship
 // For Windows/Mac/Linux if the version doesn't match, offer to regenerate it
 void DetectArchiveVersion(std::string fileName, bool isO2rType) {
@@ -611,7 +619,7 @@ void DetectArchiveVersion(std::string fileName, bool isO2rType) {
 
         if (Extractor::ShowYesNoBox("Old O2R File Found", msgBuf) == IDYES) {
             std::string installPath = Ship::Context::GetAppBundlePath();
-            if (!std::filesystem::exists(installPath + "/assets")) {
+            if (!ExtractorAssetsPresent(installPath)) {
                 Extractor::ShowErrorBox(
                     "Extractor assets not found",
                     "Unable to regenerate. Missing assets folder needed to generate O2R file.\n\nExiting...");
@@ -697,7 +705,7 @@ extern "C" void InitOTR() {
     if (!std::filesystem::exists(mmPathO2R) && !std::filesystem::exists(mmPathZIP) &&
         !std::filesystem::exists(mmPathOtr)) {
         std::string installPath = Ship::Context::GetAppBundlePath();
-        if (!std::filesystem::exists(installPath + "/assets")) {
+        if (!ExtractorAssetsPresent(installPath)) {
             Extractor::ShowErrorBox(
                 "Extractor assets not found",
                 "No game O2R file found. Missing assets folder needed to generate O2R file. Exiting...");
