@@ -109,8 +109,16 @@ void PollLastDevice() {
 #else
         sLastDevice = Style::Keyboard;
 #endif
-        if (!gamepads.empty()) {
-            sLastDevice = StyleOfGamepad(gamepads.begin()->second);
+        // A real controller wins over the touch overlay's virtual one.
+        for (const auto& [id, gamepad] : gamepads) {
+            sLastDevice = StyleOfGamepad(gamepad);
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+            if (SDL_GameControllerGetType(gamepad) != SDL_CONTROLLER_TYPE_VIRTUAL) {
+                break;
+            }
+#else
+            break;
+#endif
         }
     }
 

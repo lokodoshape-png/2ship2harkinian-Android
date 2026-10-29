@@ -5029,7 +5029,7 @@ index 8819c392..01bee2f2 100644
              const float textWidth = GetStringWidth(overlay.Value.c_str());
              const float textOffset = 40.0f;
 diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
-index 17f0c2b0..b5bf96ae 100644
+index 17f0c2b0..ccf0ce1e 100644
 --- a/src/ship/window/gui/Gui.cpp
 +++ b/src/ship/window/gui/Gui.cpp
 @@ -2,6 +2,8 @@
@@ -5086,9 +5086,15 @@ index 17f0c2b0..b5bf96ae 100644
  #endif
  
      auto imguiIniPath = Context::GetPathRelativeToAppDirectory("imgui.ini");
-@@ -174,6 +192,13 @@ void Gui::ImGuiWMInit() {
+@@ -173,7 +191,19 @@ void Gui::ImGuiWMInit() {
+             SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
              SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
              ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mImpl.Opengl.Window), mImpl.Opengl.Context);
++#if defined(__ANDROID__)
++            // The touch overlay's virtual controller is opened first; reading only the first gamepad would leave a
++            // real controller unable to drive the menus.
++            ImGui_ImplSDL2_SetGamepadMode(ImGui_ImplSDL2_GamepadMode_AutoAll);
++#endif
              break;
 +#ifdef ENABLE_VULKAN
 +        case WindowBackend::FAST3D_SDL_VULKAN:
@@ -5100,7 +5106,7 @@ index 17f0c2b0..b5bf96ae 100644
  #if __APPLE__
          case WindowBackend::FAST3D_SDL_METAL:
              SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
-@@ -205,6 +230,12 @@ void Gui::ShutDownImGui(Ship::Window* window) {
+@@ -205,6 +235,12 @@ void Gui::ShutDownImGui(Ship::Window* window) {
              ImGui_ImplMetal_Shutdown();
              break;
  #endif
@@ -5113,7 +5119,7 @@ index 17f0c2b0..b5bf96ae 100644
  #if defined(ENABLE_DX11) || defined(ENABLE_DX12)
          case WindowBackend::FAST3D_DXGI_DX11:
              ImGui_ImplWin32_Shutdown();
-@@ -288,6 +319,9 @@ bool Gui::SupportsViewports() {
+@@ -288,6 +324,9 @@ bool Gui::SupportsViewports() {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
              return true;
@@ -5123,7 +5129,7 @@ index 17f0c2b0..b5bf96ae 100644
          default:
              return false;
      }
-@@ -297,6 +331,7 @@ void Gui::HandleWindowEvents(WindowEvent event) {
+@@ -297,6 +336,7 @@ void Gui::HandleWindowEvents(WindowEvent event) {
      switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
@@ -5131,7 +5137,7 @@ index 17f0c2b0..b5bf96ae 100644
              ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(event.Sdl.Event));
  #if defined(__ANDROID__) || defined(__IOS__)
              Mobile::ImGuiProcessEvent(mImGuiIo->WantTextInput);
-@@ -355,6 +390,12 @@ void Gui::ImGuiBackendNewFrame() {
+@@ -355,6 +395,12 @@ void Gui::ImGuiBackendNewFrame() {
              break;
  #endif
  
@@ -5144,7 +5150,7 @@ index 17f0c2b0..b5bf96ae 100644
  #ifdef __APPLE__
          case WindowBackend::FAST3D_SDL_METAL: {
              Fast::GfxRenderingAPIMetal* api =
-@@ -373,6 +414,7 @@ void Gui::ImGuiWMNewFrame() {
+@@ -373,6 +419,7 @@ void Gui::ImGuiWMNewFrame() {
      switch (Context::GetInstance()->GetWindow()->GetWindowBackend()) {
          case WindowBackend::FAST3D_SDL_OPENGL:
          case WindowBackend::FAST3D_SDL_METAL:
@@ -5152,7 +5158,7 @@ index 17f0c2b0..b5bf96ae 100644
              ImGui_ImplSDL2_NewFrame();
              break;
  #ifdef ENABLE_DX11
-@@ -540,6 +582,12 @@ void Gui::DrawMenu() {
+@@ -540,6 +587,12 @@ void Gui::DrawMenu() {
  
      ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_NoDockingInCentralNode);
  
@@ -5165,7 +5171,7 @@ index 17f0c2b0..b5bf96ae 100644
      if (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
          (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
           Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0))) {
-@@ -565,6 +613,18 @@ void Gui::DrawMenu() {
+@@ -565,6 +618,18 @@ void Gui::DrawMenu() {
          }
      }
  
@@ -5184,7 +5190,7 @@ index 17f0c2b0..b5bf96ae 100644
      // Mac interprets this as cmd+r when io.ConfigMacOSXBehavior is on (on by default)
      if ((ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) &&
          ImGui::IsKeyPressed(ImGuiKey_R, false)) {
-@@ -872,6 +932,13 @@ void Gui::ImGuiRenderDrawData(ImDrawData* data) {
+@@ -872,6 +937,13 @@ void Gui::ImGuiRenderDrawData(ImDrawData* data) {
              ImGui_ImplDX11_RenderDrawData(data);
              break;
  #endif

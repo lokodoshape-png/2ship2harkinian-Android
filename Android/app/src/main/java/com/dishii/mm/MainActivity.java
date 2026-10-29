@@ -47,6 +47,10 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.view.Gravity;
+import android.view.InputDevice;
+import android.view.InputEvent;
+import android.view.KeyEvent;
+import android.hardware.input.InputManager;
 
 //This class is the main SDLActivity and just sets up a bunch of default files and the input overlay
 public class MainActivity extends SDLActivity{
@@ -76,6 +80,9 @@ public class MainActivity extends SDLActivity{
 
         setupControllerOverlay();
         attachController();
+        // The virtual triggers start centred, which reads as half pressed.
+        setButton(ControllerButtons.AXIS_LT, false);
+        setButton(ControllerButtons.AXIS_RT, false);
     }
 
     // <data folder>/inicio.log: each launch starts it, the native side (mm/2s2h/Android/StartupLog.cpp) adds to it.
@@ -849,27 +856,132 @@ public class MainActivity extends SDLActivity{
 
     }
 
+    private ViewGroup touchButtonGroup;
+    private boolean controlsHiddenByUser = false;
+    private boolean controlsHiddenForGamepad = false;
+
     private void setupToggleButton(Button button, ViewGroup uiGroup){
-        boolean isHidden = preferences.getBoolean("controlsVisible", false); // Default to 'false' (visible)
-        uiGroup.setVisibility(isHidden ? View.INVISIBLE : View.VISIBLE); // Set the initial visibility based on the saved state
-        /*if(isHidden){
-            detachController();
-        }*/
+        touchButtonGroup = uiGroup;
+        controlsHiddenByUser = preferences.getBoolean("controlsVisible", false); // the key holds "hidden"
         button.setOnClickListener(new View.OnClickListener() {
-            boolean isHidden = false;
             @Override
             public void onClick(View v) {
-                if (isHidden) {
-                    uiGroup.setVisibility(View.VISIBLE); // Show UI elements
-                    //attachController();
-                } else {
-                    uiGroup.setVisibility(View.INVISIBLE); // Hide UI elements
-                    //detachController();
-                }
-                preferences.edit().putBoolean("controlsVisible", !isHidden).apply();
-                isHidden = !isHidden; // Toggle state
+                controlsHiddenByUser = !controlsHiddenByUser;
+                controlsHiddenForGamepad = false;
+                preferences.edit().putBoolean("controlsVisible", controlsHiddenByUser).apply();
+                updateTouchControlsVisibility();
             }
         });
+        // A gamepad's buttons must reach the game, never the overlay's views.
+        disableFocus(overlayView);
+        controlsHiddenForGamepad = hasPhysicalGamepad();
+        updateTouchControlsVisibility();
+        InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
+        inputManager.registerInputDeviceListener(new InputManager.InputDeviceListener() {
+            @Override
+            public void onInputDeviceAdded(int deviceId) {
+                if (isPhysicalGamepad(InputDevice.getDevice(deviceId))) {
+                    setHiddenForGamepad(true);
+                }
+            }
+
+            @Override
+            public void onInputDeviceRemoved(int deviceId) {
+                if (!hasPhysicalGamepad()) {
+                    setHiddenForGamepad(false);
+                }
+            }
+
+            @Override
+            public void onInputDeviceChanged(int deviceId) {
+            }
+        }, null);
+    }
+
+    private static void disableFocus(View view) {
+        view.setFocusable(false);
+        view.setFocusableInTouchMode(false);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                disableFocus(group.getChildAt(i));
+            }
+        }
+    }
+
+    private static boolean isPhysicalGamepad(InputDevice device) {
+        if (device == null || device.isVirtual()) {
+            return false;
+        }
+        int sources = device.getSources();
+        return (sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+    }
+
+    private static boolean hasPhysicalGamepad() {
+        for (int id : InputDevice.getDeviceIds()) {
+            if (isPhysicalGamepad(InputDevice.getDevice(id))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isGamepadEvent(InputEvent event) {
+        return event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK);
+    }
+
+    private void setHiddenForGamepad(boolean hidden) {
+        if (controlsHiddenForGamepad != hidden) {
+            controlsHiddenForGamepad = hidden;
+            updateTouchControlsVisibility();
+        }
+    }
+
+    private void updateTouchControlsVisibility() {
+        if (touchButtonGroup == null) {
+            return;
+        }
+        boolean hidden = controlsHiddenByUser || controlsHiddenForGamepad;
+        touchButtonGroup.setVisibility(hidden ? View.INVISIBLE : View.VISIBLE);
+        // Clear anything the overlay was holding so the game does not see a stuck button or stick.
+        if (hidden) {
+            for (int button : new int[] { ControllerButtons.BUTTON_A, ControllerButtons.BUTTON_B,
+                    ControllerButtons.BUTTON_X, ControllerButtons.BUTTON_Y, ControllerButtons.BUTTON_LB,
+                    ControllerButtons.BUTTON_RB, ControllerButtons.BUTTON_START, ControllerButtons.BUTTON_BACK }) {
+                setButton(button, false);
+            }
+            setButton(ControllerButtons.AXIS_RT, false);
+            setAxis(ControllerButtons.AXIS_LX, (short) 0);
+            setAxis(ControllerButtons.AXIS_LY, (short) 0);
+            setAxis(ControllerButtons.AXIS_RX, (short) 0);
+            setAxis(ControllerButtons.AXIS_RY, (short) 0);
+        }
+    }
+
+    // A physical gamepad in use hides the touch controls; touching the screen in game brings them back.
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (isGamepadEvent(event)) {
+            setHiddenForGamepad(true);
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (isGamepadEvent(event)) {
+            setHiddenForGamepad(true);
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && controlsHiddenForGamepad && TouchAreaEnabled) {
+            setHiddenForGamepad(false);
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     // Function to set a touch listener for each button
