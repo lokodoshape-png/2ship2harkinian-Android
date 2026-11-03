@@ -342,6 +342,31 @@ index 1f03cb63..b4a12007 100644
      int mSdlToLusTable[512];
      float mMouseWheelX = 0.0f;
      float mMouseWheelY = 0.0f;
+diff --git a/include/fast/backends/gfx_shader_disk_cache.h b/include/fast/backends/gfx_shader_disk_cache.h
+new file mode 100644
+index 00000000..0cbc967c
+--- /dev/null
++++ b/include/fast/backends/gfx_shader_disk_cache.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include <vector>
++
++// Compiled shaders kept on disk, so a shader is compiled once and later sessions load it instead of stalling a frame.
++namespace Fast::ShaderDiskCache {
++
++// FNV-1a over the bytes, continued from seed.
++uint64_t Hash(const void* data, size_t size, uint64_t seed = 0xcbf29ce484222325ULL);
++uint64_t Hash(const std::string& text, uint64_t seed = 0xcbf29ce484222325ULL);
++
++// api names the renderer's folder ("dx11", "vulkan", "opengl"). Load returns false when nothing usable is stored.
++bool Load(const char* api, uint64_t key, std::vector<uint8_t>& out);
++void Store(const char* api, uint64_t key, const void* data, size_t size);
++
++} // namespace Fast::ShaderDiskCache
 diff --git a/include/fast/backends/gfx_vulkan.h b/include/fast/backends/gfx_vulkan.h
 new file mode 100644
 index 00000000..4d370188
@@ -638,7 +663,7 @@ index 9943170d..06a9ea9e 100644
      }
  
 diff --git a/src/fast/backends/gfx_direct3d11.cpp b/src/fast/backends/gfx_direct3d11.cpp
-index 1077d2a4..e49fb0e4 100644
+index 1077d2a4..c95830b7 100644
 --- a/src/fast/backends/gfx_direct3d11.cpp
 +++ b/src/fast/backends/gfx_direct3d11.cpp
 @@ -3,6 +3,7 @@
@@ -649,7 +674,15 @@ index 1077d2a4..e49fb0e4 100644
  
  #include <map>
  #include <unordered_map>
-@@ -55,14 +56,15 @@ GfxRenderingAPIDX11::GfxRenderingAPIDX11(GfxWindowBackendDXGI* backend) {
+@@ -21,6 +22,7 @@
+ 
+ #include "fast/backends/gfx_window_manager_api.h"
+ #include "fast/backends/gfx_direct3d_common.h"
++#include "fast/backends/gfx_shader_disk_cache.h"
+ 
+ #define DECLARE_GFX_DXGI_FUNCTIONS
+ #include "fast/backends/gfx_dxgi.h"
+@@ -55,14 +57,15 @@ GfxRenderingAPIDX11::GfxRenderingAPIDX11(GfxWindowBackendDXGI* backend) {
  }
  
  void GfxRenderingAPIDX11::CreateDepthStencilObjects(uint32_t width, uint32_t height, uint32_t msaa_count,
@@ -667,7 +700,7 @@ index 1077d2a4..e49fb0e4 100644
      texture_desc.SampleDesc.Count = msaa_count;
      texture_desc.SampleDesc.Quality = 0;
      texture_desc.Usage = D3D11_USAGE_DEFAULT;
-@@ -74,7 +76,8 @@ void GfxRenderingAPIDX11::CreateDepthStencilObjects(uint32_t width, uint32_t hei
+@@ -74,7 +77,8 @@ void GfxRenderingAPIDX11::CreateDepthStencilObjects(uint32_t width, uint32_t hei
      ThrowIfFailed(mDevice->CreateTexture2D(&texture_desc, nullptr, texture.GetAddressOf()));
  
      D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
@@ -677,7 +710,7 @@ index 1077d2a4..e49fb0e4 100644
      view_desc.Flags = 0;
      if (msaa_count > 1) {
          view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
-@@ -88,13 +91,18 @@ void GfxRenderingAPIDX11::CreateDepthStencilObjects(uint32_t width, uint32_t hei
+@@ -88,13 +92,18 @@ void GfxRenderingAPIDX11::CreateDepthStencilObjects(uint32_t width, uint32_t hei
  
      if (srv != nullptr) {
          D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
@@ -698,7 +731,7 @@ index 1077d2a4..e49fb0e4 100644
      }
  }
  static bool CreateDeviceFunc(class GfxRenderingAPIDX11* self, IDXGIAdapter1* adapter, bool test_only) {
-@@ -309,8 +317,8 @@ struct ShaderProgram* GfxRenderingAPIDX11::CreateAndLoadNewShader(uint64_t shade
+@@ -309,45 +318,56 @@ struct ShaderProgram* GfxRenderingAPIDX11::CreateAndLoadNewShader(uint64_t shade
      char* buf;
      size_t len, numFloats;
  
@@ -709,7 +742,87 @@ index 1077d2a4..e49fb0e4 100644
  
      buf = shader.data();
      len = shader.size();
-@@ -573,9 +581,11 @@ void GfxRenderingAPIDX11::SetUseAlpha(bool use_alpha) {
+ 
+-    ComPtr<ID3DBlob> vs, ps;
+-    ComPtr<ID3DBlob> error_blob;
+-
+ #if DEBUG_D3D
+     UINT compile_flags = D3DCOMPILE_DEBUG;
+ #else
+     UINT compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL2;
+ #endif
+ 
+-    HRESULT hr = mD3dCompile(buf, len, nullptr, nullptr, nullptr, "VSMain", "vs_4_0", compile_flags, 0,
+-                             vs.GetAddressOf(), error_blob.GetAddressOf());
+-
+-    if (FAILED(hr)) {
+-        char* err = (char*)error_blob->GetBufferPointer();
+-        MessageBoxA(mWindowBackend->GetWindowHandle(), err, "Error", MB_OK | MB_ICONERROR);
+-        throw hr;
+-    }
+-
+-    hr = mD3dCompile(buf, len, nullptr, nullptr, nullptr, "PSMain", "ps_4_0", compile_flags, 0, ps.GetAddressOf(),
+-                     error_blob.GetAddressOf());
++    // Compiling takes long enough to stall a frame, so the bytecode is kept on disk and reused in later sessions.
++    auto compile = [&](const char* entry, const char* profile, std::vector<uint8_t>& out, bool useCache) {
++        uint64_t key = Fast::ShaderDiskCache::Hash(buf, len);
++        key = Fast::ShaderDiskCache::Hash(std::string(entry) + profile, key);
++        key = Fast::ShaderDiskCache::Hash(&compile_flags, sizeof(compile_flags), key);
++        if (useCache && Fast::ShaderDiskCache::Load("dx11", key, out)) {
++            return;
++        }
++        ComPtr<ID3DBlob> blob;
++        ComPtr<ID3DBlob> error_blob;
++        HRESULT hr = mD3dCompile(buf, len, nullptr, nullptr, nullptr, entry, profile, compile_flags, 0,
++                                 blob.GetAddressOf(), error_blob.GetAddressOf());
++        if (FAILED(hr)) {
++            char* err = (char*)error_blob->GetBufferPointer();
++            MessageBoxA(mWindowBackend->GetWindowHandle(), err, "Error", MB_OK | MB_ICONERROR);
++            throw hr;
++        }
++        const uint8_t* data = (const uint8_t*)blob->GetBufferPointer();
++        out.assign(data, data + blob->GetBufferSize());
++        Fast::ShaderDiskCache::Store("dx11", key, out.data(), out.size());
++    };
+ 
+-    if (FAILED(hr)) {
+-        char* err = (char*)error_blob->GetBufferPointer();
+-        MessageBoxA(mWindowBackend->GetWindowHandle(), err, "Error", MB_OK | MB_ICONERROR);
+-        throw hr;
+-    }
++    std::vector<uint8_t> vs, ps;
++    compile("VSMain", "vs_4_0", vs, true);
++    compile("PSMain", "ps_4_0", ps, true);
+ 
+     struct ShaderProgramD3D11* prg = &mShaderProgramPool[std::make_pair(shader_id0, shader_id1)];
+ 
+-    ThrowIfFailed(mDevice->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), nullptr,
+-                                              prg->vertex_shader.GetAddressOf()));
+-    ThrowIfFailed(mDevice->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), nullptr,
+-                                             prg->pixel_shader.GetAddressOf()));
++    // A stored shader the driver rejects (a damaged file) is compiled again.
++    if (FAILED(mDevice->CreateVertexShader(vs.data(), vs.size(), nullptr, prg->vertex_shader.GetAddressOf()))) {
++        compile("VSMain", "vs_4_0", vs, false);
++        ThrowIfFailed(
++            mDevice->CreateVertexShader(vs.data(), vs.size(), nullptr, prg->vertex_shader.GetAddressOf()));
++    }
++    if (FAILED(mDevice->CreatePixelShader(ps.data(), ps.size(), nullptr, prg->pixel_shader.GetAddressOf()))) {
++        compile("PSMain", "ps_4_0", ps, false);
++        ThrowIfFailed(mDevice->CreatePixelShader(ps.data(), ps.size(), nullptr, prg->pixel_shader.GetAddressOf()));
++    }
+ 
+     // Input Layout
+ 
+@@ -400,7 +420,7 @@ struct ShaderProgram* GfxRenderingAPIDX11::CreateAndLoadNewShader(uint64_t shade
+         ied[ied_index++] = { "INPUT", i, format, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 };
+     }
+ 
+-    ThrowIfFailed(mDevice->CreateInputLayout(ied, ied_index, vs->GetBufferPointer(), vs->GetBufferSize(),
++    ThrowIfFailed(mDevice->CreateInputLayout(ied, ied_index, vs.data(), vs.size(),
+                                              prg->input_layout.GetAddressOf()));
+ 
+     // Blend state
+@@ -573,9 +593,11 @@ void GfxRenderingAPIDX11::SetUseAlpha(bool use_alpha) {
  
  void GfxRenderingAPIDX11::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size_t buf_vbo_num_tris) {
  
@@ -722,7 +835,7 @@ index 1077d2a4..e49fb0e4 100644
  
          mDepthStencilState.Reset();
  
-@@ -588,10 +598,23 @@ void GfxRenderingAPIDX11::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, siz
+@@ -588,10 +610,23 @@ void GfxRenderingAPIDX11::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, siz
          depth_stencil_desc.DepthFunc = mCurrentDepthTest
                                             ? (mCurrentZmodeDecal ? D3D11_COMPARISON_LESS_EQUAL : D3D11_COMPARISON_LESS)
                                             : D3D11_COMPARISON_ALWAYS;
@@ -748,7 +861,7 @@ index 1077d2a4..e49fb0e4 100644
      }
  
      if (mLastZmodeDecal != mCurrentZmodeDecal) {
-@@ -717,6 +740,162 @@ void GfxRenderingAPIDX11::StartFrame() {
+@@ -717,6 +752,162 @@ void GfxRenderingAPIDX11::StartFrame() {
          // No high values, as noise starts to look ugly
          mPerFrameCbData.noise_frame = 0;
      }
@@ -911,7 +1024,7 @@ index 1077d2a4..e49fb0e4 100644
  }
  
  void GfxRenderingAPIDX11::EndFrame() {
-@@ -806,12 +985,15 @@ void GfxRenderingAPIDX11::UpdateFramebufferParameters(int fb_id, uint32_t width,
+@@ -806,12 +997,15 @@ void GfxRenderingAPIDX11::UpdateFramebufferParameters(int fb_id, uint32_t width,
      if (has_depth_buffer &&
          (diff || !fb.has_depth_buffer || (fb.depth_stencil_srv.Get() != nullptr) != can_extract_depth)) {
          fb.depth_stencil_srv.Reset();
@@ -928,7 +1041,7 @@ index 1077d2a4..e49fb0e4 100644
      }
  
      fb.has_depth_buffer = has_depth_buffer;
-@@ -845,7 +1027,7 @@ void GfxRenderingAPIDX11::ClearFramebuffer(bool color, bool depth) {
+@@ -845,7 +1039,7 @@ void GfxRenderingAPIDX11::ClearFramebuffer(bool color, bool depth) {
          mContext->ClearRenderTargetView(fb.render_target_view.Get(), clearColor);
      }
      if (depth && fb.has_depth_buffer) {
@@ -937,7 +1050,7 @@ index 1077d2a4..e49fb0e4 100644
      }
  }
  
-@@ -1127,223 +1309,5 @@ void GfxRenderingAPIDX11::SetSrgbMode() {
+@@ -1127,223 +1321,5 @@ void GfxRenderingAPIDX11::SetSrgbMode() {
      mSrgbMode = true;
  }
  
@@ -1428,10 +1541,21 @@ index 00000000..0d89a3ca
 +} // namespace Fast
 +#endif
 diff --git a/src/fast/backends/gfx_opengl.cpp b/src/fast/backends/gfx_opengl.cpp
-index 0b114667..cf1b17e8 100644
+index 0b114667..f4b589b6 100644
 --- a/src/fast/backends/gfx_opengl.cpp
 +++ b/src/fast/backends/gfx_opengl.cpp
-@@ -57,6 +57,9 @@ static void VertexArraySetAttribs(ShaderProgram* prg) {
+@@ -19,6 +19,10 @@
+ #endif
+ 
+ #include "fast/backends/gfx_opengl.h"
++#include "fast/backends/gfx_shader_disk_cache.h"
++#include <cstring>
++#include <string>
++#include <vector>
+ #include "ship/window/gui/Gui.h"
+ #include <prism/processor.h>
+ #include <fstream>
+@@ -57,6 +61,9 @@ static void VertexArraySetAttribs(ShaderProgram* prg) {
  void GfxRenderingAPIOGL::SetUniforms(ShaderProgram* prg) const {
      glUniform1i(prg->frameCountLocation, mFrameCount);
      glUniform1f(prg->noiseScaleLocation, mCurrentNoiseScale);
@@ -1441,7 +1565,7 @@ index 0b114667..cf1b17e8 100644
  }
  
  void GfxRenderingAPIOGL::SetPerDrawUniforms() {
-@@ -88,6 +91,10 @@ void GfxRenderingAPIOGL::LoadShader(ShaderProgram* new_prg) {
+@@ -88,6 +95,10 @@ void GfxRenderingAPIOGL::LoadShader(ShaderProgram* new_prg) {
      SetUniforms(new_prg);
  }
  
@@ -1452,7 +1576,7 @@ index 0b114667..cf1b17e8 100644
  #define RAND_NOISE "((random(vec3(floor(gl_FragCoord.xy * noise_scale), float(frame_count))) + 1.0) / 2.0)"
  
  static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha,
-@@ -99,12 +106,24 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
+@@ -99,12 +110,24 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
              case SHADER_1:
                  return with_alpha ? "vec4(1.0, 1.0, 1.0, 1.0)" : "vec3(1.0, 1.0, 1.0)";
              case SHADER_INPUT_1:
@@ -1477,7 +1601,7 @@ index 0b114667..cf1b17e8 100644
                  return with_alpha || !inputs_have_alpha ? "vInput4" : "vInput4.rgb";
              case SHADER_TEXEL0:
                  return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
-@@ -141,13 +160,13 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
+@@ -141,13 +164,13 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
              case SHADER_1:
                  return "1.0";
              case SHADER_INPUT_1:
@@ -1495,7 +1619,7 @@ index 0b114667..cf1b17e8 100644
              case SHADER_TEXEL0:
                  return first_cycle ? "texVal0.a" : "texVal1.a";
              case SHADER_TEXEL0A:
-@@ -227,6 +246,10 @@ std::optional<std::string> opengl_include_fs(const std::string& path) {
+@@ -227,6 +250,10 @@ std::optional<std::string> opengl_include_fs(const std::string& path) {
  }
  
  std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
@@ -1506,7 +1630,7 @@ index 0b114667..cf1b17e8 100644
      prism::Processor processor;
      prism::ContextItems mContext = {
          { "o_c", M_ARRAY(cc_features.c, int, 2, 2, 4) },
-@@ -247,6 +270,9 @@ std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
+@@ -247,6 +274,9 @@ std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
          { "o_do_single", M_ARRAY(cc_features.do_single, bool, 2, 2) },
          { "o_do_multiply", M_ARRAY(cc_features.do_multiply, bool, 2, 2) },
          { "o_color_alpha_same", M_ARRAY(cc_features.color_alpha_same, bool, 2) },
@@ -1516,7 +1640,132 @@ index 0b114667..cf1b17e8 100644
          { "FILTER_THREE_POINT", FILTER_THREE_POINT },
          { "FILTER_LINEAR", FILTER_LINEAR },
          { "FILTER_NONE", FILTER_NONE },
-@@ -476,6 +502,9 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
+@@ -381,38 +411,95 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
+     const GLint lengths[2] = { (GLint)vs_buf.size(), (GLint)fs_buf.size() };
+     GLint success;
+ 
+-    GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+-    glShaderSource(vertex_shader, 1, &sources[0], &lengths[0]);
+-    glCompileShader(vertex_shader);
+-    glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
+-    if (!success) {
+-        GLint max_length = 0;
+-        glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &max_length);
+-        char error_log[1024];
+-        // fprintf(stderr, "Vertex shader compilation failed\n");
+-        glGetShaderInfoLog(vertex_shader, max_length, &max_length, &error_log[0]);
+-        // fprintf(stderr, "%s\n", &error_log[0]);
+-        abort();
++    // Linked programs are kept on disk (when the driver can hand them out), so a shader compiles once instead of
++    // stalling a frame every session. The key includes the driver, whose binaries are only valid for itself.
++    GLuint shader_program = glCreateProgram();
++    bool loaded = false;
++    bool useBinaryCache = false;
++    uint64_t cacheKey = 0;
++#ifdef GL_PROGRAM_BINARY_LENGTH
++    GLint binaryFormats = 0;
++    glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &binaryFormats);
++    useBinaryCache = binaryFormats > 0;
++    if (useBinaryCache) {
++        const char* vendor = (const char*)glGetString(GL_VENDOR);
++        const char* renderer = (const char*)glGetString(GL_RENDERER);
++        const char* version = (const char*)glGetString(GL_VERSION);
++        std::string driver = std::string(vendor ? vendor : "") + "|" + (renderer ? renderer : "") + "|" +
++                             (version ? version : "");
++        cacheKey = Fast::ShaderDiskCache::Hash(vs_buf.data(), vs_buf.size());
++        cacheKey = Fast::ShaderDiskCache::Hash(fs_buf.data(), fs_buf.size(), cacheKey);
++        cacheKey = Fast::ShaderDiskCache::Hash(driver, cacheKey);
++        std::vector<uint8_t> stored;
++        if (Fast::ShaderDiskCache::Load("opengl", cacheKey, stored) && stored.size() > sizeof(GLenum)) {
++            GLenum format;
++            memcpy(&format, stored.data(), sizeof(format));
++            glProgramBinary(shader_program, format, stored.data() + sizeof(format),
++                            (GLsizei)(stored.size() - sizeof(format)));
++            glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
++            loaded = success == GL_TRUE;
++        }
+     }
++#endif
+ 
+-    GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+-    glShaderSource(fragment_shader, 1, &sources[1], &lengths[1]);
+-    glCompileShader(fragment_shader);
+-    glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
+-    if (!success) {
+-        GLint max_length = 0;
+-        glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &max_length);
+-        char error_log[1024];
+-        fprintf(stderr, "Fragment shader compilation failed\n");
+-        glGetShaderInfoLog(fragment_shader, max_length, &max_length, &error_log[0]);
+-        fprintf(stderr, "%s\n", &error_log[0]);
+-        abort();
+-    }
++    if (!loaded) {
++        GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
++        glShaderSource(vertex_shader, 1, &sources[0], &lengths[0]);
++        glCompileShader(vertex_shader);
++        glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
++        if (!success) {
++            GLint max_length = 0;
++            glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &max_length);
++            char error_log[1024];
++            // fprintf(stderr, "Vertex shader compilation failed\n");
++            glGetShaderInfoLog(vertex_shader, max_length, &max_length, &error_log[0]);
++            // fprintf(stderr, "%s\n", &error_log[0]);
++            abort();
++        }
+ 
+-    GLuint shader_program = glCreateProgram();
+-    glAttachShader(shader_program, vertex_shader);
+-    glAttachShader(shader_program, fragment_shader);
+-    glLinkProgram(shader_program);
++        GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
++        glShaderSource(fragment_shader, 1, &sources[1], &lengths[1]);
++        glCompileShader(fragment_shader);
++        glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
++        if (!success) {
++            GLint max_length = 0;
++            glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &max_length);
++            char error_log[1024];
++            fprintf(stderr, "Fragment shader compilation failed\n");
++            glGetShaderInfoLog(fragment_shader, max_length, &max_length, &error_log[0]);
++            fprintf(stderr, "%s\n", &error_log[0]);
++            abort();
++        }
++
++        glAttachShader(shader_program, vertex_shader);
++        glAttachShader(shader_program, fragment_shader);
++#ifdef GL_PROGRAM_BINARY_LENGTH
++        if (useBinaryCache) {
++            glProgramParameteri(shader_program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
++        }
++#endif
++        glLinkProgram(shader_program);
++        glDeleteShader(vertex_shader);
++        glDeleteShader(fragment_shader);
++
++#ifdef GL_PROGRAM_BINARY_LENGTH
++        glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
++        GLint binaryLength = 0;
++        if (useBinaryCache && success == GL_TRUE) {
++            glGetProgramiv(shader_program, GL_PROGRAM_BINARY_LENGTH, &binaryLength);
++        }
++        if (binaryLength > 0) {
++            std::vector<uint8_t> stored(sizeof(GLenum) + binaryLength);
++            GLenum format = 0;
++            GLsizei written = 0;
++            glGetProgramBinary(shader_program, binaryLength, &written, &format, stored.data() + sizeof(GLenum));
++            if (written > 0) {
++                memcpy(stored.data(), &format, sizeof(format));
++                Fast::ShaderDiskCache::Store("opengl", cacheKey, stored.data(), sizeof(GLenum) + written);
++            }
++        }
++#endif
++    }
+ 
+     size_t cnt = 0;
+ 
+@@ -476,6 +563,9 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
      prg->texture_width_location = glGetUniformLocation(shader_program, "texture_width");
      prg->texture_height_location = glGetUniformLocation(shader_program, "texture_height");
      prg->texture_filtering_location = glGetUniformLocation(shader_program, "texture_filtering");
@@ -1526,7 +1775,7 @@ index 0b114667..cf1b17e8 100644
  
      LoadShader(prg);
  
-@@ -572,6 +601,9 @@ void GfxRenderingAPIOGL::SetSamplerParameters(int tile, bool linear_filter, uint
+@@ -572,6 +662,9 @@ void GfxRenderingAPIOGL::SetSamplerParameters(int tile, bool linear_filter, uint
  void GfxRenderingAPIOGL::SetDepthTestAndMask(bool depth_test, bool z_upd) {
      mCurrentDepthTest = depth_test;
      mCurrentDepthMask = z_upd;
@@ -1536,7 +1785,7 @@ index 0b114667..cf1b17e8 100644
  }
  
  void GfxRenderingAPIOGL::SetZmodeDecal(bool zmode_decal) {
-@@ -692,6 +724,177 @@ void GfxRenderingAPIOGL::OnResize() {
+@@ -692,6 +785,177 @@ void GfxRenderingAPIOGL::OnResize() {
  
  void GfxRenderingAPIOGL::StartFrame() {
      mFrameCount++;
@@ -1714,7 +1963,7 @@ index 0b114667..cf1b17e8 100644
  }
  
  void GfxRenderingAPIOGL::EndFrame() {
-@@ -798,7 +1001,8 @@ void GfxRenderingAPIOGL::ClearFramebuffer(bool color, bool depth) {
+@@ -798,7 +1062,8 @@ void GfxRenderingAPIOGL::ClearFramebuffer(bool color, bool depth) {
      glDisable(GL_SCISSOR_TEST);
      glDepthMask(GL_TRUE);
      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1833,14 +2082,109 @@ index eb5df8b2..57aa4933 100644
      SDL_DestroyWindow(mWnd);
      SDL_DestroyRenderer(mRenderer);
      SDL_Quit();
+diff --git a/src/fast/backends/gfx_shader_disk_cache.cpp b/src/fast/backends/gfx_shader_disk_cache.cpp
+new file mode 100644
+index 00000000..bb846f47
+--- /dev/null
++++ b/src/fast/backends/gfx_shader_disk_cache.cpp
+@@ -0,0 +1,88 @@
++#include "fast/backends/gfx_shader_disk_cache.h"
++
++#include <cstdio>
++#include <filesystem>
++#include <fstream>
++
++#include "ship/Context.h"
++
++namespace Fast::ShaderDiskCache {
++
++// Bump when the stored format or the shader generators change in a way the source hash would not catch.
++static constexpr uint32_t kVersion = 1;
++static constexpr uint32_t kMagic = 0x43484853; // "SHHC"
++
++uint64_t Hash(const void* data, size_t size, uint64_t seed) {
++    uint64_t hash = seed;
++    const uint8_t* bytes = static_cast<const uint8_t*>(data);
++    for (size_t i = 0; i < size; i++) {
++        hash ^= bytes[i];
++        hash *= 0x100000001b3ULL;
++    }
++    return hash;
++}
++
++uint64_t Hash(const std::string& text, uint64_t seed) {
++    return Hash(text.data(), text.size(), seed);
++}
++
++static std::filesystem::path PathFor(const char* api, uint64_t key) {
++    char name[32];
++    snprintf(name, sizeof(name), "%016llx.bin", (unsigned long long)key);
++    return std::filesystem::path(Ship::Context::GetPathRelativeToAppDirectory("shadercache")) / api / name;
++}
++
++bool Load(const char* api, uint64_t key, std::vector<uint8_t>& out) {
++    std::ifstream file(PathFor(api, key), std::ios::binary);
++    if (!file) {
++        return false;
++    }
++    uint32_t header[3] = {};
++    uint64_t storedKey = 0;
++    if (!file.read(reinterpret_cast<char*>(header), sizeof(header)) ||
++        !file.read(reinterpret_cast<char*>(&storedKey), sizeof(storedKey))) {
++        return false;
++    }
++    if (header[0] != kMagic || header[1] != kVersion || storedKey != key || header[2] == 0 ||
++        header[2] > 16 * 1024 * 1024) {
++        return false;
++    }
++    out.resize(header[2]);
++    if (!file.read(reinterpret_cast<char*>(out.data()), out.size())) {
++        out.clear();
++        return false;
++    }
++    return true;
++}
++
++void Store(const char* api, uint64_t key, const void* data, size_t size) {
++    if (data == nullptr || size == 0) {
++        return;
++    }
++    std::error_code ec;
++    auto path = PathFor(api, key);
++    std::filesystem::create_directories(path.parent_path(), ec);
++    auto temp = path;
++    temp += ".tmp";
++    {
++        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
++        if (!file) {
++            return;
++        }
++        uint32_t header[3] = { kMagic, kVersion, (uint32_t)size };
++        file.write(reinterpret_cast<const char*>(header), sizeof(header));
++        file.write(reinterpret_cast<const char*>(&key), sizeof(key));
++        file.write(static_cast<const char*>(data), size);
++        if (!file) {
++            file.close();
++            std::filesystem::remove(temp, ec);
++            return;
++        }
++    }
++    std::filesystem::rename(temp, path, ec);
++    if (ec) {
++        std::filesystem::remove(temp, ec);
++    }
++}
++
++} // namespace Fast::ShaderDiskCache
 diff --git a/src/fast/backends/gfx_vulkan.cpp b/src/fast/backends/gfx_vulkan.cpp
 new file mode 100644
-index 00000000..f0f9ef63
+index 00000000..c29edd5d
 --- /dev/null
 +++ b/src/fast/backends/gfx_vulkan.cpp
-@@ -0,0 +1,2639 @@
+@@ -0,0 +1,2700 @@
 +#ifdef ENABLE_VULKAN
 +
++#include "fast/backends/gfx_shader_disk_cache.h"
 +#include "fast/backends/gfx_vulkan.h"
 +
 +#include <algorithm>
@@ -1952,8 +2296,8 @@ index 00000000..f0f9ef63
 +}
 +)";
 +
-+bool CompileToSpirv(const std::string& source, EShLanguage stage, bool hlsl, const char* entry,
-+                    std::vector<uint32_t>& spirv) {
++bool CompileToSpirvUncached(const std::string& source, EShLanguage stage, bool hlsl, const char* entry,
++                            std::vector<uint32_t>& spirv) {
 +    glslang::TShader shader(stage);
 +    const char* src = source.c_str();
 +    shader.setStrings(&src, 1);
@@ -1989,6 +2333,32 @@ index 00000000..f0f9ef63
 +        SPDLOG_ERROR("Vulkan: SPIR-V generation failed ({}): {}", entry, logger.getAllMessages());
 +        return false;
 +    }
++    return true;
++}
++
++constexpr uint64_t kPipelineCacheKey = 0x706970656c696e65ULL; // "pipeline"
++
++// glslang takes tens of milliseconds per shader, enough to stall a frame, so the SPIR-V is kept on disk.
++bool CompileToSpirv(const std::string& source, EShLanguage stage, bool hlsl, const char* entry,
++                    std::vector<uint32_t>& spirv) {
++    uint64_t key = Fast::ShaderDiskCache::Hash(source);
++    uint32_t extra[2] = { (uint32_t)stage, hlsl ? 1u : 0u };
++    key = Fast::ShaderDiskCache::Hash(extra, sizeof(extra), key);
++    key = Fast::ShaderDiskCache::Hash(std::string(entry), key);
++
++    std::vector<uint8_t> cached;
++    if (Fast::ShaderDiskCache::Load("vulkan", key, cached) && cached.size() % 4 == 0 && cached.size() >= 20) {
++        spirv.resize(cached.size() / 4);
++        memcpy(spirv.data(), cached.data(), cached.size());
++        if (spirv[0] == 0x07230203) { // SPIR-V magic
++            return true;
++        }
++        spirv.clear();
++    }
++    if (!CompileToSpirvUncached(source, stage, hlsl, entry, spirv)) {
++        return false;
++    }
++    Fast::ShaderDiskCache::Store("vulkan", key, spirv.data(), spirv.size() * sizeof(uint32_t));
 +    return true;
 +}
 +
@@ -2106,6 +2476,24 @@ index 00000000..f0f9ef63
 +    VkQueue queue = VK_NULL_HANDLE;
 +    VmaAllocator allocator = nullptr;
 +    VkPipelineCache pipelineCache = VK_NULL_HANDLE;
++    bool pipelineCacheDirty = false;
++    uint32_t framesSincePipelineSave = 0;
++
++    void SavePipelineCache() {
++        if (pipelineCache == VK_NULL_HANDLE || !pipelineCacheDirty) {
++            return;
++        }
++        size_t size = 0;
++        if (vkGetPipelineCacheData(device, pipelineCache, &size, nullptr) != VK_SUCCESS || size == 0) {
++            return;
++        }
++        std::vector<uint8_t> data(size);
++        if (vkGetPipelineCacheData(device, pipelineCache, &size, data.data()) != VK_SUCCESS) {
++            return;
++        }
++        Fast::ShaderDiskCache::Store("vulkan", kPipelineCacheKey, data.data(), size);
++        pipelineCacheDirty = false;
++    }
 +    bool depthClampSupported = false;
 +    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 +    bool depthSampleable = false;
@@ -2376,8 +2764,17 @@ index 00000000..f0f9ef63
 +        aci.pVulkanFunctions = &fns;
 +        Check(vmaCreateAllocator(&aci, &allocator), "vmaCreateAllocator");
 +
++        // The driver's pipeline cache is kept between sessions too; a driver ignores data it cannot use.
++        std::vector<uint8_t> pipelineData;
++        Fast::ShaderDiskCache::Load("vulkan", kPipelineCacheKey, pipelineData);
 +        VkPipelineCacheCreateInfo pcci = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-+        vkCreatePipelineCache(device, &pcci, nullptr, &pipelineCache);
++        pcci.initialDataSize = pipelineData.size();
++        pcci.pInitialData = pipelineData.empty() ? nullptr : pipelineData.data();
++        if (vkCreatePipelineCache(device, &pcci, nullptr, &pipelineCache) != VK_SUCCESS && !pipelineData.empty()) {
++            pcci.initialDataSize = 0;
++            pcci.pInitialData = nullptr;
++            vkCreatePipelineCache(device, &pcci, nullptr, &pipelineCache);
++        }
 +    }
 +
 +    void CreateFrameSlots() {
@@ -3002,6 +3399,11 @@ index 00000000..f0f9ef63
 +    }
 +
 +    void EndFrame() {
++        // New pipelines are written out a few seconds after they appear, not only at exit.
++        if (pipelineCacheDirty && ++framesSincePipelineSave >= 600) {
++            framesSincePipelineSave = 0;
++            SavePipelineCache();
++        }
 +        if (!recording) {
 +            EnsureRecording();
 +        }
@@ -3170,6 +3572,7 @@ index 00000000..f0f9ef63
 +        Check(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pci, nullptr, &pipeline),
 +              "vkCreateGraphicsPipelines");
 +        pipelines[key] = pipeline;
++        pipelineCacheDirty = true;
 +        return pipeline;
 +    }
 +
@@ -4151,6 +4554,7 @@ index 00000000..f0f9ef63
 +        vkDestroyDescriptorSetLayout(device, depthReadSetLayout, nullptr);
 +        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 +        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
++        SavePipelineCache();
 +        vkDestroyPipelineCache(device, pipelineCache, nullptr);
 +        vkDestroySwapchainKHR(device, swapchain, nullptr);
 +        vmaDestroyAllocator(allocator);
