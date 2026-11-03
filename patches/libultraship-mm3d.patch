@@ -490,30 +490,46 @@ index de38dd2f..b0871f74 100644
  };
  }; // namespace Ship
 diff --git a/include/ship/resource/ResourceManager.h b/include/ship/resource/ResourceManager.h
-index aed8d59c..6c965125 100644
+index aed8d59c..8ade69a9 100644
 --- a/include/ship/resource/ResourceManager.h
 +++ b/include/ship/resource/ResourceManager.h
-@@ -130,6 +130,7 @@ class ResourceManager {
+@@ -130,6 +130,11 @@ class ResourceManager {
      std::shared_ptr<IResource> GetCachedResource(std::variant<ResourceLoadError, std::shared_ptr<IResource>> cacheLine);
  
    private:
 +    bool AltAssetWins(const std::string& path);
++    // AltAssetWins is asked for every resource lookup, so its answers are kept until the archives change.
++    std::unordered_map<std::string, bool> mAltAssetWinsCache;
++    uint32_t mAltAssetWinsGeneration = 0;
++    std::mutex mAltAssetWinsMutex;
      std::unordered_map<ResourceIdentifier, std::variant<ResourceLoadError, std::shared_ptr<IResource>>,
                         ResourceIdentifierHash>
          mResourceCache;
 diff --git a/include/ship/resource/archive/ArchiveManager.h b/include/ship/resource/archive/ArchiveManager.h
-index 813b0338..f01701d7 100644
+index 813b0338..afec98b2 100644
 --- a/include/ship/resource/archive/ArchiveManager.h
 +++ b/include/ship/resource/archive/ArchiveManager.h
-@@ -35,6 +35,8 @@ class ArchiveManager {
+@@ -35,6 +35,12 @@ class ArchiveManager {
      bool HasFile(uint64_t hash);
      std::shared_ptr<Archive>
      GetArchiveFromFile(const std::string& filePath); // Retrieves a ptr to the archive that the asset is inside of
 +    // Position, in load order, of the archive that serves the file; -1 when no archive has it.
 +    int32_t GetArchiveOrder(const std::string& filePath);
++    // Changes whenever archives are added, removed or replaced.
++    uint32_t GetGeneration() const {
++        return mGeneration;
++    }
      std::shared_ptr<std::vector<std::string>> ListFiles(const std::string& searchMask = "");
      std::shared_ptr<std::vector<std::string>> ListFiles(const std::list<std::string>& includes,
                                                          const std::list<std::string>& excludes);
+@@ -51,6 +57,7 @@ class ArchiveManager {
+ 
+   private:
+     std::vector<std::shared_ptr<Archive>> mArchives;
++    uint32_t mGeneration = 0;
+     std::vector<uint32_t> mGameVersions;
+     std::unordered_set<uint32_t> mValidGameVersions;
+     std::unordered_map<uint64_t, std::string> mHashes;
 diff --git a/include/ship/window/Window.h b/include/ship/window/Window.h
 index b7dca53e..6998b9fe 100644
 --- a/include/ship/window/Window.h
@@ -4945,27 +4961,36 @@ index 34391d1b..c6e573fc 100644
 +}
 +#endif
 diff --git a/src/ship/resource/ResourceManager.cpp b/src/ship/resource/ResourceManager.cpp
-index 5c76ac33..0b04231f 100644
+index 5c76ac33..70d47c3d 100644
 --- a/src/ship/resource/ResourceManager.cpp
 +++ b/src/ship/resource/ResourceManager.cpp
-@@ -79,6 +79,16 @@ std::shared_ptr<File> ResourceManager::LoadFileProcess(const std::string& filePa
+@@ -79,6 +79,25 @@ std::shared_ptr<File> ResourceManager::LoadFileProcess(const std::string& filePa
      return file;
  }
  
 +// An alternate (alt/) asset is used unless a later archive replaces the standard one: a translation or other mod
 +// loaded after an HD pack keeps its own version of the textures it changes.
 +bool ResourceManager::AltAssetWins(const std::string& path) {
-+    int32_t standard = mArchiveManager->GetArchiveOrder(path);
-+    if (standard < 0) {
-+        return true;
++    const std::lock_guard<std::mutex> lock(mAltAssetWinsMutex);
++    if (mAltAssetWinsGeneration != mArchiveManager->GetGeneration()) {
++        mAltAssetWinsCache.clear();
++        mAltAssetWinsGeneration = mArchiveManager->GetGeneration();
 +    }
-+    return mArchiveManager->GetArchiveOrder(IResource::gAltAssetPrefix + path) >= standard;
++    auto cached = mAltAssetWinsCache.find(path);
++    if (cached != mAltAssetWinsCache.end()) {
++        return cached->second;
++    }
++
++    int32_t standard = mArchiveManager->GetArchiveOrder(path);
++    bool wins = standard < 0 || mArchiveManager->GetArchiveOrder(IResource::gAltAssetPrefix + path) >= standard;
++    mAltAssetWinsCache.emplace(path, wins);
++    return wins;
 +}
 +
  std::shared_ptr<File> ResourceManager::LoadFileProcess(const ResourceIdentifier& identifier) {
      if (identifier.Parent == nullptr) {
          return LoadFileProcess(identifier.Path);
-@@ -103,7 +113,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResourceProcess(const ResourceId
+@@ -103,7 +122,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResourceProcess(const ResourceId
  
      // Attempt to load the alternate version of the asset, if we fail then we continue trying to load the standard
      // asset.
@@ -4975,7 +5000,7 @@ index 5c76ac33..0b04231f 100644
          const auto altPath = IResource::gAltAssetPrefix + identifier.Path;
          auto altResource = LoadResourceProcess({ altPath, identifier.Owner, identifier.Parent }, loadExact, initData);
  
-@@ -240,7 +251,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResource(uint64_t crc, bool load
+@@ -240,7 +260,8 @@ std::shared_ptr<IResource> ResourceManager::LoadResource(uint64_t crc, bool load
  
  std::variant<ResourceManager::ResourceLoadError, std::shared_ptr<IResource>>
  ResourceManager::CheckCache(const ResourceIdentifier& identifier, bool loadExact) {
@@ -4986,7 +5011,7 @@ index 5c76ac33..0b04231f 100644
          auto altCacheResult = CheckCache({ altPath, identifier.Owner, identifier.Parent }, loadExact);
  
 diff --git a/src/ship/resource/archive/ArchiveManager.cpp b/src/ship/resource/archive/ArchiveManager.cpp
-index 80a38853..7a1d5170 100644
+index 80a38853..26ea832d 100644
 --- a/src/ship/resource/archive/ArchiveManager.cpp
 +++ b/src/ship/resource/archive/ArchiveManager.cpp
 @@ -1,5 +1,7 @@
@@ -5013,6 +5038,30 @@ index 80a38853..7a1d5170 100644
  std::shared_ptr<Archive> ArchiveManager::GetArchiveFromFile(const std::string& filePath) {
      return mFileToArchive[CRC64(filePath.c_str())];
  }
+@@ -167,6 +178,7 @@ bool ArchiveManager::WriteFile(std::shared_ptr<Archive> archive, const std::stri
+ }
+ 
+ size_t ArchiveManager::RemoveArchive(const std::string& path) {
++    mGeneration++;
+     for (size_t i = 0; i < mArchives.size(); i++) {
+         if (path == mArchives[i]->GetPath()) {
+             mArchives[i]->Unload();
+@@ -184,6 +196,7 @@ size_t ArchiveManager::RemoveArchive(std::shared_ptr<Archive> archive) {
+ }
+ 
+ void ArchiveManager::SetArchives(std::shared_ptr<std::vector<std::shared_ptr<Archive>>> archives) {
++    mGeneration++;
+     mArchives.clear();
+ 
+     if (archives) {
+@@ -258,6 +271,7 @@ std::shared_ptr<Archive> ArchiveManager::AddArchive(const std::string& archivePa
+ }
+ 
+ std::shared_ptr<Archive> ArchiveManager::AddArchive(std::shared_ptr<Archive> archive) {
++    mGeneration++;
+     if (!archive->IsLoaded()) {
+         SPDLOG_WARN("Attempting to add unloaded Archive at {} to Archive Manager", archive->GetPath());
+         return nullptr;
 diff --git a/src/ship/window/gui/GameOverlay.cpp b/src/ship/window/gui/GameOverlay.cpp
 index 8819c392..01bee2f2 100644
 --- a/src/ship/window/gui/GameOverlay.cpp
