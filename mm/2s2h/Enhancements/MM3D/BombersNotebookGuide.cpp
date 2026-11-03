@@ -895,7 +895,34 @@ StepIcon IconForText(const std::string& text, bool last) {
     return last ? StepIcon::Couple : StepIcon::Exclamation;
 }
 
+// The game's own icon for a step, when it has one; it comes from the player's files, so an HD texture pack
+// replaces it too.
+const char* GameIconPath(StepIcon icon) {
+    switch (icon) {
+        case StepIcon::Envelope: return (const char*)gItemIcons[ITEM_LETTER_TO_KAFEI];
+        case StepIcon::Pendant: return (const char*)gItemIcons[ITEM_PENDANT_OF_MEMORIES];
+        case StepIcon::Heart: return (const char*)gItemIcons[ITEM_HEART_PIECE];
+        case StepIcon::Key: return (const char*)gItemIcons[ITEM_ROOM_KEY];
+        case StepIcon::Bottle: return (const char*)gItemIcons[ITEM_BOTTLE];
+        case StepIcon::Book: return (const char*)gItemIcons[ITEM_BOMBERS_NOTEBOOK];
+        case StepIcon::Scroll: return (const char*)gItemIcons[ITEM_DEED_LAND];
+        default: return nullptr;
+    }
+}
+
+bool GameIcon(const Page& pg, const char* path, float cx, float cy, float s) {
+    ImTextureID id = Texture(path);
+    if (id == nullptr) {
+        return false;
+    }
+    pg.dl->AddImage(id, pg.P(cx - s / 2, cy - s / 2), pg.P(cx + s / 2, cy + s / 2));
+    return true;
+}
+
 void DrawStepIcon(const Page& pg, StepIcon icon, float cx, float cy, float s, ImU32 tint = Col(120, 60, 160)) {
+    if (GameIcon(pg, GameIconPath(icon), cx, cy, s * 0.95f)) {
+        return;
+    }
     switch (icon) {
         case StepIcon::Envelope: IconEnvelope(pg, cx, cy, s); break;
         case StepIcon::Pendant: IconPendant(pg, cx, cy, s); break;
@@ -963,6 +990,13 @@ const char* kSectionHeaders[SECTION_MAX] = { "Pessoas de Termina", "Máscaras de
                                              "Fadas Perdidas" };
 
 void SectionIcon(const Page& pg, int section, float cx, float cy, float s) {
+    const char* game = section == SECTION_PEOPLE  ? (const char*)gItemIcons[ITEM_BOMBERS_NOTEBOOK]
+                       : section == SECTION_MASKS ? (const char*)gItemIcons[ITEM_MASK_DEKU]
+                       : section == SECTION_SONGS ? (const char*)gItemIcons[ITEM_SONG_SONATA]
+                                                  : nullptr;
+    if (GameIcon(pg, game, cx, cy, s * 0.9f)) {
+        return;
+    }
     switch (section) {
         case SECTION_PEOPLE: IconBook(pg, cx, cy, s); break;
         case SECTION_MASKS: IconMaskFace(pg, cx, cy, s); break;
@@ -984,7 +1018,7 @@ std::vector<ListRow> BuildRows(int section) {
     const SimpleEntry* list = SimpleList(section, count);
     for (int i = 0; i < count; i++) {
         bool done = SimpleDone(section, list[i]);
-        const char* photo = (section == SECTION_MASKS) ? SimpleIcon(section, list[i]) : nullptr;
+        const char* photo = (section != SECTION_FAIRIES) ? SimpleIcon(section, list[i]) : nullptr;
         rows.push_back({ list[i].name, true, done, photo, section });
     }
     return rows;
@@ -1130,8 +1164,13 @@ void DrawList(const Page& pg, int section, const std::vector<ListRow>& rows, int
             dl->AddLine(pg.P(x + 6, y + h + 3), pg.P(x + w - 6, y + h + 3), Col(140, 100, 150, 120), pg.S(1));
         }
         if (row.photo != nullptr) {
-            dl->AddCircleFilled(pg.P(x + 30, y + h / 2), pg.S(21), Col(220, 180, 110));
-            Picture(pg, row.photo, x + 11, y + 4, 38, 19, row.known ? (row.done || section == SECTION_PEOPLE ? 1.0f : 0.55f) : 0.25f);
+            float alpha = row.known ? (row.done || section == SECTION_PEOPLE ? 1.0f : 0.55f) : 0.25f;
+            if (section == SECTION_PEOPLE) {
+                dl->AddCircleFilled(pg.P(x + 30, y + h / 2), pg.S(21), Col(220, 180, 110));
+                Picture(pg, row.photo, x + 11, y + 4, 38, 19, alpha);
+            } else {
+                Picture(pg, row.photo, x + 11, y + 4, 38, 0, alpha);
+            }
         } else {
             SectionIcon(pg, section, x + 30, y + h / 2, 40);
         }
@@ -1385,9 +1424,11 @@ void DrawSimplePage(const Page& pg, int section, const SimpleEntry& entry) {
     const char* rewardText = section == SECTION_SONGS ? "A canção na ocarina"
                              : section == SECTION_FAIRIES ? (entry.id < 0 ? "Máscara da Grande Fada" : "Poder da Grande Fada")
                                                           : entry.name;
-    const char* picture = section == SECTION_MASKS ? SimpleIcon(section, entry) : nullptr;
+    const char* picture = section != SECTION_FAIRIES ? SimpleIcon(section, entry) : nullptr;
+    const char* rewardPicture = (section != SECTION_FAIRIES || entry.id < 0) ? SimpleIcon(section, entry) : nullptr;
     DrawDetail(pg, entry.name, status.c_str(), picture, section, tiles, entry.when, entry.where, rewardText,
-               section == SECTION_SONGS ? StepIcon::Scroll : StepIcon::Mask, picture, done ? "" : entry.where, true);
+               section == SECTION_SONGS ? StepIcon::Scroll : StepIcon::Mask, rewardPicture, done ? "" : entry.where,
+               true);
 }
 
 } // namespace
