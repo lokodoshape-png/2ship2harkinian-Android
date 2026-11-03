@@ -269,15 +269,19 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         sha=${GITHUB_SHA::7}
-        (cd 2ship-windows && zip -qr "../2ship-mm3d-4.0-windows-$sha.zip" .)
-        (cd 2ship-linux && chmod +x 2ship.appimage && zip -qr "../2ship-mm3d-4.0-linux-$sha.zip" .)
+        name="Majoras-Mask-Android-Definitive-Edition"
+        exe=$(find 2ship-windows -name 2ship.exe | head -n 1)
+        if [ -n "$exe" ]; then mv "$exe" "$(dirname "$exe")/$name.exe"; fi
+        mv 2ship-linux/2ship.appimage "2ship-linux/$name.appimage"
+        (cd 2ship-windows && zip -qr "../$name-windows-$sha.zip" .)
+        (cd 2ship-linux && chmod +x "$name.appimage" && zip -qr "../$name-linux-$sha.zip" .)
         tag="pc-4.0-build-${GITHUB_RUN_NUMBER}"
         for i in 1 2 3 4 5; do
           gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-              --title "PC (base 2Ship 4.0) build ${GITHUB_RUN_NUMBER}" \
-              --notes "2Ship MM3D na base 2Ship 4.0.2, Windows e Linux. Commit $sha." || { sleep $((i * 10)); continue; }
-          gh release upload "$tag" 2ship-mm3d-4.0-*.zip -R "$GITHUB_REPOSITORY" --clobber && exit 0
+              --title "Majoras Mask Android Definitive Edition - PC build ${GITHUB_RUN_NUMBER}" \
+              --notes "Majoras Mask Android Definitive Edition para Windows e Linux (base 2Ship 4.0.2). Commit $sha." || { sleep $((i * 10)); continue; }
+          gh release upload "$tag" Majoras-Mask-Android-Definitive-Edition-*.zip -R "$GITHUB_REPOSITORY" --clobber && exit 0
           sleep $((i * 10))
         done
         exit 1

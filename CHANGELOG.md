@@ -15,6 +15,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 - **MM3D: Grandes Fadas trocadas.** A de Woodfall dobra a magia e a de Snowhead dá o Giro Especial (as falas não mudam).
 - **MM3D: Koume e Dampé trocados.** O tiro ao alvo da Koume dá a garrafa e o baú do Dampé dá o Pedaço de Coração.
   As cinco ficam em Melhorias > Majora's Mask 3D.
+- **PC com o nome e o ícone novos.** Título da janela, ícone do `.exe` (Windows) e do AppImage (Linux), e arquivos do
+  release `Majoras-Mask-Android-Definitive-Edition-windows/linux-<commit>.zip`.
 - **Novo nome: Majoras Mask Android Definitive Edition.** Nome do app, do arquivo APK e ícone novos. A pasta de dados no
   celular passa a ser `Majoras Mask Android Definitive Edition`; na primeira abertura o app move para ela tudo o que estava
   em `2S2H-MM3D` (mm.o2r, saves, mods, traduções).

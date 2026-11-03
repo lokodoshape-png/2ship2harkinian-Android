@@ -180,7 +180,7 @@ OTRGlobals::OTRGlobals() {
 
     std::unordered_set<uint32_t> validHashes = { MM_NTSC_US_10, MM_NTSC_US_GC };
 
-    context = Ship::Context::CreateUninitializedInstance("2 Ship 2 Harkinian", appShortName, "2ship2harkinian.json");
+    context = Ship::Context::CreateUninitializedInstance("Majoras Mask Android Definitive Edition", appShortName, "2ship2harkinian.json");
     context->InitFileDropMgr();
     context->InitGfxDebugger();
     context->InitConfiguration();
