@@ -1883,6 +1883,11 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.MM3D.SwapKoumeDampeRewards")
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, Koume's boat archery gives an empty bottle "
                                            "and the chest under Dampe's house gives a Piece of Heart."));
+    AddWidget(path, "Giant's Mask in the Twinmold Fight", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.GiantsMaskInTwinmoldFight")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Giant's Mask is received during the "
+                                           "Twinmold fight, when the first Twinmold falls. The Stone Tower Temple "
+                                           "chest that held it gives a purple rupee instead."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()

@@ -1025,6 +1025,13 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Like in Majora's Mask 3D, Goron Link keeps rolling after A is let go. Press A again to stop.",
       "Como no Majora's Mask 3D, o Link Goron continua rolando depois de soltar o A. Aperte A de novo para parar." },
     { "Keep the Scarecrow's Song", "Manter a canção do espantalho" },
+    { "Giant's Mask in the Twinmold Fight", "Máscara do Gigante na luta contra o Twinmold" },
+    { "Like in Majora's Mask 3D, the Giant's Mask is received during the Twinmold fight, when the first Twinmold "
+      "falls. The Stone Tower Temple chest that held it gives a purple rupee instead.",
+      "Como no Majora's Mask 3D, a Máscara do Gigante é recebida durante a luta contra o Twinmold, quando o primeiro "
+      "Twinmold cai. O baú do Templo da Torre de Pedra que a guardava dá uma rupia roxa no lugar." },
+    { "Giant's Mask", "Máscara do Gigante" },
+    { "Put it on to grow huge!", "Coloque-a para ficar gigante!" },
     { "Swap Koume's and Dampe's Rewards", "Trocar os prêmios da Koume e do Dampé" },
     { "Like in Majora's Mask 3D, Koume's boat archery gives an empty bottle and the chest under Dampe's house gives a "
       "Piece of Heart.",

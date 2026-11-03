@@ -4,6 +4,8 @@
 #include "2s2h/Enhancements/Saving/SavingEnhancements.h"
 #include "MM3D.h"
 #include "2s2h/Rando/Rando.h"
+#include "2s2h/BenGui/Notification.h"
+#include "2s2h/BenGui/Translation.h"
 
 extern "C" {
 #include <z64.h>
@@ -15,6 +17,7 @@ extern Input* sPlayerControlInput;
 void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #include "overlays/actors/ovl_En_Elfgrp/z_en_elfgrp.h"
 #include "overlays/actors/ovl_Bg_Dy_Yoseizo/z_bg_dy_yoseizo.h"
+#include "overlays/actors/ovl_Boss_02/z_boss_02.h"
 }
 
 // Small gameplay changes Majora's Mask 3D made to the N64 game.
@@ -24,6 +27,7 @@ void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #define CVAR_SCARECROW_NAME "gEnhancements.MM3D.KeepScarecrowSong"
 #define CVAR_FAIRIES_NAME "gEnhancements.MM3D.SwapGreatFairyRewards"
 #define CVAR_KOUME_DAMPE_NAME "gEnhancements.MM3D.SwapKoumeDampeRewards"
+#define CVAR_GIANTS_MASK_NAME "gEnhancements.MM3D.GiantsMaskInTwinmoldFight"
 
 // Owl Statues: saving keeps the game going, and the save is not deleted when it is loaded. This writes the same
 // kind of save as the pause menu and autosave options.
@@ -178,8 +182,42 @@ void RegisterSwapKoumeDampeRewards() {
     });
 }
 
+// Giant's Mask: as in Majora's Mask 3D it arrives during the Twinmold fight, once the first Twinmold falls, instead of
+// in the Inverted Stone Tower Temple chest. That chest gives a purple rupee instead (what the 3DS chest holds is not
+// known here).
+
+void RegisterGiantsMaskInTwinmoldFight() {
+    bool enabled = CVarGetInteger(CVAR_GIANTS_MASK_NAME, 0) && !IS_RANDO;
+
+    COND_VB_SHOULD(VB_GIVE_ITEM_FROM_OFFER, enabled, {
+        GetItemId* item = va_arg(args, GetItemId*);
+        Actor* actor = va_arg(args, Actor*);
+        if (actor->id == ACTOR_EN_BOX && gPlayState->sceneId == SCENE_INISIE_R && *item == -GI_MASK_GIANT) {
+            *item = (GetItemId)-GI_RUPEE_PURPLE;
+        }
+    });
+
+    COND_ID_HOOK(OnActorUpdate, ACTOR_BOSS_02, enabled, [](Actor* actor) {
+        if (gPlayState->sceneId != SCENE_INISIE_BS || INV_CONTENT(ITEM_MASK_GIANT) == ITEM_MASK_GIANT) {
+            return;
+        }
+        if (TWINMOLD_GET_TYPE(actor) != TWINMOLD_TYPE_RED && TWINMOLD_GET_TYPE(actor) != TWINMOLD_TYPE_BLUE) {
+            return;
+        }
+        if ((s8)actor->colChkInfo.health > 0) {
+            return;
+        }
+        Item_Give(gPlayState, ITEM_MASK_GIANT);
+        Audio_PlaySfx(NA_SE_SY_GET_ITEM);
+        Notification::Emit({ .prefix = BenGui::Tr("Giant's Mask"),
+                             .message = BenGui::Tr("Put it on to grow huge!"),
+                             .remainingTime = 6.0f });
+    });
+}
+
 static RegisterShipInitFunc initOwlSave(RegisterOwlStatueSaveAndContinue, { CVAR_OWL_SAVE_NAME });
 static RegisterShipInitFunc initGoronRoll(RegisterGoronRollWithoutHolding, { CVAR_GORON_ROLL_NAME });
 static RegisterShipInitFunc initScarecrow(RegisterKeepScarecrowSong, { CVAR_SCARECROW_NAME });
 static RegisterShipInitFunc initFairies(RegisterSwapGreatFairyRewards, { CVAR_FAIRIES_NAME, "IS_RANDO" });
 static RegisterShipInitFunc initKoumeDampe(RegisterSwapKoumeDampeRewards, { CVAR_KOUME_DAMPE_NAME, "IS_RANDO" });
+static RegisterShipInitFunc initGiantsMask(RegisterGiantsMaskInTwinmoldFight, { CVAR_GIANTS_MASK_NAME, "IS_RANDO" });
