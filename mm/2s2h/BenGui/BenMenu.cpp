@@ -1879,6 +1879,10 @@ void BenMenu::AddEnhancements() {
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Woodfall Great Fairy doubles the magic "
                                            "meter and the Snowhead Great Fairy gives the Great Spin Attack. What "
                                            "they say is not changed."));
+    AddWidget(path, "Swap Koume's and Dampe's Rewards", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.SwapKoumeDampeRewards")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, Koume's boat archery gives an empty bottle "
+                                           "and the chest under Dampe's house gives a Piece of Heart."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()

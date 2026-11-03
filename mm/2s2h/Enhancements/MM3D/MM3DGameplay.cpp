@@ -23,6 +23,7 @@ void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #define CVAR_GORON_ROLL_NAME "gEnhancements.MM3D.GoronRollWithoutHolding"
 #define CVAR_SCARECROW_NAME "gEnhancements.MM3D.KeepScarecrowSong"
 #define CVAR_FAIRIES_NAME "gEnhancements.MM3D.SwapGreatFairyRewards"
+#define CVAR_KOUME_DAMPE_NAME "gEnhancements.MM3D.SwapKoumeDampeRewards"
 
 // Owl Statues: saving keeps the game going, and the save is not deleted when it is loaded. This writes the same
 // kind of save as the pause menu and autosave options.
@@ -161,7 +162,24 @@ void RegisterSwapGreatFairyRewards() {
     });
 }
 
+// Koume's boat archery gives an empty bottle and the chest Dampé's Big Poe leaves gives a Piece of Heart, the other
+// way round from the N64 game. Chests offer their item as a negative id.
+
+void RegisterSwapKoumeDampeRewards() {
+    COND_VB_SHOULD(VB_GIVE_ITEM_FROM_OFFER, CVarGetInteger(CVAR_KOUME_DAMPE_NAME, 0) && !IS_RANDO, {
+        GetItemId* item = va_arg(args, GetItemId*);
+        Actor* actor = va_arg(args, Actor*);
+
+        if (actor->id == ACTOR_EN_DNH && *item == GI_HEART_PIECE) {
+            *item = GI_BOTTLE;
+        } else if (actor->id == ACTOR_EN_BOX && gPlayState->sceneId == SCENE_DANPEI2TEST && *item == -GI_BOTTLE) {
+            *item = (GetItemId)-GI_HEART_PIECE;
+        }
+    });
+}
+
 static RegisterShipInitFunc initOwlSave(RegisterOwlStatueSaveAndContinue, { CVAR_OWL_SAVE_NAME });
 static RegisterShipInitFunc initGoronRoll(RegisterGoronRollWithoutHolding, { CVAR_GORON_ROLL_NAME });
 static RegisterShipInitFunc initScarecrow(RegisterKeepScarecrowSong, { CVAR_SCARECROW_NAME });
 static RegisterShipInitFunc initFairies(RegisterSwapGreatFairyRewards, { CVAR_FAIRIES_NAME, "IS_RANDO" });
+static RegisterShipInitFunc initKoumeDampe(RegisterSwapKoumeDampeRewards, { CVAR_KOUME_DAMPE_NAME, "IS_RANDO" });

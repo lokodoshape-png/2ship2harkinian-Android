@@ -1025,6 +1025,11 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Like in Majora's Mask 3D, Goron Link keeps rolling after A is let go. Press A again to stop.",
       "Como no Majora's Mask 3D, o Link Goron continua rolando depois de soltar o A. Aperte A de novo para parar." },
     { "Keep the Scarecrow's Song", "Manter a canção do espantalho" },
+    { "Swap Koume's and Dampe's Rewards", "Trocar os prêmios da Koume e do Dampé" },
+    { "Like in Majora's Mask 3D, Koume's boat archery gives an empty bottle and the chest under Dampe's house gives a "
+      "Piece of Heart.",
+      "Como no Majora's Mask 3D, o tiro ao alvo no barco da Koume dá uma garrafa vazia e o baú embaixo da casa do "
+      "Dampé dá uma Peça de Coração." },
     { "Swap the Woodfall and Snowhead Great Fairies' Rewards", "Trocar os prêmios das Grandes Fadas de Woodfall e Snowhead" },
     { "Like in Majora's Mask 3D, the Woodfall Great Fairy doubles the magic meter and the Snowhead Great Fairy gives "
       "the Great Spin Attack. What they say is not changed.",
