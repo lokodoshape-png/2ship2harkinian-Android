@@ -588,7 +588,13 @@ void DrawPersonDetail(s32 person) {
         bool past = !stepDone && step.days != ANY_DAY && currentDay > 0 && (step.days >> currentDay) == 0;
         ImGui::PushStyleColor(ImGuiCol_Text, past ? ImVec4(0.5f, 0.45f, 0.4f, 1.0f) : kInk);
         ImGui::TextWrapped("%s - %s", DaysText(step.days).c_str(), step.time);
-        ImGui::TextWrapped("%s", step.task);
+        // The reward is listed once, under Recompensa, so it is left out of the step's own text.
+        std::string task = step.task;
+        size_t reward = task.find(". Recompensa: ");
+        if (reward != std::string::npos) {
+            task.resize(reward + 1);
+        }
+        ImGui::TextWrapped("%s", task.c_str());
         if (past) {
             ImGui::TextWrapped("Esse dia já passou: só no próximo ciclo.");
         }
