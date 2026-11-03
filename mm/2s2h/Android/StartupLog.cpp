@@ -18,7 +18,7 @@
 #include <unwind.h>
 
 // Must match DATA_FOLDER in MainActivity.java, which starts the file on each launch.
-static const char* kLogPath = "/storage/emulated/0/2S2H-MM3D/inicio.log";
+static const char* kLogPath = "/storage/emulated/0/Majoras Mask Android Definitive Edition/inicio.log";
 static int sFd = -1;
 
 static void WriteRaw(const char* text) {

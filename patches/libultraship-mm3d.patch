@@ -4678,7 +4678,7 @@ index 404caae6..48779f46 100644
      @if(o_fog)
          @if(o_alpha)
 diff --git a/src/ship/Context.cpp b/src/ship/Context.cpp
-index 0c36b4f4..8726cde1 100644
+index 0c36b4f4..eacadd8d 100644
 --- a/src/ship/Context.cpp
 +++ b/src/ship/Context.cpp
 @@ -392,7 +392,9 @@ std::string Context::GetShortName() {
@@ -4688,7 +4688,7 @@ index 0c36b4f4..8726cde1 100644
 -    const char* externaldir = SDL_AndroidGetExternalStoragePath();
 +    // Shared storage folder the user can reach with a file manager (ROM, mods, translation packs). This build uses
 +    // its own folder so it can sit beside the original 2Ship app; MainActivity.DATA_FOLDER must match.
-+    const char* externaldir = "/storage/emulated/0/2S2H-MM3D";
++    const char* externaldir = "/storage/emulated/0/Majoras Mask Android Definitive Edition";
      if (externaldir != NULL) {
          return externaldir;
      }
@@ -4699,7 +4699,7 @@ index 0c36b4f4..8726cde1 100644
 -    const char* externaldir = SDL_AndroidGetExternalStoragePath();
 +    // Shared storage folder the user can reach with a file manager (ROM, mods, translation packs). This build uses
 +    // its own folder so it can sit beside the original 2Ship app; MainActivity.DATA_FOLDER must match.
-+    const char* externaldir = "/storage/emulated/0/2S2H-MM3D";
++    const char* externaldir = "/storage/emulated/0/Majoras Mask Android Definitive Edition";
      if (externaldir != NULL) {
          return externaldir;
      }

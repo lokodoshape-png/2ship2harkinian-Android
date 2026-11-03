@@ -59,7 +59,9 @@ public class MainActivity extends SDLActivity{
     // Own data folder, so this build installs beside the original 2Ship (which uses /2S2H) and starts
     // from scratch: nothing is read from or written to the original's folder. Must match
     // libultraship's Context.cpp, which the Android workflow patches to the same name.
-    static final String DATA_FOLDER = "2S2H-MM3D";
+    static final String DATA_FOLDER = "Majoras Mask Android Definitive Edition";
+    // Data folder of the builds before the rename; its files are moved into DATA_FOLDER.
+    static final String OLD_DATA_FOLDER = "2S2H-MM3D";
 
     private static final CountDownLatch setupLatch = new CountDownLatch(1);
 
@@ -305,7 +307,34 @@ public class MainActivity extends SDLActivity{
         }
     }
 
+    // Moves mm.o2r, saves, mods and the rest from the folder used before the rename. Files already in the new folder
+    // are kept; whatever could not be moved stays in the old folder.
+    private void migrateOldDataFolder() {
+        File storage = Environment.getExternalStorageDirectory();
+        File oldFolder = new File(storage, OLD_DATA_FOLDER);
+        File newFolder = new File(storage, DATA_FOLDER);
+        File[] children = oldFolder.listFiles();
+        if (children == null) {
+            return;
+        }
+        if (!newFolder.isDirectory() && oldFolder.renameTo(newFolder)) {
+            startupLog("Pasta " + OLD_DATA_FOLDER + " renomeada para " + DATA_FOLDER);
+            return;
+        }
+        newFolder.mkdirs();
+        int moved = 0;
+        for (File child : children) {
+            File target = new File(newFolder, child.getName());
+            if (!target.exists() && child.renameTo(target)) {
+                moved++;
+            }
+        }
+        oldFolder.delete(); // only succeeds when everything was moved
+        startupLog(moved + " itens movidos de " + OLD_DATA_FOLDER + " para " + DATA_FOLDER);
+    }
+
     public void checkAndSetupFiles() {
+        migrateOldDataFolder();
         startupLog("Conferindo os arquivos");
         doVersionCheck();
         File targetRootFolder = new File(Environment.getExternalStorageDirectory(), DATA_FOLDER);

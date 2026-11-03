@@ -24,7 +24,7 @@ void Save(Language language, const std::string& appShortName);
 // Translation pack archives for the saved language, sorted by file name; empty for English.
 std::vector<std::string> GetPackArchives(const std::string& appShortName);
 
-// Folder the player puts the packs for a language in, e.g. ".../2S2H-MM3D/traducoes/pt-BR".
+// Folder the player puts the packs for a language in, e.g. ".../Majoras Mask Android Definitive Edition/traducoes/pt-BR".
 std::string GetPackFolder(Language language, const std::string& appShortName);
 
 #ifdef __ANDROID__

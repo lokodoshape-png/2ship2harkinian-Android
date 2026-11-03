@@ -1,4 +1,4 @@
-# Changelog do 2Ship MM3D
+# Changelog do Majoras Mask Android Definitive Edition
 
 Mudanças deste fork (lokodoshape-png/2ship2harkinian-Android) em relação ao 2 Ship 2 Harkinian original.
 As builds saem na página [Releases](https://github.com/lokodoshape-png/2ship2harkinian-Android/releases):
@@ -7,6 +7,11 @@ As builds saem na página [Releases](https://github.com/lokodoshape-png/2ship2ha
 O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da sua própria cópia.
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
+
+### 2026-11-03
+- **Novo nome: Majoras Mask Android Definitive Edition.** Nome do app, do arquivo APK e ícone novos. A pasta de dados no
+  celular passa a ser `Majoras Mask Android Definitive Edition`; na primeira abertura o app move para ela tudo o que estava
+  em `2S2H-MM3D` (mm.o2r, saves, mods, traduções).
 
 ### 2026-10-29
 - **Android: cada build novo instala por cima do anterior.** Antes cada build era assinado com uma chave diferente e o

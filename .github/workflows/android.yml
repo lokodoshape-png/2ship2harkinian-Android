@@ -73,7 +73,7 @@ jobs:
       - name: Apply patches and point Gradle at the runner's CMake
         run: |
           # Renderer (cel shading, outlines, colour options) and the Android parts of LUS: touch controls,
-          # phone gyroscope, back button, and the app's own data folder /storage/emulated/0/2S2H-MM3D.
+          # phone gyroscope, back button, and the app's own data folder /storage/emulated/0/Majoras Mask Android Definitive Edition.
           git -C libultraship apply --ignore-whitespace ../patches/libultraship-mm3d.patch
           git -C ZAPDTR apply --ignore-whitespace ../patches/zapdtr-android.patch
           cmake --version
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: 2ship-mm3d-android-4.0
+          name: majoras-mask-android-definitive-edition
           path: Android/app/build/outputs/apk/debug/*.apk
 
       # The release holds only the app; the game data (mm.o2r) is generated on the phone from the user's own ROM.
@@ -108,14 +108,14 @@ jobs:
           set -e
           short_sha="${GITHUB_SHA::7}"
           tag="android-4.0-build-${GITHUB_RUN_NUMBER}"
-          apk="2ship-mm3d-4.0-android-${short_sha}.apk"
+          apk="Majoras-Mask-Android-Definitive-Edition-${short_sha}.apk"
           cp Android/app/build/outputs/apk/debug/*.apk "$apk"
           cat > notes.md <<NOTES
           APK do 2Ship MM3D para Android (arm64), agora na base 2Ship 4.0.2: menu novo em português, recursos estilo Majora's Mask 3D, segurar B para acelerar cenas, cel shading com contorno, menu de mods e pacotes de tradução.
 
           **Como instalar**
           1. Baixe o arquivo \`$apk\` abaixo, em Assets, e instale no celular. Ele atualiza o 2Ship MM3D que você já tem.
-          2. Na primeira vez, permita o acesso a todos os arquivos. O app recria os arquivos dele na pasta \`2S2H-MM3D\`.
+          2. Na primeira vez, permita o acesso a todos os arquivos. O app recria os arquivos dele na pasta \`Majoras Mask Android Definitive Edition\` (a pasta antiga \`2S2H-MM3D\` é movida para ela sozinha).
           3. Escolha a sua ROM do Majora's Mask (N64). O app gera de novo o \`mm.o2r\` no próprio celular, porque a base 4.0 usa um formato novo. Os mods e as traduções da pasta continuam lá.
 
           O menu abre com o botão Back da tela ou com o botão Voltar do Android.
@@ -128,7 +128,7 @@ jobs:
           # Release creation sometimes gets a transient HTTP 403 from the API, so it is retried a few times.
           for attempt in 1 2 3 4 5; do
             if gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
-              --title "2Ship MM3D Android (base 4.0) - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+              --title "Majoras Mask Android Definitive Edition - build ${GITHUB_RUN_NUMBER} (${short_sha})" \
               --notes-file notes.md --latest; then
               exit 0
             fi
