@@ -28,6 +28,7 @@ void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #define CVAR_FAIRIES_NAME "gEnhancements.MM3D.SwapGreatFairyRewards"
 #define CVAR_KOUME_DAMPE_NAME "gEnhancements.MM3D.SwapKoumeDampeRewards"
 #define CVAR_GIANTS_MASK_NAME "gEnhancements.MM3D.GiantsMaskInTwinmoldFight"
+#define CVAR_DEKU_AIM_NAME "gEnhancements.MM3D.DekuBubbleFirstPerson"
 
 // Owl Statues: saving keeps the game going, and the save is not deleted when it is loaded. This writes the same
 // kind of save as the pause menu and autosave options.
@@ -215,9 +216,16 @@ void RegisterGiantsMaskInTwinmoldFight() {
     });
 }
 
+// Deku bubbles are aimed in first person, with the same camera as the bow.
+
+void RegisterDekuBubbleFirstPerson() {
+    COND_VB_SHOULD(VB_DEKU_BUBBLE_SHOULDER_CAMERA, CVarGetInteger(CVAR_DEKU_AIM_NAME, 0), { *should = false; });
+}
+
 static RegisterShipInitFunc initOwlSave(RegisterOwlStatueSaveAndContinue, { CVAR_OWL_SAVE_NAME });
 static RegisterShipInitFunc initGoronRoll(RegisterGoronRollWithoutHolding, { CVAR_GORON_ROLL_NAME });
 static RegisterShipInitFunc initScarecrow(RegisterKeepScarecrowSong, { CVAR_SCARECROW_NAME });
 static RegisterShipInitFunc initFairies(RegisterSwapGreatFairyRewards, { CVAR_FAIRIES_NAME, "IS_RANDO" });
 static RegisterShipInitFunc initKoumeDampe(RegisterSwapKoumeDampeRewards, { CVAR_KOUME_DAMPE_NAME, "IS_RANDO" });
 static RegisterShipInitFunc initGiantsMask(RegisterGiantsMaskInTwinmoldFight, { CVAR_GIANTS_MASK_NAME, "IS_RANDO" });
+static RegisterShipInitFunc initDekuAim(RegisterDekuBubbleFirstPerson, { CVAR_DEKU_AIM_NAME });

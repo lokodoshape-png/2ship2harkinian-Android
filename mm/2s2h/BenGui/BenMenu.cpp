@@ -1888,6 +1888,10 @@ void BenMenu::AddEnhancements() {
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Giant's Mask is received during the "
                                            "Twinmold fight, when the first Twinmold falls. The Stone Tower Temple "
                                            "chest that held it gives a purple rupee instead."));
+    AddWidget(path, "Aim Deku Bubbles in First Person", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.DekuBubbleFirstPerson")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, Deku Link aims bubbles in first person, with "
+                                           "the bow's camera, instead of from over the shoulder."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()

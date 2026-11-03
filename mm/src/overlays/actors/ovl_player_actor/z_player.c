@@ -7707,7 +7707,8 @@ s32 func_8083868C(PlayState* play, Player* this) {
             if (this->transformation == PLAYER_FORM_HUMAN) {
                 camMode = CAM_MODE_SLINGSHOT;
             } else if (this->transformation == PLAYER_FORM_DEKU) {
-                camMode = CAM_MODE_DEKUSHOOT;
+                camMode = GameInteractor_Should(VB_DEKU_BUBBLE_SHOULDER_CAMERA, true, this) ? CAM_MODE_DEKUSHOOT
+                                                                                              : CAM_MODE_BOWARROW;
             } else {
                 camMode = CAM_MODE_BOWARROW;
             }

@@ -1025,6 +1025,11 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Like in Majora's Mask 3D, Goron Link keeps rolling after A is let go. Press A again to stop.",
       "Como no Majora's Mask 3D, o Link Goron continua rolando depois de soltar o A. Aperte A de novo para parar." },
     { "Keep the Scarecrow's Song", "Manter a canção do espantalho" },
+    { "Aim Deku Bubbles in First Person", "Mirar as bolhas do Deku em primeira pessoa" },
+    { "Like in Majora's Mask 3D, Deku Link aims bubbles in first person, with the bow's camera, instead of from over "
+      "the shoulder.",
+      "Como no Majora's Mask 3D, o Link Deku mira as bolhas em primeira pessoa, com a câmera do arco, em vez de por "
+      "cima do ombro." },
     { "Giant's Mask in the Twinmold Fight", "Máscara do Gigante na luta contra o Twinmold" },
     { "Like in Majora's Mask 3D, the Giant's Mask is received during the Twinmold fight, when the first Twinmold "
       "falls. The Stone Tower Temple chest that held it gives a purple rupee instead.",

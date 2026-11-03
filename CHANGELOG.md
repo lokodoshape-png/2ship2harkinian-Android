@@ -16,6 +16,7 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 - **MM3D: Koume e Dampé trocados.** O tiro ao alvo da Koume dá a garrafa e o baú do Dampé dá o Pedaço de Coração.
 - **MM3D: Máscara do Gigante na luta contra o Twinmold.** Ela chega quando o primeiro Twinmold cai; o baú do Templo
   da Torre de Pedra que a guardava dá uma rupia roxa.
+- **MM3D: bolhas do Deku miradas em primeira pessoa**, com a câmera do arco.
   Todas ficam em Melhorias > Majora's Mask 3D.
 - **PC com o nome e o ícone novos.** Título da janela, ícone do `.exe` (Windows) e do AppImage (Linux), e arquivos do
   release `Majoras-Mask-Android-Definitive-Edition-windows/linux-<commit>.zip`.

@@ -944,6 +944,15 @@ typedef enum {
 
     // #### `result`
     // ```c
+    // true
+    // ```
+    // #### `args`
+    // - `*Player`
+    // When false, Deku Link aims bubbles with the first-person bow camera instead of the over-the-shoulder one.
+    VB_DEKU_BUBBLE_SHOULDER_CAMERA,
+
+    // #### `result`
+    // ```c
     // (gSaveContext.magicState == MAGIC_STATE_IDLE) &&
     // (gSaveContext.save.saveInfo.playerData.magic >= 2) &&
     // (this->av2.actionVar2 >= 0x36B0)
