@@ -1030,6 +1030,14 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "the shoulder.",
       "Como no Majora's Mask 3D, o Link Deku mira as bolhas em primeira pessoa, com a câmera do arco, em vez de por "
       "cima do ombro." },
+    { "Inverted Song of Time at Half Speed", "Canção do Tempo Invertida na metade da velocidade" },
+    { "Like in Majora's Mask 3D, the Inverted Song of Time makes time run at half speed instead of one third.",
+      "Como no Majora's Mask 3D, a Canção do Tempo Invertida deixa o tempo na metade da velocidade, em vez de um "
+      "terço." },
+    { "Owl Statues Wake Up When Checked", "Estátuas da coruja acordam ao examinar" },
+    { "Like in Majora's Mask 3D, talking to a closed Owl Statue opens it; it no longer has to be hit with the sword.",
+      "Como no Majora's Mask 3D, examinar uma estátua da coruja fechada já a abre; não é mais preciso bater nela com a "
+      "espada." },
     { "Giant's Mask in the Twinmold Fight", "Máscara do Gigante na luta contra o Twinmold" },
     { "Like in Majora's Mask 3D, the Giant's Mask is received during the Twinmold fight, when the first Twinmold "
       "falls. The Stone Tower Temple chest that held it gives a purple rupee instead.",

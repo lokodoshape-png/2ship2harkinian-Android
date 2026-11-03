@@ -1892,6 +1892,14 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.MM3D.DekuBubbleFirstPerson")
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, Deku Link aims bubbles in first person, with "
                                            "the bow's camera, instead of from over the shoulder."));
+    AddWidget(path, "Inverted Song of Time at Half Speed", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.InvertedSongHalfSpeed")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Inverted Song of Time makes time run at "
+                                           "half speed instead of one third."));
+    AddWidget(path, "Owl Statues Wake Up When Checked", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.OwlStatueWakeByChecking")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, talking to a closed Owl Statue opens it; it no "
+                                           "longer has to be hit with the sword."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()

@@ -953,6 +953,24 @@ typedef enum {
 
     // #### `result`
     // ```c
+    // false
+    // ```
+    // #### `args`
+    // - None
+    // When true, the clock moves one more unit this frame (after the normal speed and offset are applied).
+    VB_ADVANCE_TIME_EXTRA_TICK,
+
+    // #### `result`
+    // ```c
+    // true
+    // ```
+    // #### `args`
+    // - `*ObjWarpstone`
+    // When false, talking to a closed Owl Statue opens it instead of showing its "leave proof" message.
+    VB_OWL_STATUE_TALK_WHILE_CLOSED,
+
+    // #### `result`
+    // ```c
     // (gSaveContext.magicState == MAGIC_STATE_IDLE) &&
     // (gSaveContext.save.saveInfo.playerData.magic >= 2) &&
     // (this->av2.actionVar2 >= 0x36B0)

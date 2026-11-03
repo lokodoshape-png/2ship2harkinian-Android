@@ -157,7 +157,13 @@ void ObjWarpstone_Update(Actor* thisx, PlayState* play) {
             }
         }
     } else if (Actor_TalkOfferAccepted(&this->dyna.actor, &play->state)) {
-        this->isTalking = true;
+        if ((this->actionFunc == ObjWarpstone_ClosedIdle) &&
+            !GameInteractor_Should(VB_OWL_STATUE_TALK_WHILE_CLOSED, true, this)) {
+            Message_CloseTextbox(play);
+            ObjWarpstone_SetupAction(this, ObjWarpstone_BeginOpeningCutscene);
+        } else {
+            this->isTalking = true;
+        }
     } else if (!this->actionFunc(this, play)) {
         Actor_OfferTalkNearColChkInfoCylinder(&this->dyna.actor, play);
     }

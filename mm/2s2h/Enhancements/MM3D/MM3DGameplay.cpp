@@ -29,6 +29,8 @@ void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #define CVAR_KOUME_DAMPE_NAME "gEnhancements.MM3D.SwapKoumeDampeRewards"
 #define CVAR_GIANTS_MASK_NAME "gEnhancements.MM3D.GiantsMaskInTwinmoldFight"
 #define CVAR_DEKU_AIM_NAME "gEnhancements.MM3D.DekuBubbleFirstPerson"
+#define CVAR_INVERTED_HALF_NAME "gEnhancements.MM3D.InvertedSongHalfSpeed"
+#define CVAR_OWL_WAKE_NAME "gEnhancements.MM3D.OwlStatueWakeByChecking"
 
 // Owl Statues: saving keeps the game going, and the save is not deleted when it is loaded. This writes the same
 // kind of save as the pause menu and autosave options.
@@ -222,6 +224,25 @@ void RegisterDekuBubbleFirstPerson() {
     COND_VB_SHOULD(VB_DEKU_BUBBLE_SHOULDER_CAMERA, CVarGetInteger(CVAR_DEKU_AIM_NAME, 0), { *should = false; });
 }
 
+// Inverted Song of Time: time runs at one half of the normal speed instead of one third. The normal speed is 3 units a
+// frame and the song's offset makes it 1, so one more unit every other frame gives 1.5.
+
+void RegisterInvertedSongHalfSpeed() {
+    COND_VB_SHOULD(VB_ADVANCE_TIME_EXTRA_TICK, CVarGetInteger(CVAR_INVERTED_HALF_NAME, 0), {
+        static bool sExtraTick = false;
+        if (R_TIME_SPEED == 3 && gSaveContext.save.timeSpeedOffset == -2) {
+            sExtraTick = !sExtraTick;
+            *should = sExtraTick;
+        }
+    });
+}
+
+// Owl Statues wake up when Link checks them, without having to hit them with the sword.
+
+void RegisterOwlStatueWakeByChecking() {
+    COND_VB_SHOULD(VB_OWL_STATUE_TALK_WHILE_CLOSED, CVarGetInteger(CVAR_OWL_WAKE_NAME, 0), { *should = false; });
+}
+
 static RegisterShipInitFunc initOwlSave(RegisterOwlStatueSaveAndContinue, { CVAR_OWL_SAVE_NAME });
 static RegisterShipInitFunc initGoronRoll(RegisterGoronRollWithoutHolding, { CVAR_GORON_ROLL_NAME });
 static RegisterShipInitFunc initScarecrow(RegisterKeepScarecrowSong, { CVAR_SCARECROW_NAME });
@@ -229,3 +250,5 @@ static RegisterShipInitFunc initFairies(RegisterSwapGreatFairyRewards, { CVAR_FA
 static RegisterShipInitFunc initKoumeDampe(RegisterSwapKoumeDampeRewards, { CVAR_KOUME_DAMPE_NAME, "IS_RANDO" });
 static RegisterShipInitFunc initGiantsMask(RegisterGiantsMaskInTwinmoldFight, { CVAR_GIANTS_MASK_NAME, "IS_RANDO" });
 static RegisterShipInitFunc initDekuAim(RegisterDekuBubbleFirstPerson, { CVAR_DEKU_AIM_NAME });
+static RegisterShipInitFunc initInvertedHalf(RegisterInvertedSongHalfSpeed, { CVAR_INVERTED_HALF_NAME });
+static RegisterShipInitFunc initOwlWake(RegisterOwlStatueWakeByChecking, { CVAR_OWL_WAKE_NAME });

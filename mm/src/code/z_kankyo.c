@@ -2,6 +2,7 @@
 #include "z64light.h"
 #include "z64math.h"
 #include <libultraship/bridge/consolevariablebridge.h>
+#include "2s2h/GameInteractor/GameInteractor.h"
 
 typedef enum {
     /* 0x00 */ LIGHTNING_BOLT_START,
@@ -1233,6 +1234,9 @@ void Environment_UpdateTime(PlayState* play, EnvironmentContext* envCtx, PauseCo
                         gSaveContext.save.time = CURRENT_TIME + (u16)R_TIME_SPEED;
                         if (R_TIME_SPEED != 0) {
                             gSaveContext.save.time = CURRENT_TIME + (u16)((void)0, gSaveContext.save.timeSpeedOffset);
+                            if (GameInteractor_Should(VB_ADVANCE_TIME_EXTRA_TICK, false)) {
+                                gSaveContext.save.time = CURRENT_TIME + 1;
+                            }
                         }
                     }
                 }
