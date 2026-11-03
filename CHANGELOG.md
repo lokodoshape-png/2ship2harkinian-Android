@@ -17,6 +17,15 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 - **MM3D: Máscara do Gigante na luta contra o Twinmold.** Ela chega quando o primeiro Twinmold cai; o baú do Templo
   da Torre de Pedra que a guardava dá uma rupia roxa.
 - **MM3D: bolhas do Deku miradas em primeira pessoa**, com a câmera do arco.
+- **MM3D: Canção do Tempo Invertida na metade da velocidade** (no N64 é um terço).
+- **MM3D: estátua da coruja acorda só de examinar**, sem precisar bater com a espada.
+- **PC: pacote HD mais leve.** A escolha entre a textura HD e a de um mod carregado depois agora é guardada, em vez de
+  recalculada para cada textura em cada quadro.
+- **Menos travadinhas: os shaders ficam salvos no disco** (DirectX 11, Vulkan e OpenGL). Cada efeito novo ainda compila
+  uma vez, mas nas próximas vezes que você abrir o jogo ele já está pronto. Ficam na pasta `shadercache`.
+- **Caderno dos Bombers em forma de menu de missões.** A janela do guia agora tem seções (Pessoas, Máscaras, Canções,
+  Fadas Perdidas), a lista com o que já foi feito marcado e os detalhes de cada um: progresso, horário, local e
+  recompensa. Usa os retratos do próprio Caderno e os ícones do jogo.
   Todas ficam em Melhorias > Majora's Mask 3D.
 - **PC com o nome e o ícone novos.** Título da janela, ícone do `.exe` (Windows) e do AppImage (Linux), e arquivos do
   release `Majoras-Mask-Android-Definitive-Edition-windows/linux-<commit>.zip`.
