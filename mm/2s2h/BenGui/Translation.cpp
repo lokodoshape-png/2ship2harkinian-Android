@@ -1016,6 +1016,19 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Large", "Grande" },
     { "Very Large", "Muito grande" },
     { "Game Songs as MIDI", "Músicas do jogo em MIDI" },
+    { "Owl Statues Save and Continue", "Estátuas da coruja salvam e o jogo continua" },
+    { "Like in Majora's Mask 3D, saving at an Owl Statue keeps the game going instead of returning to the title "
+      "screen, and the save is kept after loading it.",
+      "Como no Majora's Mask 3D, salvar numa estátua da coruja não volta para a tela de título: o jogo continua, e o "
+      "save não é apagado ao carregar." },
+    { "Goron Rolls Without Holding A", "Goron rola sem segurar A" },
+    { "Like in Majora's Mask 3D, Goron Link keeps rolling after A is let go. Press A again to stop.",
+      "Como no Majora's Mask 3D, o Link Goron continua rolando depois de soltar o A. Aperte A de novo para parar." },
+    { "Keep the Scarecrow's Song", "Manter a canção do espantalho" },
+    { "Like in Majora's Mask 3D, the Scarecrow's Song is not forgotten when the Song of Time takes you back to the "
+      "first day.",
+      "Como no Majora's Mask 3D, a canção do espantalho não é esquecida quando a Canção do Tempo volta ao primeiro "
+      "dia." },
     { "Export as Mod (.o2r)", "Exportar como mod (.o2r)" },
     { "Packs these songs into one mod file. On this device they already play; the mod is for another device or for sharing, installed through Settings > Mods.",
       "Junta estas músicas em um único arquivo de mod. Neste aparelho elas já tocam; o mod serve para outro aparelho ou para compartilhar, instalando em Configurações > Mods." },

@@ -935,6 +935,15 @@ typedef enum {
 
     // #### `result`
     // ```c
+    // ((this->unk_B86[1] == 0) && !CHECK_BTN_ALL(sPlayerControlInput->cur.button, BTN_A)) ||
+    // ((this->av1.actionVar1 == 3) && (this->actor.velocity.y < 0.0f))
+    // ```
+    // #### `args`
+    // - `*Player`
+    VB_GORON_ROLL_STOP,
+
+    // #### `result`
+    // ```c
     // (gSaveContext.magicState == MAGIC_STATE_IDLE) &&
     // (gSaveContext.save.saveInfo.playerData.magic >= 2) &&
     // (this->av2.actionVar2 >= 0x36B0)
@@ -1435,6 +1444,14 @@ typedef enum {
     // #### `args`
     // - `u8`
     VB_OWL_STATUE_BE_ACTIVE,
+
+    // #### `result`
+    // ```c
+    // true
+    // ```
+    // #### `args`
+    // - `*ObjWarpstone`
+    VB_OWL_STATUE_SAVE_AND_QUIT,
 
     // #### `result`
     // ```c

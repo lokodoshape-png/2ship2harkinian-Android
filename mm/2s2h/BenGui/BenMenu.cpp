@@ -1861,6 +1861,19 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.MM3D.EarlyBombersNotebook")
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, get the Bombers' Notebook on the first visit "
                                            "to Clock Town, without the Bombers' hide-and-seek game."));
+    AddWidget(path, "Owl Statues Save and Continue", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.OwlStatueSaveAndContinue")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, saving at an Owl Statue keeps the game going "
+                                           "instead of returning to the title screen, and the save is kept after "
+                                           "loading it."));
+    AddWidget(path, "Goron Rolls Without Holding A", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.GoronRollWithoutHolding")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, Goron Link keeps rolling after A is let go. "
+                                           "Press A again to stop."));
+    AddWidget(path, "Keep the Scarecrow's Song", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.KeepScarecrowSong")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Scarecrow's Song is not forgotten when the "
+                                           "Song of Time takes you back to the first day."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()

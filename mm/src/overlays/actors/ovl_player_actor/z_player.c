@@ -19826,8 +19826,10 @@ void func_808577E0(Player* this) {
 }
 
 s32 func_80857950(PlayState* play, Player* this) {
-    if (((this->unk_B86[1] == 0) && !CHECK_BTN_ALL(sPlayerControlInput->cur.button, BTN_A)) ||
-        ((this->av1.actionVar1 == 3) && (this->actor.velocity.y < 0.0f))) {
+    if (GameInteractor_Should(VB_GORON_ROLL_STOP,
+                              ((this->unk_B86[1] == 0) && !CHECK_BTN_ALL(sPlayerControlInput->cur.button, BTN_A)) ||
+                                  ((this->av1.actionVar1 == 3) && (this->actor.velocity.y < 0.0f)),
+                              this)) {
         Player_SetAction(play, this, Player_Action_Idle, 1);
         Math_Vec3f_Copy(&this->actor.world.pos, &this->actor.prevPos);
         PlayerAnimation_Change(play, &this->skelAnime, &gPlayerAnim_pg_maru_change, -PLAYER_ANIM_ADJUSTED_SPEED, 7.0f,
