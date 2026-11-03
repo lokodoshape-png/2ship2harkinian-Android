@@ -953,11 +953,20 @@ void Message_DrawTextNES(PlayState* play, Gfx** gfxP, u16 textDrawPos) {
                         sColorsButtonsNES[(s16)sButtonColorIndicesNES[(u8)character - MESSAGE_BTN_A]].g;
                     msgCtx->textColorB =
                         sColorsButtonsNES[(s16)sButtonColorIndicesNES[(u8)character - MESSAGE_BTN_A]].b;
-                    if (ButtonPrompts_MessageGlyph((u8)character) != NULL) {
-                        // The controller icons carry their own colors.
+                    s32 isPrompt = ButtonPrompts_MessageGlyph((u8)character) != NULL;
+                    if (isPrompt) {
+                        // The controller icons carry their own colors. The text combiner takes its color from the
+                        // primitive alone, which would draw them as a flat white shape, so take it from the texture.
                         msgCtx->textColorR = msgCtx->textColorG = msgCtx->textColorB = 255;
+                        gDPPipeSync(gfx++);
+                        gDPSetCombineMode(gfx++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
                     }
                     Message_DrawTextChar(play, &font->charBuf[font->unk_11D88][charTexIndex], &gfx);
+                    if (isPrompt) {
+                        gDPPipeSync(gfx++);
+                        gDPSetCombineLERP(gfx++, 0, 0, 0, PRIMITIVE, TEXEL0, 0, PRIMITIVE, 0, 0, 0, 0, PRIMITIVE,
+                                          TEXEL0, 0, PRIMITIVE, 0);
+                    }
                     msgCtx->textColorR = prevR;
                     msgCtx->textColorG = prevG;
                     msgCtx->textColorB = prevB;
