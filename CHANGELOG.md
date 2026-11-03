@@ -12,7 +12,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 - **MM3D: estátuas da coruja salvam e o jogo continua** (em vez de voltar à tela de título), e o save fica guardado.
 - **MM3D: Goron rola sem segurar A.** Aperte A para rolar e A de novo para parar.
 - **MM3D: a canção do espantalho não some** quando a Canção do Tempo volta ao primeiro dia.
-  As três ficam em Melhorias > Majora's Mask 3D.
+- **MM3D: Grandes Fadas trocadas.** A de Woodfall dobra a magia e a de Snowhead dá o Giro Especial (as falas não mudam).
+  As quatro ficam em Melhorias > Majora's Mask 3D.
 - **Novo nome: Majoras Mask Android Definitive Edition.** Nome do app, do arquivo APK e ícone novos. A pasta de dados no
   celular passa a ser `Majoras Mask Android Definitive Edition`; na primeira abertura o app move para ela tudo o que estava
   em `2S2H-MM3D` (mm.o2r, saves, mods, traduções).

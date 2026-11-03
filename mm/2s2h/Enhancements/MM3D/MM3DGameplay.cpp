@@ -3,6 +3,7 @@
 #include "2s2h/ShipInit.hpp"
 #include "2s2h/Enhancements/Saving/SavingEnhancements.h"
 #include "MM3D.h"
+#include "2s2h/Rando/Rando.h"
 
 extern "C" {
 #include <z64.h>
@@ -12,6 +13,8 @@ extern "C" {
 extern PlayState* gPlayState;
 extern Input* sPlayerControlInput;
 void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
+#include "overlays/actors/ovl_En_Elfgrp/z_en_elfgrp.h"
+#include "overlays/actors/ovl_Bg_Dy_Yoseizo/z_bg_dy_yoseizo.h"
 }
 
 // Small gameplay changes Majora's Mask 3D made to the N64 game.
@@ -19,6 +22,7 @@ void Interface_DrawAutosaveIcon(PlayState* play, u16 alpha);
 #define CVAR_OWL_SAVE_NAME "gEnhancements.MM3D.OwlStatueSaveAndContinue"
 #define CVAR_GORON_ROLL_NAME "gEnhancements.MM3D.GoronRollWithoutHolding"
 #define CVAR_SCARECROW_NAME "gEnhancements.MM3D.KeepScarecrowSong"
+#define CVAR_FAIRIES_NAME "gEnhancements.MM3D.SwapGreatFairyRewards"
 
 // Owl Statues: saving keeps the game going, and the save is not deleted when it is loaded. This writes the same
 // kind of save as the pause menu and autosave options.
@@ -122,6 +126,42 @@ void RegisterKeepScarecrowSong() {
     });
 }
 
+// Great Fairies: as in Majora's Mask 3D, the Woodfall fairy doubles the magic meter and the Snowhead fairy gives the
+// Great Spin Attack (the N64 game has them the other way round). Their spoken lines are unchanged.
+
+static void GiveDoubleMagic() {
+    if (gSaveContext.save.saveInfo.playerData.isDoubleMagicAcquired != true) {
+        gSaveContext.save.saveInfo.playerData.isDoubleMagicAcquired = true;
+        gSaveContext.magicFillTarget = MAGIC_DOUBLE_METER;
+        gSaveContext.save.saveInfo.playerData.magicLevel = 0;
+    }
+}
+
+void RegisterSwapGreatFairyRewards() {
+    bool enabled = CVarGetInteger(CVAR_FAIRIES_NAME, 0) && !IS_RANDO;
+
+    // The stray fairy group gives the Great Spin Attack (Woodfall) when the fountain's cutscene starts.
+    COND_VB_SHOULD(VB_GIVE_ITEM_FROM_STRAY_FAIRY_MANAGER, enabled, {
+        EnElfgrp* elfgrp = va_arg(args, EnElfgrp*);
+        if (elfgrp->type == ENELFGRP_TYPE_POWER) {
+            *should = false;
+            GiveDoubleMagic();
+        } else if (elfgrp->type == ENELFGRP_TYPE_WISDOM) {
+            *should = false;
+            SET_WEEKEVENTREG(WEEKEVENTREG_RECEIVED_GREAT_SPIN_ATTACK);
+        }
+    });
+
+    // The Great Fairy herself gives the double magic meter (Snowhead).
+    COND_VB_SHOULD(VB_GIVE_ITEM_FROM_GREAT_FAIRY, enabled, {
+        BgDyYoseizo* fairy = va_arg(args, BgDyYoseizo*);
+        if (GREAT_FAIRY_GET_TYPE(&fairy->actor) == GREAT_FAIRY_TYPE_WISDOM) {
+            *should = false;
+        }
+    });
+}
+
 static RegisterShipInitFunc initOwlSave(RegisterOwlStatueSaveAndContinue, { CVAR_OWL_SAVE_NAME });
 static RegisterShipInitFunc initGoronRoll(RegisterGoronRollWithoutHolding, { CVAR_GORON_ROLL_NAME });
 static RegisterShipInitFunc initScarecrow(RegisterKeepScarecrowSong, { CVAR_SCARECROW_NAME });
+static RegisterShipInitFunc initFairies(RegisterSwapGreatFairyRewards, { CVAR_FAIRIES_NAME, "IS_RANDO" });

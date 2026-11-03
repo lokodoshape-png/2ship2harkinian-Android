@@ -1874,6 +1874,11 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.MM3D.KeepScarecrowSong")
         .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Scarecrow's Song is not forgotten when the "
                                            "Song of Time takes you back to the first day."));
+    AddWidget(path, "Swap the Woodfall and Snowhead Great Fairies' Rewards", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.MM3D.SwapGreatFairyRewards")
+        .Options(CheckboxOptions().Tooltip("Like in Majora's Mask 3D, the Woodfall Great Fairy doubles the magic "
+                                           "meter and the Snowhead Great Fairy gives the Great Spin Attack. What "
+                                           "they say is not changed."));
     AddWidget(path, "Song of Time Variants in the Pause Menu", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.MM3D.TimeSongVariantsInPause")
         .Options(CheckboxOptions()
