@@ -218,6 +218,16 @@ void OnGameFrame() {
             sStartInjected = true;
         }
     }
+    // L on the pause screen opens the menu; the pause menu itself has no use for it. On the Song of Time it is
+    // left to the Song of Time variants, and with the debug tools on to the inventory editor.
+    if (!sOpen && PauseReady() && CHECK_BTN_ANY(input->press.button, BTN_L) &&
+        !CVarGetInteger("gDeveloperTools.DebugEnabled", 0) &&
+        !(pauseCtx->pageIndex == PAUSE_QUEST && pauseCtx->cursorSpecialPos == 0 &&
+          pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_SONG_TIME)) {
+        Open();
+        ClearInput(input);
+        return;
+    }
     if (!sOpen) {
         return;
     }
@@ -863,8 +873,9 @@ void DrawPauseButton() {
     if (!GameRect(pos, size)) {
         return;
     }
-    float h = std::clamp(size.y * 0.075f, 28.0f, 80.0f), w = h * 3.4f;
-    ImVec2 at(pos.x + size.x - w - h * 0.4f, pos.y + h * 0.4f);
+    // Top centre, above the page title: the touch controls' L and R buttons sit in the corners.
+    float h = std::clamp(size.y * 0.09f, 34.0f, 96.0f), w = h * 3.4f;
+    ImVec2 at(pos.x + (size.x - w) / 2, pos.y + h * 0.12f);
     ImGui::SetNextWindowPos(at);
     ImGui::SetNextWindowSize(ImVec2(w, h));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));

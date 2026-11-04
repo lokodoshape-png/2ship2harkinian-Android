@@ -1937,7 +1937,7 @@ void BenMenu::AddEnhancements() {
         .WindowName("Quest Menu")
         .Options(ButtonOptions()
                      .Tooltip("Opens the quest menu inside the pause menu (the game is paused first). While paused, "
-                              "N on the keyboard, Back (View / Select / -) on a controller or the QUESTS button on the "
+                              "L, N on the keyboard, Back (View / Select / -) on a controller or the QUESTS button on the "
                               "pause screen open it too.")
                      .Size(Sizes::Inline));
 

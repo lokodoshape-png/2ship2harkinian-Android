@@ -9,6 +9,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-11-04 — versão 4.0.2-mm3d.3
+- **Menu de missões mais fácil de abrir.** Com o jogo pausado, aperte **L** (no toque também). O botão MISSÕES saiu
+  do canto, onde ficava embaixo do R da tela de toque, e foi para o meio do topo, maior.
 - **Tela inicial: os controles de toque ficam na tela.** O analógico, o direcional, o A e o B da tela agora mexem no
   menu como um controle. Um toque fora deles vai direto para o item do menu, em vez de girar a câmera. Com o botão do
   olho, os controles somem e a tela toda fica para o toque.
