@@ -326,9 +326,11 @@ void FileSelect_UpdateMainMenu(GameState* thisx) {
             Audio_PlaySfx(NA_SE_SY_FSEL_ERROR);
         }
     } else if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
-        gSaveContext.gameMode = GAMEMODE_TITLE_SCREEN;
-        STOP_GAMESTATE(&this->state);
-        SET_NEXT_GAMESTATE(&this->state, TitleSetup_Init, sizeof(TitleSetupState));
+        if (GameInteractor_Should(VB_FILE_SELECT_EXIT_TO_TITLE, true)) {
+            gSaveContext.gameMode = GAMEMODE_TITLE_SCREEN;
+            STOP_GAMESTATE(&this->state);
+            SET_NEXT_GAMESTATE(&this->state, TitleSetup_Init, sizeof(TitleSetupState));
+        }
     } else {
         if (ABS_ALT(this->stickAdjY) > 30) {
             Audio_PlaySfx(NA_SE_SY_FSEL_CURSOR);

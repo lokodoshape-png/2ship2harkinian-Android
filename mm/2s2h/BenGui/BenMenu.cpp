@@ -1443,6 +1443,15 @@ void BenMenu::AddEnhancements() {
     AddWidget(path, "Skip Entrance Cutscenes", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.Cutscenes.SkipEntranceCutscenes")
         .Options(CheckboxOptions().Tooltip("Skip cutscenes that occur when first entering a new area."));
+    AddWidget(path, "Tela inicial nova", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.TitleMenu.Enabled")
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Troca a tela de título e a seleção de arquivo pela tela inicial nova (Continuar, Novo Jogo, Carregar "
+            "Jogo, Bombers Book, Missões, Inventário, Opções, Extras). Desligada, volta a tela original do jogo."));
+    AddWidget(path, "Efeitos da tela inicial", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.TitleMenu.Effects")
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Lua em movimento, olhos e fada brilhando e partículas no ar. Desligue em aparelhos mais fracos."));
     AddWidget(path, "Skip to File Select", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.Cutscenes.SkipToFileSelect")
         .Options(CheckboxOptions().Tooltip(
