@@ -2166,7 +2166,7 @@ s16 sQuestVtxRectLeft[] = {
     -103, // QUEST_BOMBERS_NOTEBOOK
     7,    // QUEST_QUIVER
     82,   // QUEST_BOMB_BAG
-    -110, // QUEST_SKULL_TOKEN (unused)
+    -98,  // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     -54,  // QUEST_HEART_PIECE
     -98,  // ocarina song button index 0
     -86,  // ocarina song button index 1
@@ -2208,7 +2208,7 @@ s16 sQuestVtxRectTop[] = {
     54,  // QUEST_BOMBERS_NOTEBOOK
     -44, // QUEST_QUIVER
     -44, // QUEST_BOMB_BAG
-    34,  // QUEST_SKULL_TOKEN (unused)
+    22,  // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     58,  // QUEST_HEART_PIECE
     -52, // ocarina song button index 0
     -52, // ocarina song button index 1
@@ -2250,7 +2250,7 @@ s16 sQuestVtxWidths[] = {
     32, // QUEST_BOMBERS_NOTEBOOK
     32, // QUEST_QUIVER
     32, // QUEST_BOMB_BAG
-    24, // QUEST_SKULL_TOKEN (unused)
+    22, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     48, // QUEST_HEART_PIECE
     16, // ocarina song button index 0
     16, // ocarina song button index 1
@@ -2292,7 +2292,7 @@ s16 sQuestVtxHeights[] = {
     32, // QUEST_BOMBERS_NOTEBOOK
     32, // QUEST_QUIVER
     32, // QUEST_BOMB_BAG
-    24, // QUEST_SKULL_TOKEN (unused)
+    22, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     48, // QUEST_HEART_PIECE
     16, // ocarina song button index 0
     16, // ocarina song button index 1
@@ -2906,7 +2906,7 @@ f32 sQuestStatusCursorsX[] = {
     -68.0f, // QUEST_BOMBERS_NOTEBOOK
     22.0f,  // QUEST_QUIVER
     83.0f,  // QUEST_BOMB_BAG
-    -67.0f, // QUEST_SKULL_TOKEN
+    -68.0f, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     -21.0f, // QUEST_HEART_PIECE
 };
 
@@ -2932,7 +2932,7 @@ f32 sQuestStatusCursorsY[] = {
     27.0f,  // QUEST_BOMBERS_NOTEBOOK
     -53.0f, // QUEST_QUIVER
     -53.0f, // QUEST_BOMB_BAG
-    14.0f,  // QUEST_SKULL_TOKEN
+    8.0f,   // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     26.0f,  // QUEST_HEART_PIECE
 };
 

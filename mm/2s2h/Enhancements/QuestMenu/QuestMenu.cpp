@@ -1,4 +1,5 @@
 #include "QuestMenu.h"
+#include "QuestMenuBridge.h"
 
 #include "QuestData.h"
 #include "QuestRenderer.h"
@@ -864,42 +865,6 @@ void UseFonts() {
 #endif
 }
 
-// The QUESTS button on the pause screen, for touch and mouse.
-void DrawPauseButton() {
-    if (!PauseReady() || sOpen) {
-        return;
-    }
-    ImVec2 pos, size;
-    if (!GameRect(pos, size)) {
-        return;
-    }
-    // Top centre, above the page title: the touch controls' L and R buttons sit in the corners.
-    float h = std::clamp(size.y * 0.09f, 34.0f, 96.0f), w = h * 3.4f;
-    ImVec2 at(pos.x + (size.x - w) / 2, pos.y + h * 0.12f);
-    ImGui::SetNextWindowPos(at);
-    ImGui::SetNextWindowSize(ImVec2(w, h));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    ImGui::Begin("##QuestMenuButton", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing |
-                     ImGuiWindowFlags_NoMove);
-    Page pg{ ImGui::GetWindowDrawList(), at, h / 64.0f };
-    float pw = w / pg.k;
-    bool hovered = false;
-    if (Hit(pg, "##qm_open", 0, 0, pw, 64, &hovered)) {
-        Open();
-    }
-    if (!NineSlice(pg, hovered ? "button_selected" : "button", ImVec2(0, 0), ImVec2(pw, 64), 28, 20)) {
-        Panel(pg, ImVec2(0, 0), ImVec2(pw, 64), cWine, cPurpleDeep, 10);
-        GoldFrame(pg, ImVec2(0, 0), ImVec2(pw, 64), 10, 2);
-    }
-    Png(pg, "cat_main", ImVec2(8, 8), ImVec2(56, 56));
-    TextShadow(pg, 62, 14, 30, cGold, "MISSÕES", TitleFont());
-    ImGui::End();
-    ImGui::PopStyleVar(2);
-}
-
 void DrawMenu() {
     float dt = ImGui::GetIO().DeltaTime;
     sTime += dt;
@@ -992,7 +957,6 @@ void QuestMenuWindow::Draw() {
             QuestMenu::RequestOpen();
         }
     }
-    QuestMenu::DrawPauseButton();
     QuestMenu::DrawMenu();
 }
 
@@ -1015,3 +979,12 @@ static void RegisterQuestMenu() {
 }
 
 static RegisterShipInitFunc sQuestMenuInit(RegisterQuestMenu, {});
+
+// The MISSÕES entry on the pause menu's quest page, under the Bombers' Notebook (see z_kaleido_collect.c).
+extern "C" bool QuestMenu_PauseEntryShown(void) {
+    return CVarGetInteger("gEnhancements.QuestMenu.PauseEntry", 1) != 0;
+}
+
+extern "C" void QuestMenu_OpenFromPause(void) {
+    QuestMenu::RequestOpen();
+}

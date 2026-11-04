@@ -658,6 +658,13 @@ def clock_box():
     finish(img, "clock_box.png")
 
 
+def pause_icon():
+    # The quest page entry under the Bombers' Notebook: the side-quest scroll at 32x32. The ".rgba32.png" name makes
+    # the asset packer store it as a game Texture resource, so the pause menu draws it like its own items.
+    src = Image.open(os.path.join(OUT, "cat_side.png")).convert("RGBA").resize((32, 32), Image.LANCZOS)
+    src.save(os.path.join(OUT, "gQuestMenuPauseIconTex.rgba32.png"), optimize=True)
+
+
 def book_assets():
     book_frame()
     page_left()
@@ -692,6 +699,7 @@ def main():
     icon_records()
     state_icons()
     book_assets()
+    pause_icon()
 
 
 if __name__ == "__main__":

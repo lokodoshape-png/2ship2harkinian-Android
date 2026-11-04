@@ -6,10 +6,13 @@
 
 #include "z_kaleido_scope.h"
 #include "2s2h/Enhancements/MM3D/MM3D.h"
+#include "2s2h/Enhancements/QuestMenu/QuestMenuBridge.h"
 #include "interface/parameter_static/parameter_static.h"
 #include "archives/icon_item_static/icon_item_static_yar.h"
 
 s32 KaleidoScope_UpdateQuestStatusPoint(PauseContext* pauseCtx, s16 point);
+
+#define dgQuestMenuPauseIconTex "__OTR__overlays/questmenu/gQuestMenuPauseIconTex"
 
 s16 sQuestRemainsColorTimerInit[] = { 120, 60, 2, 80 };
 s16 sQuestHpColorTimerInits[] = { 20, 4, 20, 10 };
@@ -279,6 +282,12 @@ void KaleidoScope_DrawQuestStatus(PlayState* play) {
     }
 
     // Skip over &pauseCtx->questVtx[84], which should be `QUEST_SKULL_TOKEN`
+    // 2S2H [Enhancement] The unused slot under the Bombers' Notebook holds the entry that opens the quest menu
+    if (QuestMenu_PauseEntryShown()) {
+        gSPVertex(POLY_OPA_DISP++, &pauseCtx->questVtx[j], 4, 0);
+        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
+        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestMenuPauseIconTex, 32, 32, 0);
+    }
     j += 4;
 
     sp1CA = ABS_ALT(sQuestHpPrimRed - sQuestHpPrimColorTargets[sQuestHpPrimColorTargetIndex][0]) / sQuestHpColorTimer;
@@ -606,6 +615,16 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
     s16 i;
     u16 cursor;
     u16 cursorItem;
+    // 2S2H [Enhancement] The quest menu entry sits between the Bombers' Notebook and the Song of Time row
+    bool questMenuEntry = QuestMenu_PauseEntryShown();
+
+    sCursorPointLinks[QUEST_BOMBERS_NOTEBOOK].down = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_SONG_TIME;
+    sCursorPointLinks[QUEST_SONG_TIME].up = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_BOMBERS_NOTEBOOK;
+    sCursorPointLinks[QUEST_SONG_HEALING].up = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_BOMBERS_NOTEBOOK;
+    sCursorPointLinks[QUEST_SKULL_TOKEN].up = questMenuEntry ? QUEST_BOMBERS_NOTEBOOK : QUEST_QUIVER;
+    if (!questMenuEntry && (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_SKULL_TOKEN)) {
+        pauseCtx->cursorPoint[PAUSE_QUEST] = QUEST_BOMBERS_NOTEBOOK;
+    }
 
     pauseCtx->nameColorSet = PAUSE_NAME_COLOR_SET_WHITE;
     pauseCtx->cursorColorSet = PAUSE_CURSOR_COLOR_SET_WHITE;
@@ -837,50 +856,64 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
                             Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
                         }
                     }
-                } else {
-                    if ((cursor == QUEST_BOMBERS_NOTEBOOK) && (pauseCtx->cursorItem[PAUSE_QUEST] != PAUSE_ITEM_NONE)) {
-                        if (interfaceCtx->aButtonDoActionDelayed != DO_ACTION_DECIDE) {
-                            Interface_SetAButtonDoAction(play, DO_ACTION_DECIDE);
-                        }
-                        pauseCtx->cursorColorSet = PAUSE_CURSOR_COLOR_SET_BLUE;
-                    } else if (interfaceCtx->aButtonDoActionDelayed == DO_ACTION_DECIDE) {
-                        Interface_SetAButtonDoAction(play, DO_ACTION_INFO);
+                } else if ((cursor == QUEST_SKULL_TOKEN) && questMenuEntry) {
+                    // 2S2H [Enhancement] A on the quest menu entry opens the quest menu
+                    if (interfaceCtx->aButtonDoActionDelayed != DO_ACTION_DECIDE) {
+                        Interface_SetAButtonDoAction(play, DO_ACTION_DECIDE);
                     }
-
-                    if ((pauseCtx->cursorItem[PAUSE_QUEST] != PAUSE_ITEM_NONE) && (msgCtx->msgLength == 0)) {
-                        if (gSaveContext.buttonStatus[EQUIP_SLOT_A] == BTN_DISABLED) {
-                            gSaveContext.buttonStatus[EQUIP_SLOT_A] = BTN_ENABLED;
-                            gSaveContext.hudVisibility = HUD_VISIBILITY_IDLE;
-                            Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
-                        }
-
-                        if (CHECK_BTN_ALL(CONTROLLER1(&play->state)->press.button, BTN_A) && (msgCtx->msgLength == 0)) {
-                            if (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_BOMBERS_NOTEBOOK) {
-                                play->pauseCtx.bombersNotebookOpen = true;
-                                pauseCtx->mainState = PAUSE_MAIN_STATE_BOMBERS_NOTEBOOK_OPEN;
-                                Audio_PlaySfx(NA_SE_SY_DECIDE);
-                            } else {
-                                pauseCtx->itemDescriptionOn = true;
-                                if (pauseCtx->cursorYIndex[PAUSE_QUEST] < 2) {
-                                    if (pauseCtx->cursorItem[PAUSE_QUEST] < ITEM_REMAINS_ODOLWA) {
-                                        func_801514B0(play, 0x1737 + pauseCtx->cursorItem[PAUSE_QUEST], 1);
-                                    } else {
-                                        func_801514B0(play, 0x173B + pauseCtx->cursorItem[PAUSE_QUEST], 3);
-                                    }
-                                } else {
-                                    if (pauseCtx->cursorItem[PAUSE_QUEST] < ITEM_REMAINS_ODOLWA) {
-                                        func_801514B0(play, 0x1737 + pauseCtx->cursorItem[PAUSE_QUEST], 1);
-                                    } else {
-                                        func_801514B0(play, 0x173B + pauseCtx->cursorItem[PAUSE_QUEST], 1);
-                                    }
-                                }
-                            }
-                        }
-                    } else if (gSaveContext.buttonStatus[EQUIP_SLOT_A] != BTN_DISABLED) {
-                        gSaveContext.buttonStatus[EQUIP_SLOT_A] = BTN_DISABLED;
+                    pauseCtx->cursorColorSet = PAUSE_CURSOR_COLOR_SET_BLUE;
+                    if (gSaveContext.buttonStatus[EQUIP_SLOT_A] == BTN_DISABLED) {
+                        gSaveContext.buttonStatus[EQUIP_SLOT_A] = BTN_ENABLED;
                         gSaveContext.hudVisibility = HUD_VISIBILITY_IDLE;
                         Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
                     }
+                    if (CHECK_BTN_ALL(CONTROLLER1(&play->state)->press.button, BTN_A) && (msgCtx->msgLength == 0)) {
+                        QuestMenu_OpenFromPause();
+                    }
+                } else {
+                        if ((cursor == QUEST_BOMBERS_NOTEBOOK) && (pauseCtx->cursorItem[PAUSE_QUEST] != PAUSE_ITEM_NONE)) {
+                            if (interfaceCtx->aButtonDoActionDelayed != DO_ACTION_DECIDE) {
+                                Interface_SetAButtonDoAction(play, DO_ACTION_DECIDE);
+                            }
+                            pauseCtx->cursorColorSet = PAUSE_CURSOR_COLOR_SET_BLUE;
+                        } else if (interfaceCtx->aButtonDoActionDelayed == DO_ACTION_DECIDE) {
+                            Interface_SetAButtonDoAction(play, DO_ACTION_INFO);
+                        }
+
+                        if ((pauseCtx->cursorItem[PAUSE_QUEST] != PAUSE_ITEM_NONE) && (msgCtx->msgLength == 0)) {
+                            if (gSaveContext.buttonStatus[EQUIP_SLOT_A] == BTN_DISABLED) {
+                                gSaveContext.buttonStatus[EQUIP_SLOT_A] = BTN_ENABLED;
+                                gSaveContext.hudVisibility = HUD_VISIBILITY_IDLE;
+                                Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
+                            }
+
+                            if (CHECK_BTN_ALL(CONTROLLER1(&play->state)->press.button, BTN_A) && (msgCtx->msgLength == 0)) {
+                                if (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_BOMBERS_NOTEBOOK) {
+                                    play->pauseCtx.bombersNotebookOpen = true;
+                                    pauseCtx->mainState = PAUSE_MAIN_STATE_BOMBERS_NOTEBOOK_OPEN;
+                                    Audio_PlaySfx(NA_SE_SY_DECIDE);
+                                } else {
+                                    pauseCtx->itemDescriptionOn = true;
+                                    if (pauseCtx->cursorYIndex[PAUSE_QUEST] < 2) {
+                                        if (pauseCtx->cursorItem[PAUSE_QUEST] < ITEM_REMAINS_ODOLWA) {
+                                            func_801514B0(play, 0x1737 + pauseCtx->cursorItem[PAUSE_QUEST], 1);
+                                        } else {
+                                            func_801514B0(play, 0x173B + pauseCtx->cursorItem[PAUSE_QUEST], 3);
+                                        }
+                                    } else {
+                                        if (pauseCtx->cursorItem[PAUSE_QUEST] < ITEM_REMAINS_ODOLWA) {
+                                            func_801514B0(play, 0x1737 + pauseCtx->cursorItem[PAUSE_QUEST], 1);
+                                        } else {
+                                            func_801514B0(play, 0x173B + pauseCtx->cursorItem[PAUSE_QUEST], 1);
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (gSaveContext.buttonStatus[EQUIP_SLOT_A] != BTN_DISABLED) {
+                            gSaveContext.buttonStatus[EQUIP_SLOT_A] = BTN_DISABLED;
+                            gSaveContext.hudVisibility = HUD_VISIBILITY_IDLE;
+                            Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
+                        }
                 }
             } else if (pauseCtx->mainState == PAUSE_MAIN_STATE_SONG_PROMPT) {
                 // Abort reading ocarina song input if the stick is moved

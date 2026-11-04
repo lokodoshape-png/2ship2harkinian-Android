@@ -1186,9 +1186,11 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "enquanto falta pegar a recompensa e fica verde quando ela já foi recebida." },
     { "Open the Quest Menu", "Abrir o menu de missões" },
     { "Opens the quest menu inside the pause menu (the game is paused first). While paused, L, N on the keyboard, Back "
-      "(View / Select / -) on a controller or the QUESTS button on the pause screen open it too.",
+      "(View / Select / -) on a controller or the QUESTS entry under the Bombers' Notebook on the Quest Status page "
+      "open it too.",
       "Abre o menu de missões dentro do menu de pausa (o jogo é pausado antes). Com o jogo pausado, o botão L, a tecla N, o botão "
-      "Back (View / Select / -) do controle ou o botão MISSÕES na tela de pausa também abrem." },
+      "Back (View / Select / -) do controle ou o item MISSÕES, logo abaixo do Caderno dos Bombers na página de Status "
+      "da Jornada, também abrem." },
     { "Opens the full list of Bombers' Notebook tips in a window.",
       "Abre a lista completa de dicas do Caderno dos Bombers em uma janela." },
     { "3DS-Style Lighting", "Iluminação estilo 3DS" },
