@@ -1923,11 +1923,14 @@ void BenMenu::AddEnhancements() {
                               "needed. A note is yellow while the reward is still to get and turns green once it "
                               "has been received.")
                      .DefaultValue(true));
-    AddWidget(path, "Open Bombers' Notebook Guide", WIDGET_WINDOW_BUTTON)
-        .CVar("gWindows.BombersNotebookGuide")
-        .WindowName("Bombers Notebook Guide")
-        .Options(ButtonOptions().Tooltip("Opens the quest menu. Also opens and closes with N on the keyboard or Back "
-                                         "(View / Select / -) on a controller.").Size(Sizes::Inline));
+    AddWidget(path, "Open the Quest Menu", WIDGET_WINDOW_BUTTON)
+        .CVar("gWindows.QuestMenu")
+        .WindowName("Quest Menu")
+        .Options(ButtonOptions()
+                     .Tooltip("Opens the quest menu inside the pause menu (the game is paused first). While paused, "
+                              "N on the keyboard, Back (View / Select / -) on a controller or the QUESTS button on the "
+                              "pause screen open it too.")
+                     .Size(Sizes::Inline));
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "3DS-Style Lighting", WIDGET_SEPARATOR_TEXT);

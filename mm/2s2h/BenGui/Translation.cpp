@@ -1184,10 +1184,11 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "Com o Caderno dos Bombers aberto, as dicas da pessoa selecionada aparecem no próprio caderno como lembretes: "
       "a recompensa, o dia e a hora certos, o lugar e a máscara ou condição necessária. O lembrete fica amarelo "
       "enquanto falta pegar a recompensa e fica verde quando ela já foi recebida." },
-    { "Open Bombers' Notebook Guide", "Abrir guia do Caderno dos Bombers" },
-    { "Opens the quest menu. Also opens and closes with N on the keyboard or Back (View / Select / -) on a controller.",
-      "Abre o menu de missões. Ele também abre e fecha com a tecla N do teclado ou com o botão Back (View / Select / -) "
-      "do controle." },
+    { "Open the Quest Menu", "Abrir o menu de missões" },
+    { "Opens the quest menu inside the pause menu (the game is paused first). While paused, N on the keyboard, Back "
+      "(View / Select / -) on a controller or the QUESTS button on the pause screen open it too.",
+      "Abre o menu de missões dentro do menu de pausa (o jogo é pausado antes). Com o jogo pausado, a tecla N, o botão "
+      "Back (View / Select / -) do controle ou o botão MISSÕES na tela de pausa também abrem." },
     { "Opens the full list of Bombers' Notebook tips in a window.",
       "Abre a lista completa de dicas do Caderno dos Bombers em uma janela." },
     { "3DS-Style Lighting", "Iluminação estilo 3DS" },

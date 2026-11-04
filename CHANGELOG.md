@@ -8,6 +8,23 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04
+- **Menu de missões dentro do jogo.** Com o jogo pausado, aperte N (teclado), Back / View / Select / - (controle) ou o
+  botão MISSÕES no canto da tela de pausa. O menu de pausa fica parado por trás e o próprio controle do jogo navega:
+  L / Z e R trocam a categoria, o direcional ou o analógico escolhem, A abre os detalhes, B volta e Start fecha. Mouse
+  e toque funcionam em tudo. O botão "Abrir o menu de missões" em Melhorias > Majora's Mask 3D pausa o jogo e abre.
+  - Sete categorias: missões principais, secundárias, as 24 máscaras, personagens, locais (estátuas da coruja), itens
+    importantes e registros (canções, fadas perdidas, Skulltulas, corações).
+  - Cada missão tem região, horário, descrição, objetivos marcados, recompensa e um dos quatro estados: bloqueada,
+    disponível, em andamento ou concluída. Tudo é lido das variáveis do save; um passo que o jogo não registra só
+    aparece marcado quando a missão inteira está concluída.
+  - Arte própria em `assets/custom/overlays/questmenu/` (molduras, pergaminho, botões, ícones de categoria e de
+    estado), gerada por `make_assets.py`. Os ícones das missões são os do seu jogo, então um pacote HD troca eles também.
+  - Código em `mm/2s2h/Enhancements/QuestMenu/`: `QuestData` (o que é listado), `QuestState` (estado de cada missão),
+    `QuestRenderer` (desenho) e `QuestMenu` (entrada, layout e animações). O menu de pausa para com o novo
+    `VB_KALEIDO_UPDATE`.
+  - A janela antiga do guia saiu; as dicas em notas dentro do Caderno dos Bombers continuam.
+
 ### 2026-11-03
 - **MM3D: estátuas da coruja salvam e o jogo continua** (em vez de voltar à tela de título), e o save fica guardado.
 - **MM3D: Goron rola sem segurar A.** Aperte A para rolar e A de novo para parar.

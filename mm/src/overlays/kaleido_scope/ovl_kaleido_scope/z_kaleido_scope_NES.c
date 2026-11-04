@@ -3351,6 +3351,12 @@ void KaleidoScope_Update(PlayState* play) {
     s16 stepA;
     s16 stickAdjX = input->rel.stick_x;
 
+    // 2S2H [Enhancement] A screen drawn over the pause menu (the quest menu) takes the input while it is open; the
+    // pause menu stays on screen, frozen, and the game stays paused.
+    if (!GameInteractor_Should(VB_KALEIDO_UPDATE, true)) {
+        return;
+    }
+
     MapDisp_UpdateDungeonMap(play);
 
     pauseCtx->stickAdjX = input->rel.stick_x;

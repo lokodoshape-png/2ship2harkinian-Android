@@ -1187,6 +1187,16 @@ typedef enum {
     // - None
     VB_KALEIDO_UNPAUSE_CLOSE,
 
+    // Whether the pause menu runs its update this frame. False while a screen drawn over it (the quest menu) has
+    // the input; the pause menu then stays as it is.
+    // #### `result`
+    // ```c
+    // true
+    // ```
+    // #### `args`
+    // - None
+    VB_KALEIDO_UPDATE,
+
     // #### `result`
     // ```c
     // CHECK_WEEKEVENTREG(WEEKEVENTREG_08_80)

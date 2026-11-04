@@ -27,6 +27,7 @@
 #include "Enhancements/Trackers/TimeSplits/TimesplitsSettings.h"
 #include "BenMenu.h"
 #include "2s2h/Enhancements/MM3D/BombersNotebookGuide.h"
+#include "2s2h/Enhancements/QuestMenu/QuestMenu.h"
 #include "2s2h/Updater/Updater.h"
 #include "BenMenuBar.h"
 #include "DeveloperTools/HookDebugger.h"
@@ -51,6 +52,7 @@ std::shared_ptr<HookDebuggerWindow> mHookDebuggerWindow;
 std::shared_ptr<SaveEditorWindow> mSaveEditorWindow;
 std::shared_ptr<HudEditorWindow> mHudEditorWindow;
 std::shared_ptr<BombersNotebookGuideWindow> mBombersNotebookGuideWindow;
+std::shared_ptr<QuestMenuWindow> mQuestMenuWindow;
 std::shared_ptr<UpdaterWindow> mUpdaterWindow;
 std::shared_ptr<CosmeticEditorWindow> mCosmeticEditorWindow;
 std::shared_ptr<ActorViewerWindow> mActorViewerWindow;
@@ -173,6 +175,8 @@ void SetupGuiElements() {
     mBombersNotebookGuideWindow = std::make_shared<BombersNotebookGuideWindow>(
         "gWindows.BombersNotebookGuide", "Bombers Notebook Guide", ImVec2(900, 620));
     gui->AddGuiWindow(mBombersNotebookGuideWindow);
+    mQuestMenuWindow = std::make_shared<QuestMenuWindow>("gWindows.QuestMenu", "Quest Menu", ImVec2(1, 1));
+    gui->AddGuiWindow(mQuestMenuWindow);
 
     mUpdaterWindow = std::make_shared<UpdaterWindow>("gWindows.Updater", "Updater");
     gui->AddGuiWindow(mUpdaterWindow);
@@ -220,6 +224,7 @@ void Destroy() {
     mSaveEditorWindow = nullptr;
     mHudEditorWindow = nullptr;
     mBombersNotebookGuideWindow = nullptr;
+    mQuestMenuWindow = nullptr;
     mUpdaterWindow = nullptr;
     mCosmeticEditorWindow = nullptr;
     mActorViewerWindow = nullptr;
