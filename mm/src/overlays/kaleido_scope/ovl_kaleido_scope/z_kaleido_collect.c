@@ -286,7 +286,8 @@ void KaleidoScope_DrawQuestStatus(PlayState* play) {
     if (QuestMenu_PauseEntryShown()) {
         gSPVertex(POLY_OPA_DISP++, &pauseCtx->questVtx[j], 4, 0);
         gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
-        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestMenuPauseIconTex, 32, 32, 0);
+        // 22x22 like the slot: a bigger texture showed only its top-left corner, squeezed
+        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestMenuPauseIconTex, 22, 22, 0);
     }
     j += 4;
 
