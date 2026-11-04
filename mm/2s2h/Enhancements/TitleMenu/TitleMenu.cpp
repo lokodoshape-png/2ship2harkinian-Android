@@ -1005,12 +1005,12 @@ void Card(const Page& pg, float w, float h, float a, ImVec2& at) {
 void CardText(const Page& pg, ImVec2 at, float w, const char* const* lines, int count, float a) {
     float y = at.y + 110;
     for (int i = 0; i < count; i++) {
-        bool small = lines[i][0] == '~';
-        const char* text = small ? lines[i] + 1 : lines[i];
-        float size = small ? 22.0f : 27.0f;
-        ImU32 col = small ? Col(200, 186, 214) : Col(245, 238, 250);
+        bool dim = lines[i][0] == '~';
+        const char* text = dim ? lines[i] + 1 : lines[i];
+        float size = dim ? 22.0f : 27.0f;
+        ImU32 col = dim ? Col(200, 186, 214) : Col(245, 238, 250);
         QuestUi::Text(pg, at.x + 48, y, size, Alpha(col, a), text, w - 96);
-        y += QuestUi::WrappedHeight(pg, size, w - 96, text) + (small ? 10 : 14);
+        y += QuestUi::WrappedHeight(pg, size, w - 96, text) + (dim ? 10 : 14);
     }
 }
 
