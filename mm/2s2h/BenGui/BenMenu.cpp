@@ -1926,7 +1926,8 @@ void BenMenu::AddEnhancements() {
     AddWidget(path, "Open Bombers' Notebook Guide", WIDGET_WINDOW_BUTTON)
         .CVar("gWindows.BombersNotebookGuide")
         .WindowName("Bombers Notebook Guide")
-        .Options(ButtonOptions().Tooltip("Opens the full list of Bombers' Notebook tips in a window.").Size(Sizes::Inline));
+        .Options(ButtonOptions().Tooltip("Opens the quest menu. Also opens and closes with N on the keyboard or Back "
+                                         "(View / Select / -) on a controller.").Size(Sizes::Inline));
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "3DS-Style Lighting", WIDGET_SEPARATOR_TEXT);

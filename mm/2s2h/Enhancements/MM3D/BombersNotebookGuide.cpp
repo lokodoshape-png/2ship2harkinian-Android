@@ -325,6 +325,13 @@ void BombersNotebookGuideWindow::UpdateElement() {
 }
 
 void BombersNotebookGuideWindow::Draw() {
+    // N on the keyboard, or Back / View / Select / - on a controller, opens and closes the quest menu. Neither is
+    // used by the game's default controls.
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantTextInput &&
+        (ImGui::IsKeyPressed(ImGuiKey_N, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false))) {
+        ToggleVisibility();
+    }
     DrawNotesInNotebook();
     GuiWindow::Draw();
 }

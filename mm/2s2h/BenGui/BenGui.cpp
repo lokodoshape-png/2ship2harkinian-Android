@@ -171,7 +171,7 @@ void SetupGuiElements() {
     gui->AddGuiWindow(mTimesplitsSettingsWindow);
 
     mBombersNotebookGuideWindow = std::make_shared<BombersNotebookGuideWindow>(
-        "gWindows.BombersNotebookGuide", "Bombers Notebook Guide", ImVec2(460, 520));
+        "gWindows.BombersNotebookGuide", "Bombers Notebook Guide", ImVec2(900, 620));
     gui->AddGuiWindow(mBombersNotebookGuideWindow);
 
     mUpdaterWindow = std::make_shared<UpdaterWindow>("gWindows.Updater", "Updater");

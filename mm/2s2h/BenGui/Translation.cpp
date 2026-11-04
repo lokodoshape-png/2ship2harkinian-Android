@@ -1185,6 +1185,9 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "a recompensa, o dia e a hora certos, o lugar e a máscara ou condição necessária. O lembrete fica amarelo "
       "enquanto falta pegar a recompensa e fica verde quando ela já foi recebida." },
     { "Open Bombers' Notebook Guide", "Abrir guia do Caderno dos Bombers" },
+    { "Opens the quest menu. Also opens and closes with N on the keyboard or Back (View / Select / -) on a controller.",
+      "Abre o menu de missões. Ele também abre e fecha com a tecla N do teclado ou com o botão Back (View / Select / -) "
+      "do controle." },
     { "Opens the full list of Bombers' Notebook tips in a window.",
       "Abre a lista completa de dicas do Caderno dos Bombers em uma janela." },
     { "3DS-Style Lighting", "Iluminação estilo 3DS" },
