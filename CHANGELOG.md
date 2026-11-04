@@ -25,7 +25,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
   apertado para pular, e o log registra o motivo se o menu ficar sem receber controles.
 - **Ícones em Arquivos de Jogo.** Os detalhes do arquivo mostram o ícone de cada coisa ao lado da quantidade: o sol
   no dia, a peça de coração, a Máscara Deku, a Ocarina do Tempo nas canções, a rupia verde e a ampulheta nos ciclos.
-- **Legendas.** A transcrição é refeita separando a voz da música antes, para pegar as falas que ficaram sem legenda.
+- **Legendas.** A transcrição foi refeita separando a voz da música antes, e as falas que ficaram sem legenda
+  entraram: agora são cinco (três no começo e duas perto do fim), revisadas à mão.
 
 ### 2026-11-04 — versão 4.0.2-mm3d.7
 - **Segurar para pular.** Um toque solto não pula mais a abertura: é preciso segurar um botão, uma tecla, o clique
