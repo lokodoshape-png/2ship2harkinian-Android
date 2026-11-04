@@ -43,8 +43,8 @@ import java.util.regex.Pattern;
 // The opening, played over the game when the app opens, before the title menu: the edition's logo (assets/intro/
 // logo.jpg) fades in from black, stays, fades out, and the video starts. The video is made ready while the logo is up,
 // so it starts as soon as the logo is gone. Every way out (the end, a skip, an error) goes through the moon
-// (exitToMenu): close up on the title menu's moon, its red eyes burn and pulse, and the view draws back to the menu,
-// which is made again from the moon outwards. The game boots underneath it with its sound muted
+// (exitToMenu): in the dark the title menu's moon opens its eyes, they burn and swell into a burst of light, and the
+// menu comes out of it. The game boots underneath it with its sound muted
 // (nativeSetIntroPlaying); the menu's music comes in with the moon (nativeSetIntroSound).
 //
 // The video is res/raw/abertura.mp4, which android.yml takes from the release "intro-video"; a file abertura.mp4 in
@@ -638,39 +638,31 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         anim.start();
     }
 
-    // The title menu's own picture (assets/intro/background.jpg and moon.png, the same as the menu's), close up on
-    // its moon: out of the dark the moon looks down, its eyes kindle and burn red and violet; then the view draws
-    // back, the dark opening from the moon in a widening violet ring, until the picture is exactly the menu's
-    // (TitleMenu.cpp draws it the same way: 1920 x 1080 fitted to the screen, the moon at x 1022), which takes over
-    // underneath as this fades and builds its buttons up. The same as IntroVideo.cpp's DrawMoon on PC.
+    // From total darkness the moon's eyes open, slowly, close up on the title menu's own moon (assets/intro/moon.png,
+    // the same as the menu's); they burn and pulse, lighting the moon a little; then the glow swells into a burst of
+    // light that fills the screen, and the title menu comes out of it, building its buttons up as the light fades.
+    // The same as IntroVideo.cpp's DrawMoon on PC.
     private static final class MoonView extends android.view.View {
-        static final float TOTAL = 4.9f;   // seconds
-        static final float REVEAL = 4.2f;  // the view is the menu's: this fades over it
-        static final float PAGE_W = 1920f, PAGE_H = 1080f, MOON_X = 1022f;
-        static final float[][] EYES = { { 1296f, 163f }, { 1662f, 18f } }; // on the page, as TitleMenu.cpp's kMoonEyes
+        static final float TOTAL = 4.8f;   // seconds
+        static final float REVEAL = 3.5f;  // the burst of light: the menu is under it from here
+        static final float[][] EYES = { { 274f, 163f }, { 640f, 18f } }; // in moon.png (TitleMenu.cpp's kMoonEyes)
 
         float t = 0f;
-        private final Bitmap moon, background;
+        private final Bitmap moon;
         private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
         private final android.graphics.Paint glow = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final android.graphics.Paint dark = new android.graphics.Paint();
-        private final android.graphics.Paint ring = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Paint fill = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         private final android.graphics.RectF dst = new android.graphics.RectF();
 
         MoonView(MainActivity activity) {
             super(activity);
-            moon = load(activity, "intro/moon.png");
-            background = load(activity, "intro/background.jpg");
-            ring.setStyle(android.graphics.Paint.Style.STROKE);
-        }
-
-        private static Bitmap load(MainActivity activity, String name) {
-            try (InputStream in = activity.getAssets().open(name)) {
-                return BitmapFactory.decodeStream(in);
+            Bitmap b = null;
+            try (InputStream in = activity.getAssets().open("intro/moon.png")) {
+                b = BitmapFactory.decodeStream(in);
             } catch (IOException e) {
-                MainActivity.startupLog("Abertura: sem " + name);
-                return null;
+                MainActivity.startupLog("Abertura: sem a lua da transição");
             }
+            moon = b;
         }
 
         private static float clamp01(float v) {
@@ -683,6 +675,9 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         }
 
         private void radial(android.graphics.Canvas c, float x, float y, float r, int inner, int outer) {
+            if (r <= 0f) {
+                return;
+            }
             glow.setShader(new android.graphics.RadialGradient(x, y, r, new int[] { inner, outer, Color.TRANSPARENT },
                     new float[] { 0f, 0.35f, 1f }, android.graphics.Shader.TileMode.CLAMP));
             c.drawCircle(x, y, r, glow);
@@ -692,71 +687,61 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             return Color.argb(Math.round(255 * clamp01(a)), r, g, b);
         }
 
+        private void oval(android.graphics.Canvas c, float x, float y, float rx, float ry, int color) {
+            fill.setColor(color);
+            dst.set(x - rx, y - ry, x + rx, y + ry);
+            c.drawOval(dst, fill);
+        }
+
+        // One eye, opening: an almond of red light whose height grows with open, a burning iris and a dark pupil.
+        private void eye(android.graphics.Canvas c, float x, float y, float r, float open, float g) {
+            if (open <= 0f || g <= 0f) {
+                return;
+            }
+            float h = 0.62f * open, h2 = Math.min(1f, h * 1.5f);
+            radial(c, x, y, r * 3.2f, argb(0.30f * g * open, 150, 50, 255), argb(0.15f * g * open, 100, 30, 200));
+            for (int i = 0; i < 10; i++) {
+                float k = 1.6f - 1.2f * i / 10f;
+                oval(c, x, y, r * k, r * k * h, argb(0.12f * g, 255, 40, 15));
+            }
+            oval(c, x, y, r * 0.62f, r * 0.62f * h2, argb(0.9f * g, 255, 150, 40));
+            oval(c, x, y, r * 0.42f, r * 0.42f * h2, argb(0.95f * g, 255, 225, 120));
+            oval(c, x, y, r * 0.16f, r * 0.16f * Math.min(1f, h * 1.6f), argb(0.9f * g, 40, 8, 4));
+        }
+
         @Override
         protected void onDraw(android.graphics.Canvas c) {
             int w = getWidth(), h = getHeight();
-            float layer = 1f - smooth((t - REVEAL) / (TOTAL - REVEAL));
-            if (moon == null || background == null) {
-                c.drawColor(argb(layer, 0, 0, 0));
+            float flash = t < REVEAL ? smooth((t - (REVEAL - 0.6f)) / 0.6f)
+                                     : 1f - smooth((t - REVEAL) / (TOTAL - REVEAL));
+            if (t >= REVEAL) {
+                c.drawColor(argb(flash, 255, 190, 150));
                 return;
             }
-            float pulse = 0.72f + 0.28f * (float) Math.sin(t * Math.PI * 2 * 1.6f);
-            // The page as the menu fits it on the screen.
-            float k = Math.min(w / PAGE_W, h / PAGE_H);
-            float ox = (w - PAGE_W * k) / 2, oy = (h - PAGE_H * k) / 2;
-            float mx0 = MOON_X, my0 = 0f, mx1 = MOON_X + moon.getWidth(), my1 = moon.getHeight();
-            float fx = (mx0 + mx1) / 2, fy = (my0 + my1) / 2;
-            float moonW = (mx1 - mx0) * k, moonH = (my1 - my0) * k;
-            // The view: close up on the moon, then back to the menu's own framing.
-            float close = Math.min(w * 0.86f / moonW, h * 0.72f / moonH);
-            float back = smooth(smooth((t - 2.3f) / (REVEAL - 2.3f)));
-            float z = (close + (1f - close) * back) * (1f + 0.04f * smooth(t / 2.3f) * (1f - back));
-            float ax = w / 2f + (ox + fx * k - w / 2f) * back, ay = h * 0.42f + (oy + fy * k - h * 0.42f) * back;
-            float s = k * z;
-            float moonA = smooth((t - 0.3f) / 0.9f);
-
-            c.drawColor(argb(layer, 0, 0, 0));
-            dst.set(ax - fx * s, ay - fy * s, ax + (PAGE_W - fx) * s, ay + (PAGE_H - fy) * s);
-            paint.setAlpha(Math.round(255 * clamp01(moonA * layer)));
-            c.drawBitmap(background, null, dst, paint);
-
-            // The dark, opening from the moon.
-            float mw = moonW * z, mh = moonH * z;
-            float open = smooth((t - 2.5f) / (REVEAL + 0.2f - 2.5f));
-            float feather = mw * 0.45f + Math.max(w, h) * 0.25f * open;
-            float reach = (float) Math.hypot(w, h) * 1.2f + feather;
-            float r = mw * 0.5f + (reach - mw * 0.5f) * open;
-            float inner = Math.max(0f, r - feather);
-            int black = argb(layer, 0, 0, 0);
-            int middle = inner > 0f ? Color.TRANSPARENT : argb(layer * smooth((0f - (r - feather)) / feather), 0, 0, 0);
-            dark.setShader(new android.graphics.RadialGradient(ax, ay, r, new int[] { middle, middle, black },
-                    new float[] { 0f, inner / r, 1f }, android.graphics.Shader.TileMode.CLAMP));
-            c.drawRect(0, 0, w, h, dark);
-            if (open > 0f && open < 1f) {
-                // A violet ring at the edge of the opening.
-                ring.setStrokeWidth(feather * 0.08f);
-                ring.setColor(argb(0.35f * (float) Math.sin(open * Math.PI) * layer, 150, 60, 255));
-                c.drawCircle(ax, ay, Math.max(1f, r - feather * 0.5f), ring);
+            c.drawColor(Color.BLACK);
+            if (moon != null) {
+                float zoom = 1f + 0.05f * smooth(t / REVEAL);
+                float scale = Math.min(w * 0.86f / moon.getWidth(), h * 0.72f / moon.getHeight()) * zoom;
+                float bw = moon.getWidth() * scale, bh = moon.getHeight() * scale;
+                float x0 = (w - bw) / 2, y0 = h * 0.42f - bh / 2;
+                float open = smooth((t - 0.5f) / 1.5f);
+                float lit = smooth((t - 1.2f) / 1.0f);
+                float swell = smooth((t - 2.3f) / (REVEAL - 2.3f));
+                float pulse = 0.8f + 0.2f * (float) Math.sin(t * Math.PI * 2 * 1.4f);
+                dst.set(x0, y0, x0 + bw, y0 + bh);
+                paint.setAlpha(Math.round(255 * clamp01(0.08f + 0.27f * lit + 0.35f * swell)));
+                c.drawBitmap(moon, null, dst, paint);
+                for (int i = 0; i < 2; i++) {
+                    float ex = x0 + EYES[i][0] * scale, ey = y0 + EYES[i][1] * scale;
+                    float r = bh * 0.1f * (1f + 0.5f * swell);
+                    float o = smooth((t - 0.5f - i * 0.25f) / 1.5f); // the far eye opens a moment later
+                    eye(c, ex, ey, r, o, Math.min(1f, (0.75f + 0.25f * pulse) * (0.6f + 0.4f * open) + swell));
+                    radial(c, ex, ey, r * (2f + 10f * swell), argb(0.6f * swell, 255, 120, 60),
+                            argb(0.3f * swell, 255, 90, 40));
+                }
             }
-
-            // A violet haze behind the moon while it is close, then the moon.
-            radial(c, ax, ay, Math.max(mw, mh) * 0.75f, argb(0.4f * moonA * (1f - back) * layer, 120, 40, 200),
-                    argb(0.2f * moonA * (1f - back) * layer, 70, 20, 140));
-            dst.set(ax + (mx0 - fx) * s, ay + (my0 - fy) * s, ax + (mx1 - fx) * s, ay + (my1 - fy) * s);
-            paint.setAlpha(Math.round(255 * clamp01(moonA * layer)));
-            c.drawBitmap(moon, null, dst, paint);
-
-            // The eyes kindle, burn and pulse, and settle to the menu's smoulder as the view draws back.
-            float g = smooth((t - 0.9f) / 0.7f) * (1f - 0.8f * back) * moonA * layer * pulse;
-            if (g <= 0f) {
-                return;
-            }
-            for (float[] e : EYES) {
-                float ex = ax + (e[0] - fx) * s, ey = ay + (e[1] - fy) * s;
-                float er = mh * 0.3f;
-                radial(c, ex, ey, er * 1.8f, argb(0.35f * g, 170, 60, 255), argb(0.18f * g, 110, 30, 200)); // violet
-                radial(c, ex, ey, er, argb(0.85f * g, 255, 40, 20), argb(0.45f * g, 200, 0, 0));             // red
-                radial(c, ex, ey, er * 0.18f, argb(0.95f * g, 255, 210, 150), argb(0.7f * g, 255, 90, 30));  // core
+            if (flash > 0f) {
+                c.drawColor(argb(flash, 255, 190, 150));
             }
         }
     }

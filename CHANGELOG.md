@@ -8,6 +8,15 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.9
+- **Os olhos da lua se abrem.** A transição para o menu começa no escuro total: os olhos da lua se abrem devagar,
+  como pálpebras, primeiro um e depois o outro, acendem vermelho e laranja e iluminam um pouco a lua. O brilho então
+  cresce até tomar a tela, e a tela inicial surge desse clarão, montando os botões enquanto a luz se apaga.
+  Igual no Android e no PC.
+- **A abertura termina antes do quadro final** (a máscara com "the film / the music"). O vídeo acaba aos 4:24,8, com
+  a imagem e o som saindo em fade.
+- **Legendas no tempo da voz.** Os tempos das legendas foram acertados pelo tempo de cada palavra falada.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.8
 - **Correção (PC): vídeo de abertura preto.** O vídeo era decodificado, mas cada quadro saía transparente (o canal
   alfa ficava zerado), então só o fundo preto aparecia. Agora os quadros são opacos.
