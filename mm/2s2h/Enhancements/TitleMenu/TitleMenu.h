@@ -25,7 +25,21 @@
 // The art is in assets/custom/overlays/titlemenu (made by make_assets.py from Rafael's pictures). Turned off with
 // gEnhancements.TitleMenu.Enabled, the game's own title screen and file select come back.
 
+#include <imgui.h>
 #include <ship/window/gui/GuiWindow.h>
+
+namespace TitleMenu {
+// The menu's picture as it is drawn now, for the opening's moon (IntroVideo.cpp), which starts close up on the moon
+// and draws back to exactly this. Points are on the 1920 x 1080 page; on screen, origin + point * k.
+struct Scene {
+    ImVec2 origin;
+    float k;
+    ImTextureID backgroundTex;
+    ImTextureID moonTex;
+    ImVec2 moon0, moon1, eyes[2];
+};
+bool MenuScene(Scene& out);
+} // namespace TitleMenu
 
 class TitleMenuWindow : public Ship::GuiWindow {
   public:

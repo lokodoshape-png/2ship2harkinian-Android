@@ -107,7 +107,7 @@ public class MainActivity extends SDLActivity{
         return intro != null && intro.isActive();
     }
 
-    // The opening goes under the touch controls (they drive it when no controller is plugged in).
+    // The opening goes under the touch controls' layer (the controls themselves are hidden while it is on).
     int introLayerIndex() {
         ViewGroup layout = (ViewGroup) getContentView();
         int i = overlayView != null ? layout.indexOfChild(overlayView) : -1;
@@ -129,6 +129,7 @@ public class MainActivity extends SDLActivity{
 
     // Mutes the game's sound while the opening video plays (BenPort.cpp); it fades back in after.
     static native void nativeSetIntroPlaying(boolean playing);
+    static native void nativeSetIntroSound(boolean on);
 
     // The opening stops with the app and goes on where it was when the app comes back.
     @Override
@@ -1034,7 +1035,8 @@ public class MainActivity extends SDLActivity{
         if (touchButtonGroup == null) {
             return;
         }
-        boolean menuOpen = !TouchAreaEnabled;
+        // The touch controls are only for playing: not over the settings menu, the title menu or the opening.
+        boolean menuOpen = !TouchAreaEnabled || TitleMenuShown || introActive();
         boolean hidden = controlsHiddenByUser || controlsHiddenForGamepad || menuOpen;
         touchButtonGroup.setVisibility(hidden ? View.INVISIBLE : View.VISIBLE);
         if (buttonToggle != null) {
@@ -1156,8 +1158,8 @@ public class MainActivity extends SDLActivity{
         runOnUiThread(this::updateTouchControlsVisibility);
     }
 
-    // Called from the game thread while the new title menu is on screen. The touch controls stay up and drive it
-    // like a controller, and a tap outside them reaches the menu's own buttons instead of turning the camera.
+    // Called from the game thread while the new title menu is on screen. The touch controls are hidden there (the
+    // menu is driven by touching its own buttons, or a controller) and come back once a file is loaded and played.
     volatile boolean TitleMenuShown = false;
     void SetTitleMenuShown(boolean shown){
         TitleMenuShown = shown;
@@ -1165,6 +1167,12 @@ public class MainActivity extends SDLActivity{
             setCameraState(0, 0.0f);
             setCameraState(1, 0.0f);
         }
+        runOnUiThread(this::updateTouchControlsVisibility);
+    }
+
+    // IntroPlayer: the opening came on or went away (no touch controls over it).
+    void IntroChanged() {
+        runOnUiThread(this::updateTouchControlsVisibility);
     }
 
     private void setupLookAround(FrameLayout rightScreenArea) {

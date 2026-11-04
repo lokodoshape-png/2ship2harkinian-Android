@@ -8,6 +8,23 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.8
+- **Correção (PC): vídeo de abertura preto.** O vídeo era decodificado, mas cada quadro saía transparente (o canal
+  alfa ficava zerado), então só o fundo preto aparecia. Agora os quadros são opacos.
+- **Vídeo do PC em 1080p.** A versão do PC passa a ser feita em 1080p a partir do original em 4K, em duas passagens
+  e com bem mais bits (antes era 720p), para a imagem ficar nítida em tela cheia.
+- **A lua refaz o menu.** A transição agora usa a própria arte da tela inicial: começa de perto na lua, os olhos
+  acendem vermelho e violeta e pulsam, e a câmera se afasta até o enquadramento exato do menu, com o escuro se abrindo
+  a partir da lua num anel violeta. Quando a imagem é a do menu, os botões se montam um a um, vindo da esquerda.
+  Igual no Android e no PC, uns 4,9 s.
+- **Música do menu.** A música padrão da tela inicial passa a ser sempre "Últimas Horas" (Final Hours), primeira da
+  lista. Ela começa junto com a lua, do início, com fade-in de uns 3 s.
+- **Controle touch só no jogo (Android).** O controle touch não aparece mais na abertura nem na tela inicial; volta
+  quando um save é carregado e o jogo começa. Para pular a abertura, segure a tela ou um botão de um controle.
+- **Correção (PC):** ao fim da abertura, nenhuma janela fica com o foco ou um item ativo do que foi clicado ou
+  apertado para pular, e o log registra o motivo se o menu ficar sem receber controles.
+- **Legendas.** A transcrição é refeita separando a voz da música antes, para pegar as falas que ficaram sem legenda.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.7
 - **Segurar para pular.** Um toque solto não pula mais a abertura: é preciso segurar um botão, uma tecla, o clique
   ou a tela por 1 segundo. "Segure qualquer botão ou a tela para pular" fica no canto de cima, com uma barra que

@@ -13,6 +13,12 @@ on:
     paths:
       - intro/source.txt
   workflow_dispatch:
+    inputs:
+      only:
+        description: "tudo, pc (só abertura.mpg) ou legendas (só a transcrição)"
+        type: choice
+        options: [ tudo, pc, legendas ]
+        default: tudo
 
 permissions:
   contents: write
@@ -38,6 +44,7 @@ jobs:
           ffprobe -hide_banner original.mp4 2>&1 | tee probe.txt
 
       - name: Compress (H.264 High 4.1, at most 1920x1080, AAC)
+        if: ${{ inputs.only == '' || inputs.only == 'tudo' }}
         run: |
           crf=20
           while :; do
@@ -52,33 +59,55 @@ jobs:
           done
           ffprobe -hide_banner abertura.mp4 2>&1 | tee -a probe.txt
 
-      - name: Make the PC version (MPEG-1 720p and MP2)
+      - name: Make the PC version (MPEG-1 1080p, two passes, and MP2)
+        if: ${{ inputs.only != 'legendas' }}
         run: |
-          ffmpeg -hide_banner -loglevel error -y -i original.mp4 \
-            -vf "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
-            -c:v mpeg1video -b:v 3500k -maxrate 4500k -bufsize 4000k -g 24 -bf 0 \
-            -c:a mp2 -b:a 256k -ar 44100 -ac 2 -f mpeg abertura.mpg
+          # 1080p from the 4K original, two passes at about 8 Mbit/s with B-frames: MPEG-1 needs the bits to stay sharp
+          # at full HD. pl_mpeg (IntroVideo.cpp) decodes it.
+          vf="scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vf "$vf" \
+            -c:v mpeg1video -b:v 8000k -maxrate 12000k -bufsize 8000k -g 12 -bf 2 -mbd rd -trellis 2 -cmp 2 -subcmp 2 \
+            -pass 1 -passlogfile mpg -an -f mpeg /dev/null
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vf "$vf" \
+            -c:v mpeg1video -b:v 8000k -maxrate 12000k -bufsize 8000k -g 12 -bf 2 -mbd rd -trellis 2 -cmp 2 -subcmp 2 \
+            -pass 2 -passlogfile mpg -c:a mp2 -b:a 256k -ar 44100 -ac 2 -f mpeg abertura.mpg
           ls -la abertura.mpg
           ffprobe -hide_banner abertura.mpg 2>&1 | tee -a probe.txt
 
       - name: Transcribe the speech
+        if: ${{ inputs.only != 'pc' }}
         run: |
-          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vn -ac 1 -ar 16000 audio.wav
+          # The voice is taken out of the music first (demucs), so the lines spoken over the music are heard too; then
+          # whisper large-v3 writes it down in Portuguese, without the voice-activity filter that dropped them before.
+          # transcricao.srt comes from the voice alone, transcricao_mix.srt from the whole sound, to compare.
+          pip install --quiet torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet demucs==4.0.1 soundfile
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vn -ac 2 -ar 44100 full.wav
+          python3 -m demucs --two-stems vocals -n htdemucs -o sep full.wav
+          ffmpeg -hide_banner -loglevel error -y -i sep/htdemucs/full/vocals.wav -ac 1 -ar 16000 voice.wav
+          ffmpeg -hide_banner -loglevel error -y -i full.wav -ac 1 -ar 16000 mix.wav
           python3 - <<'PY'
           from faster_whisper import WhisperModel
           def ts(t):
               ms = int(round(t * 1000))
               return "%02d:%02d:%02d,%03d" % (ms // 3600000, ms // 60000 % 60, ms // 1000 % 60, ms % 1000)
-          model = WhisperModel("medium", device="cpu", compute_type="int8")
-          segments, info = model.transcribe("audio.wav", vad_filter=True, beam_size=5)
-          with open("transcricao.srt", "w", encoding="utf-8") as out:
+          model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+          for wav, name in (("voice.wav", "transcricao.srt"), ("mix.wav", "transcricao_mix.srt")):
+              segments, info = model.transcribe(wav, language="pt", beam_size=5, condition_on_previous_text=False,
+                                                no_speech_threshold=0.45)
               n = 0
-              for s in segments:
-                  n += 1
-                  out.write("%d\n%s --> %s\n%s\n\n" % (n, ts(s.start), ts(s.end), s.text.strip()))
-          print("language", info.language, info.language_probability, "segments", n)
+              with open(name, "w", encoding="utf-8") as out:
+                  for s in segments:
+                      text = s.text.strip()
+                      if not text:
+                          continue
+                      n += 1
+                      out.write("%d\n%s --> %s\n%s\n\n" % (n, ts(s.start), ts(s.end), text))
+              print(name, "segments", n)
           PY
           cat transcricao.srt
+          echo ----
+          cat transcricao_mix.srt
 
       - name: Publish on the release intro-video
         env:
@@ -87,4 +116,9 @@ jobs:
           gh release view intro-video > /dev/null 2>&1 || \
             gh release create intro-video --target "$GITHUB_SHA" --prerelease --title "Vídeo de abertura" \
               --notes "Vídeo de abertura da Definitive Edition (do canal do Rafael), comprimido para o APK, e a transcrição das falas."
-          gh release upload intro-video abertura.mp4 abertura.mpg transcricao.srt probe.txt --clobber
+          case "${{ inputs.only }}" in
+            pc) gh release upload intro-video abertura.mpg --clobber ;;
+            legendas) gh release upload intro-video transcricao.srt transcricao_mix.srt --clobber ;;
+            *) gh release upload intro-video abertura.mp4 abertura.mpg transcricao.srt transcricao_mix.srt probe.txt \
+                 --clobber ;;
+          esac

@@ -34,6 +34,7 @@
 #include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "2s2h/Enhancements/QuestMenu/QuestRenderer.h"
 #include "IntroVideo.h"
+#include <ship/controller/controldeck/ControlDeck.h>
 
 extern "C" {
 #include <z64.h>
@@ -48,6 +49,7 @@ void Sram_EraseSave(FileSelectState* fileSelect, SramContext* sramCtx, s32 fileN
 void Sram_SetFlashPagesDefault(SramContext* sramCtx, u32 curPage, u32 numPages);
 void Sram_StartWriteToFlashDefault(SramContext* sramCtx);
 void Sram_UpdateWriteToFlashDefault(SramContext* sramCtx);
+bool Intro_GameMuted(); // BenPort.cpp: the game's sound is off for the opening
 }
 
 // The 2 Ship 2 Harkinian contributors listed in the settings menu's About page (BenMenu.cpp).
@@ -56,7 +58,8 @@ extern std::vector<std::string> contributors;
 }
 
 #define CVAR_ENABLED "gEnhancements.TitleMenu.Enabled"
-#define CVAR_MUSIC "gEnhancements.TitleMenu.Music"
+// Final Hours unless the player picks another (a new name, so a choice saved before 4.0.2-mm3d.8 starts over).
+#define CVAR_MUSIC "gEnhancements.TitleMenu.MenuMusic"
 #define CVAR_LAST_SLOT "gEnhancements.TitleMenu.LastSlot"
 #define CVAR_EFFECTS "gEnhancements.TitleMenu.Effects"
 
@@ -105,8 +108,8 @@ struct Track {
     u16 seqId;
 };
 const Track kTracks[] = {
-    { "Tema de Majora", NA_BGM_MAJORAS_THEME },
     { "Últimas Horas", NA_BGM_FINAL_HOURS },
+    { "Tema de Majora", NA_BGM_MAJORAS_THEME },
     { "Torre do Relógio", NA_BGM_CLOCK_TOWER },
     { "Castelo de Ikana", NA_BGM_IKANA_CASTLE },
     { "Seleção de arquivo original", NA_BGM_FILE_SELECT },
@@ -195,6 +198,8 @@ float sCursorY = -1.0f;
 float sFade = 0.0f;    // 0 hidden .. 1 shown
 float sScreenT = 1.0f; // 0 .. 1 after a screen change
 float sScreenDir = 1.0f;
+// 0 .. 1 while the menu is built up after the opening's moon (IntroVideo): the veil, then each row in turn.
+float sBuild = 1.0f;
 float sModalT = 0.0f;
 float sTime = 0.0f;
 int sRepeatY = 0, sRepeatYTimer = 0, sRepeatX = 0, sRepeatXTimer = 0;
@@ -1823,17 +1828,22 @@ void DrawToast(const Page& pg, float dt, float a) {
 
 // ----- The main screen: the nine items over the painted panel.
 
+// How far row i has come in while the menu is built up after the opening (1 once it is in place).
+float RowBuild(int i) {
+    return Ease(std::clamp(sBuild * 1.8f - i * 0.08f, 0.0f, 1.0f));
+}
+
 void DrawMain(const Page& pg, float dt, float a) {
     Frame& f = Cur();
     for (int i = 1; i < ITEM_COUNT; i++) {
-        DrawSeparator(pg, RowY(i) - kRowStep / 2, a * 0.8f);
+        DrawSeparator(pg, RowY(i) - kRowStep / 2, a * 0.8f * RowBuild(i));
     }
     float target = RowY(f.sel);
     if (sCursorY < 0) {
         sCursorY = target;
     }
     sCursorY += (target - sCursorY) * std::min(1.0f, dt * 16.0f);
-    Highlight(pg, kPlateX0, sCursorY - kPlateH / 2, kPlateW, kPlateH, a);
+    Highlight(pg, kPlateX0, sCursorY - kPlateH / 2, kPlateW, kPlateH, a * RowBuild(f.sel));
 
     bool hasSave = ContinueSlot(sFileSelect) >= 0;
     bool hasEmpty = EmptySlot(sFileSelect) >= 0;
@@ -1842,8 +1852,9 @@ void DrawMain(const Page& pg, float dt, float a) {
         float cy = RowY(i);
         bool selected = f.sel == i;
         bool dim = ((i == ITEM_CONTINUE || i == ITEM_LOAD) && !hasSave) || (i == ITEM_START && !hasEmpty);
-        ImU32 tint = RowTint(selected, a * (dim ? 0.45f : 1.0f));
-        float shift = selected ? 6.0f : 0.0f;
+        float built = RowBuild(i);
+        ImU32 tint = RowTint(selected, a * built * (dim ? 0.45f : 1.0f));
+        float shift = (selected ? 6.0f : 0.0f) - (1.0f - built) * 90.0f;
         const char* icon = kMain[i].icon;
         Image(pg, icon, kIconX - kIconSize / 2 + shift, cy, tint, kIconSize / std::max(Size(icon).x, 1.0f));
         Image(pg, kMain[i].label, kLabelX + shift, cy - 2, tint, kLabelScale);
@@ -1858,8 +1869,9 @@ void DrawMain(const Page& pg, float dt, float a) {
         }
     }
     // Help for the selected item, and the buttons.
-    Txt(pg, 111, 1012, 24, Alpha(cDim, a), kMain[f.sel].help);
-    DrawHints(pg, 1860, 1032 - 4, a, true, false, false);
+    float rest = RowBuild(ITEM_COUNT);
+    Txt(pg, 111, 1012, 24, Alpha(cDim, a * rest), kMain[f.sel].help);
+    DrawHints(pg, 1860, 1032 - 4, a * rest, true, false, false);
 }
 
 // ----- The frame of the other screens: title, the way here, back button, pages, help and hints.
@@ -2360,7 +2372,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.7"
+#define EDITION_VERSION "4.0.2-mm3d.8"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;
@@ -2598,6 +2610,23 @@ void DrawMenu() {
     if (inputs) {
         KeyboardNav(dt);
     }
+    // For the log: what keeps the menu from its controls, once it has gone on for a few seconds.
+    {
+        static float sBlocked = 0.0f;
+        auto deck = Ship::Context::GetInstance()->GetControlDeck();
+        bool keyboard = deck != nullptr && deck->KeyboardGameInputBlocked();
+        bool pad = deck != nullptr && deck->GamepadGameInputBlocked();
+        if (shown && (!inputs || keyboard || pad)) {
+            sBlocked += dt;
+            if (sBlocked >= 4.0f) {
+                sBlocked = -1000.0f;
+                SPDLOG_INFO("Title menu: input blocked (leaving {}, other window {}, opening {}, keyboard {}, pad {})",
+                            sLeaving, OtherWindowOpen(), IntroVideo::Active(), keyboard, pad);
+            }
+        } else if (sBlocked > 0.0f) {
+            sBlocked = 0.0f;
+        }
+    }
     ImGuiIO& io = ImGui::GetIO();
     bool pointer = inputs && sFade >= 0.6f;
     sTapTaken = false;
@@ -2629,8 +2658,20 @@ void DrawMenu() {
     // Under the question or the enlarged picture, the screen does not take taps.
     sPointerInputs = pointer && !sConfirm.open && !zoom;
     DrawBackground(dl, pos, size, pg, a);
+    // After the opening's moon: the menu builds up from it, the veil first and then the rows one by one.
+    static bool sIntroWasOn = false;
+    bool introOn = IntroVideo::Active();
+    if (sIntroWasOn && !introOn) {
+        sBuild = 0.0f;
+    }
+    sIntroWasOn = introOn;
+    if (introOn) {
+        sBuild = 0.0f;
+    } else {
+        sBuild = std::min(1.0f, sBuild + dt / 1.6f);
+    }
     if (Cur().screen == Screen::Main) {
-        DrawVeil(pg, a);
+        DrawVeil(pg, a * Ease(std::min(1.0f, sBuild * 2.5f)));
         float t = Ease(sScreenT);
         Page rows{ dl, ImVec2(origin.x + (1.0f - t) * sScreenDir * 40.0f * k, origin.y), k };
         DrawMain(rows, dt, a * t);
@@ -2795,6 +2836,14 @@ void OnGameFrame() {
         PlayMenuMusic();
     }
 
+    // The opening's moon brings the menu's music in: it starts over from there, fading in (BenPort.cpp).
+    static bool sWasMuted = false;
+    bool muted = Intro_GameMuted();
+    if (sWasMuted && !muted && sActive && !sLeaving) {
+        PlayMenuMusic();
+    }
+    sWasMuted = muted;
+
     Input* input = CONTROLLER1(&fs->state);
     if (sInjectA > 0) {
         if (FileSelectReady(fs)) {
@@ -2836,6 +2885,38 @@ void OnGameFrame() {
 }
 
 } // namespace
+} // namespace TitleMenu
+
+namespace TitleMenu {
+bool MenuScene(Scene& out) {
+    ImVec2 pos, size;
+    if (!GameRect(pos, size)) {
+        return false;
+    }
+    const Tex& bg = Load("background.jpg");
+    const Tex& moon = Load("moon.png");
+    if (bg.id == nullptr || moon.id == nullptr) {
+        return false;
+    }
+    out.k = std::min(size.x / kW, size.y / kH);
+    out.origin = ImVec2(pos.x + (size.x - kW * out.k) / 2, pos.y + (size.y - kH * out.k) / 2);
+    out.backgroundTex = bg.id;
+    out.moonTex = moon.id;
+    // The same drift as DrawBackground's.
+    float t = sTime;
+    bool fx = Effects();
+    float scale = fx ? 1.009f + 0.005f * std::sin(t * 0.45f) : 1.0f;
+    float dx = fx ? 1.2f * std::sin(t * 0.23f) : 0.0f;
+    float dy = fx ? -1.5f + 1.5f * std::sin(t * 0.31f) : 0.0f;
+    auto moonPoint = [&](ImVec2 p) {
+        return ImVec2(kMoonCX + (p.x - kMoonCX) * scale + dx, kMoonCY + (p.y - kMoonCY) * scale + dy);
+    };
+    out.moon0 = moonPoint(ImVec2(kMoonX0, 0));
+    out.moon1 = moonPoint(ImVec2(kMoonX0 + moon.size.x, moon.size.y));
+    out.eyes[0] = moonPoint(kMoonEyes[0]);
+    out.eyes[1] = moonPoint(kMoonEyes[1]);
+    return true;
+}
 } // namespace TitleMenu
 
 void TitleMenuWindow::Draw() {

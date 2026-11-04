@@ -410,27 +410,37 @@ static struct {
     bool processing;
 } audio;
 
-// Android: the game is silent while the app's opening video plays over it (IntroPlayer.java), and its sound fades
-// back in when the video ends, so the video's own sound is the only one heard.
-static std::atomic<bool> sIntroPlaying{ false };
+// The opening (Android: IntroPlayer.java; PC: IntroVideo.cpp) is drawn over the game while it boots. The game is
+// silent while the opening's own sound plays, and its sound (the menu's music) fades in again from the moon.
+static std::atomic<bool> sIntroOnScreen{ false };
+static std::atomic<bool> sIntroPlaying{ false }; // the game's sound is off
 static float sIntroGain = 1.0f;
 
 #ifdef __ANDROID__
 #include <jni.h>
+// On screen (true) silences the game too; off screen lets it be heard again.
 extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_nativeSetIntroPlaying(JNIEnv*, jclass,
                                                                                       jboolean playing) {
+    sIntroOnScreen = playing != JNI_FALSE;
     sIntroPlaying = playing != JNI_FALSE;
+}
+// The moon: the game's sound (the menu's music) comes back while the opening is still on screen.
+extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_nativeSetIntroSound(JNIEnv*, jclass, jboolean on) {
+    sIntroPlaying = on == JNI_FALSE;
 }
 #endif
 
-// PC: IntroVideo.cpp plays the opening.
 extern "C" void Intro_SetGameMuted(bool muted) {
     sIntroPlaying = muted;
 }
 
-// Android: the opening is on screen while the game is muted for it.
 extern "C" bool Intro_GameMuted() {
     return sIntroPlaying;
+}
+
+// Android: the opening is on screen (the menu takes no input under it).
+extern "C" bool Intro_OnScreen() {
+    return sIntroOnScreen;
 }
 
 static void ApplyIntroGain(s16* samples, u32 count) {
@@ -438,9 +448,10 @@ static void ApplyIntroGain(s16* samples, u32 count) {
     if (sIntroGain == 1.0f && target == 1.0f) {
         return;
     }
-    // About a second from silence to full volume: a step for each buffer, spread over its samples.
+    // About three seconds from silence to full volume (the music fades in with the moon): a step for each buffer,
+    // spread over its samples.
     float from = sIntroGain;
-    float to = target > from ? std::min(1.0f, from + 0.05f) : 0.0f;
+    float to = target > from ? std::min(1.0f, from + 0.017f) : 0.0f;
     for (u32 i = 0; i < count; i++) {
         float g = from + (to - from) * (float)i / (float)count;
         samples[i] = (s16)(samples[i] * g);

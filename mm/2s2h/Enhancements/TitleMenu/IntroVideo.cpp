@@ -9,7 +9,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cmath>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <ship/Context.h>
 #include <ship/resource/ResourceManager.h>
@@ -26,6 +28,7 @@
 #include "2s2h/BenPort.h"
 #include "2s2h/GameInteractor/GameInteractor.h"
 #include "2s2h/ShipInit.hpp"
+#include "TitleMenu.h"
 
 extern "C" {
 #include "pl_mpeg.h"
@@ -41,10 +44,11 @@ namespace IntroVideo {
 namespace {
 
 constexpr float kLogoIn = 1.5f, kLogoHold = 3.0f, kLogoOut = 1.0f, kHintDelay = 1.2f;
-// The moon (see DrawMoon): the whole transition, and when the dark starts to lift off the menu.
-constexpr float kMoonTotal = 4.6f, kMoonReveal = 3.9f;
-// The eyes in intro_moon.png (840 x 300).
-const ImVec2 kEyes[] = { ImVec2(232, 165), ImVec2(604, 17) };
+// The moon (see DrawMoon): the whole transition, and when the view is the menu's own (from then the menu takes input
+// and builds its buttons up, TitleMenu.cpp's sBuild, as the moon's picture fades over it).
+constexpr float kMoonTotal = 4.9f, kMoonReveal = 4.2f;
+// The eyes in intro_moon.png (840 x 300), used only if the menu's picture cannot be found.
+const ImVec2 kIntroEyes[] = { ImVec2(232.0f / 840, 165.0f / 300), ImVec2(604.0f / 840, 17.0f / 300) };
 
 enum class Phase { Start, Logo, Video, Moon, Done };
 Phase sPhase = Phase::Start;
@@ -174,7 +178,12 @@ void LoadCues() {
 }
 
 void OnVideo(plm_t*, plm_frame_t* frame, void*) {
-    sRgba.resize((size_t)frame->width * frame->height * 4);
+    // plm_frame_to_rgba writes only red, green and blue: the alpha bytes stay as they are, so they are made opaque
+    // here once (a zero alpha drew the whole video invisible, the black under it was all that showed).
+    size_t n = (size_t)frame->width * frame->height * 4;
+    if (sRgba.size() != n) {
+        sRgba.assign(n, 255);
+    }
     plm_frame_to_rgba(frame, sRgba.data(), frame->width * 4);
     sNewFrame = true;
     sVideoTime = frame->time;
@@ -247,6 +256,11 @@ void End() {
     sCues.clear();
     sPhase = Phase::Done;
     Intro_SetGameMuted(false);
+    // Nothing the clicks and keys did under the opening keeps a window busy: the game and the menu get the keyboard
+    // and the controller again (ControlDeck blocks the keyboard while another window holds the active item).
+    ImGui::ClearActiveID();
+    ImGui::SetWindowFocus(nullptr);
+    SPDLOG_INFO("Abertura: terminou");
 }
 
 // The one way into the title menu, from every way out of the opening (the video ended, a skip during the logo or the
@@ -261,6 +275,8 @@ void ExitToMenu() {
     Free(sLogo);
     sPhase = Phase::Moon;
     sTime = 0.0f;
+    Intro_SetGameMuted(false); // the menu's music starts with the moon, fading in (BenPort.cpp, TitleMenu.cpp)
+    SPDLOG_INFO("Abertura: transição da lua");
 }
 
 bool Start() {
@@ -344,40 +360,123 @@ void Light(ImDrawList* dl, ImVec2 c, float r, int red, int green, int blue, floa
     }
 }
 
-// The moon close up, from the dark; its eyes kindle, burn red and violet and pulse, then dim and go out.
-void DrawMoon(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
-    float t = sTime;
-    if (sMoon.im == nullptr || t >= kMoonReveal) {
-        return;
+// The dark over everything (alpha at most), with a round opening at c of radius r and a soft edge f: a grid of
+// cells, each corner as dark as its distance from c says.
+void Cover(ImDrawList* dl, ImVec2 pos, ImVec2 size, ImVec2 c, float r, float f, float alpha) {
+    const int cols = 48, rows = 27;
+    auto dark = [&](float x, float y) {
+        float d = std::sqrt((x - c.x) * (x - c.x) + (y - c.y) * (y - c.y));
+        return IM_COL32(0, 0, 0, (int)(255 * alpha * Smooth((d - (r - f)) / f)));
+    };
+    for (int j = 0; j < rows; j++) {
+        float y0 = pos.y + size.y * j / rows, y1 = pos.y + size.y * (j + 1) / rows;
+        for (int i = 0; i < cols; i++) {
+            float x0 = pos.x + size.x * i / cols, x1 = pos.x + size.x * (i + 1) / cols;
+            ImU32 a = dark(x0, y0), b = dark(x1, y0), cc = dark(x1, y1), d = dark(x0, y1);
+            if (((a | b | cc | d) & IM_COL32_A_MASK) == 0) {
+                continue;
+            }
+            dl->AddRectFilledMultiColor(ImVec2(x0, y0), ImVec2(x1, y1), a, b, cc, d);
+        }
     }
-    float moonA = Smooth((t - 0.4f) / 1.0f) * (1.0f - Smooth((t - 3.2f) / 0.7f));
-    float eyes = Smooth((t - 1.0f) / 0.8f) * (1.0f - Smooth((t - 2.8f) / 0.9f));
-    float pulse = 0.72f + 0.28f * std::sin(t * 3.14159265f * 2.0f * 1.6f);
-    float zoom = 1.0f + 0.06f * std::clamp(t / kMoonTotal, 0.0f, 1.0f);
-    float k = std::min(size.x * 0.84f / sMoon.w, size.y * 0.8f / sMoon.h) * zoom;
-    ImVec2 s(sMoon.w * k, sMoon.h * k);
-    ImVec2 p0(pos.x + (size.x - s.x) / 2, pos.y + (size.y - s.y) / 2);
-    ImVec2 mid(pos.x + size.x / 2, pos.y + size.y / 2);
-    Light(dl, mid, std::max(s.x, s.y) * 0.7f, 110, 35, 190, 0.4f * moonA * (0.6f + 0.4f * eyes)); // violet haze
-    dl->AddImage(sMoon.im, p0, ImVec2(p0.x + s.x, p0.y + s.y), ImVec2(0, 0), ImVec2(1, 1),
-                 IM_COL32(255, 255, 255, (int)(255 * moonA)));
-    float g = eyes * pulse;
+}
+
+ImVec2 Lerp(ImVec2 a, ImVec2 b, float t) {
+    return ImVec2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+}
+
+// The eyes: red and violet light, burning in the middle.
+void Eyes(ImDrawList* dl, const ImVec2* eyes, float r, float g) {
     if (g <= 0.0f) {
         return;
     }
-    for (const ImVec2& e : kEyes) {
-        ImVec2 c(p0.x + e.x * k, p0.y + e.y * k);
-        float r = s.y * 0.3f;
-        Light(dl, c, r * 1.8f, 160, 55, 255, 0.35f * g); // violet
-        Light(dl, c, r, 255, 35, 15, 0.8f * g);          // red
-        Light(dl, c, r * 0.18f, 255, 200, 140, 0.9f * g); // the burning middle
+    for (int i = 0; i < 2; i++) {
+        Light(dl, eyes[i], r * 1.8f, 160, 55, 255, 0.35f * g); // violet
+        Light(dl, eyes[i], r, 255, 35, 15, 0.8f * g);          // red
+        Light(dl, eyes[i], r * 0.18f, 255, 200, 140, 0.9f * g); // the burning middle
     }
+}
+
+// The menu's own picture, close up on its moon: out of the dark the moon looks down, its eyes kindle and burn red
+// and violet; then the view draws back, the dark opening from the moon in a widening violet ring, until the
+// picture is exactly the menu's, which takes over underneath as this fades and builds its buttons up.
+void DrawMoon(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
+    float t = sTime;
+    float pulse = 0.72f + 0.28f * std::sin(t * 3.14159265f * 2.0f * 1.6f);
+    TitleMenu::Scene sc;
+    if (!TitleMenu::MenuScene(sc)) {
+        // No menu picture: the opening's own moon in the middle, which goes out before the dark lifts.
+        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                          IM_COL32(0, 0, 0, (int)(255 * (1.0f - Smooth((t - kMoonReveal) / (kMoonTotal - kMoonReveal))))));
+        if (sMoon.im == nullptr) {
+            return;
+        }
+        float moonA = Smooth((t - 0.3f) / 0.9f) * (1.0f - Smooth((t - 3.2f) / 0.8f));
+        float k = std::min(size.x * 0.84f / sMoon.w, size.y * 0.8f / sMoon.h);
+        ImVec2 s(sMoon.w * k, sMoon.h * k);
+        ImVec2 p0(pos.x + (size.x - s.x) / 2, pos.y + (size.y - s.y) / 2);
+        dl->AddImage(sMoon.im, p0, ImVec2(p0.x + s.x, p0.y + s.y), ImVec2(0, 0), ImVec2(1, 1),
+                     IM_COL32(255, 255, 255, (int)(255 * moonA)));
+        ImVec2 eyes[2];
+        for (int i = 0; i < 2; i++) {
+            eyes[i] = ImVec2(p0.x + kIntroEyes[i].x * s.x, p0.y + kIntroEyes[i].y * s.y);
+        }
+        Eyes(dl, eyes, s.y * 0.3f, Smooth((t - 1.0f) / 0.8f) * (1.0f - Smooth((t - 2.8f) / 0.9f)) * pulse);
+        return;
+    }
+
+    // The view: close up on the moon, then back to the menu's own framing.
+    ImVec2 focus((sc.moon0.x + sc.moon1.x) / 2, (sc.moon0.y + sc.moon1.y) / 2);
+    float moonW = (sc.moon1.x - sc.moon0.x) * sc.k, moonH = (sc.moon1.y - sc.moon0.y) * sc.k;
+    float close = std::min(size.x * 0.86f / moonW, size.y * 0.72f / moonH);
+    float back = Smooth(Smooth((t - 2.3f) / (kMoonReveal - 2.3f)));
+    float z = (close + (1.0f - close) * back) * (1.0f + 0.04f * Smooth(t / 2.3f) * (1.0f - back));
+    ImVec2 start(pos.x + size.x / 2, pos.y + size.y * 0.42f);
+    ImVec2 anchor = Lerp(start, ImVec2(sc.origin.x + focus.x * sc.k, sc.origin.y + focus.y * sc.k), back);
+    auto S = [&](ImVec2 p) {
+        return ImVec2(anchor.x + (p.x - focus.x) * sc.k * z, anchor.y + (p.y - focus.y) * sc.k * z);
+    };
+    // The whole of it fades out over the menu once the view is the menu's.
+    float layer = 1.0f - Smooth((t - kMoonReveal) / (kMoonTotal - kMoonReveal));
+    auto A = [&](float a) { return (int)(255 * std::clamp(a * layer, 0.0f, 1.0f)); };
+
+    ImVec2 c = S(focus);
+    ImVec2 m0 = S(sc.moon0), m1 = S(sc.moon1);
+    float mw = m1.x - m0.x, mh = m1.y - m0.y;
+    float moonA = Smooth((t - 0.3f) / 0.9f);
+    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, A(1.0f)));
+    // The picture around the moon, dim at first, then opening out.
+    dl->AddImage(sc.backgroundTex, S(ImVec2(0, 0)), S(ImVec2(1920, 1080)), ImVec2(0, 0), ImVec2(1, 1),
+                 IM_COL32(255, 255, 255, A(moonA)));
+    float open = Smooth((t - 2.5f) / (kMoonReveal + 0.2f - 2.5f));
+    float feather = mw * 0.45f + std::max(size.x, size.y) * 0.25f * open;
+    float reach = std::sqrt(size.x * size.x + size.y * size.y) * 1.2f + feather;
+    float r = mw * 0.5f + (reach - mw * 0.5f) * open;
+    Cover(dl, pos, size, c, r, feather, layer);
+    if (open > 0.0f && open < 1.0f) {
+        // A violet ring at the edge of the opening.
+        float ring = r - feather * 0.5f;
+        for (int i = 0; i < 4; i++) {
+            float k = (float)i / 3;
+            dl->AddCircle(c, std::max(1.0f, ring - k * feather * 0.1f),
+                          IM_COL32(150, 60, 255, (int)(90 * std::sin(open * 3.14159f) * (1.0f - k * 0.6f))), 128,
+                          feather * (0.08f - k * 0.015f));
+        }
+    }
+    // A violet haze behind the moon while it is close.
+    Light(dl, c, std::max(mw, mh) * 0.75f, 110, 35, 190, 0.35f * moonA * (1.0f - back) * layer);
+    dl->AddImage(sc.moonTex, m0, m1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, A(moonA)));
+    // The eyes kindle, burn and pulse, and settle to the menu's smoulder as the view draws back.
+    float lit = Smooth((t - 0.9f) / 0.7f) * (1.0f - 0.8f * back) * moonA * layer;
+    ImVec2 eyes[2] = { S(sc.eyes[0]), S(sc.eyes[1]) };
+    Eyes(dl, eyes, mh * 0.3f, lit * pulse);
 }
 
 } // namespace
 
+// The menu takes input again once the dark starts to open from the moon.
 bool Active() {
-    return sPhase != Phase::Done;
+    return sPhase != Phase::Done && !(sPhase == Phase::Moon && sTime >= kMoonReveal);
 }
 
 bool Draw() {
@@ -438,28 +537,28 @@ bool Draw() {
                 Upload(sFrame, sRgba.data(), plm_get_width(sPlm), plm_get_height(sPlm));
             }
             shown = &sFrame;
-            if (plm_has_ended(sPlm)) {
+            // The end of the file, or, should the decoder never say so, well past its length.
+            if (plm_has_ended(sPlm) || sTime > plm_get_duration(sPlm) + 5.0) {
                 ExitToMenu();
                 shown = nullptr;
             }
             break;
         }
         case Phase::Moon: {
-            if (sTime >= kMoonReveal) {
-                Intro_SetGameMuted(false); // the menu's sound fades in with its picture
-            }
             if (sTime >= kMoonTotal) {
                 End();
                 return false;
             }
-            cover = 1.0f - Smooth((sTime - kMoonReveal) / (kMoonTotal - kMoonReveal));
+            cover = 0.0f; // DrawMoon draws the dark, opening from the moon
             break;
         }
         default:
             break;
     }
 
-    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, (int)(255 * cover)));
+    if (cover > 0.0f) {
+        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, (int)(255 * cover)));
+    }
     if (shown != nullptr && shown->im != nullptr) {
         Fit(dl, *shown, pos, size, picture);
     }
@@ -534,7 +633,7 @@ extern "C" {
 #include "macros.h"
 #include "variables.h"
 }
-extern "C" bool Intro_GameMuted();
+extern "C" bool Intro_OnScreen();
 
 namespace IntroVideo {
 namespace {
@@ -544,7 +643,7 @@ bool Draw() {
     return false;
 }
 bool Active() {
-    return Intro_GameMuted();
+    return Intro_OnScreen();
 }
 void Replay() {
     JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
