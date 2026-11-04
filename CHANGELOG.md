@@ -8,6 +8,15 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.11
+- **Todas as opções do 2Ship no menu novo.** Configurações ganhou a aba **2Ship**, com todas as opções do menu do port
+  (Configurações, Melhorias e Ferramentas), seção por seção, no mesmo visual das outras abas. Ligar e desligar,
+  escolher, ajustar números e botões funcionam ali mesmo, sem abrir o menu do port. As opções que o port esconde ou
+  bloqueia em certas situações também aparecem escondidas ou bloqueadas, com o motivo. As janelas do port (editor de
+  cosméticos e outras) abrem por um botão "Abrir"; feche a janela para voltar ao menu. B volta para a lista de seções.
+- **Pergaminho de MISSÕES no pause.** O ícone embaixo do Caderno dos Bombers aparecia cortado e espremido; agora é
+  desenhado inteiro, no tamanho do espaço dele.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.10
 - **Mods em Configurações.** A tela Configurações do menu inicial ganhou a aba **Mods**, no mesmo visual das outras:
   cada mod da pasta `mods` aparece com Ligado/Desligado, e a lista rola quando há muitos.

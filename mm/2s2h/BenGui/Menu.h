@@ -31,6 +31,14 @@ class Menu : public GuiWindow {
     void AddMenuEntry(std::string entryName, const char* entryCvar);
     void AddSearchWidget(SearchWidget widget);
     std::unordered_map<uint32_t, disabledInfo>& GetDisabledMap();
+    // Every header and its sidebars with their widgets, in the menu's order (the title menu's Configurações > 2Ship
+    // tab lists them all, TitleMenu.cpp).
+    std::unordered_map<std::string, MainMenuEntry>& GetMenuEntries() {
+        return menuEntries;
+    }
+    const std::vector<std::string>& GetMenuOrder() const {
+        return menuOrder;
+    }
 
   protected:
     ImVec2 mOriginalSize;

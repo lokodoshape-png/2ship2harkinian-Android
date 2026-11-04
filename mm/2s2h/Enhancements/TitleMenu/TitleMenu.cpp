@@ -36,6 +36,7 @@
 #include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "2s2h/Enhancements/QuestMenu/QuestRenderer.h"
 #include "IntroVideo.h"
+#include "2s2h/BenGui/Menu.h"
 #include <ship/controller/controldeck/ControlDeck.h>
 
 extern "C" {
@@ -383,7 +384,7 @@ std::string DayText(int day) {
 // ----- Settings: real options of the game and the port, read and written through their CVars.
 
 // Switch: on / off like a Toggle, read and changed through functions instead of a CVar (a mod file).
-enum class Kind { Toggle, Choice, Percent, Action, Switch };
+enum class Kind { Toggle, Choice, Percent, Action, Switch, Number };
 
 struct Setting {
     std::string label;
@@ -398,6 +399,8 @@ struct Setting {
     std::function<void()> action;                               // Action
     std::function<std::string()> value;                         // Action: text on the right
     std::function<bool()> get;                                  // Switch: on or off
+    bool integer = false, percent = false;                      // Number: whole numbers, shown as a percentage
+    std::function<bool()> disabled;                             // greyed out and not changed while true
 };
 
 Setting Toggle(const char* label, const char* help, const char* cvar, int def, std::function<void()> apply = nullptr) {
@@ -482,12 +485,27 @@ std::string SettingValue(const Setting& s) {
             return s.value ? s.value() : "";
         case Kind::Switch:
             return s.get() ? "Ligado" : "Desligado";
+        case Kind::Number: {
+            char text[24];
+            if (s.integer) {
+                snprintf(text, sizeof(text), "%d", CVarGetInteger(s.cvar, (int)s.fdef));
+            } else if (s.percent) {
+                snprintf(text, sizeof(text), "%d%%", (int)std::lround(CVarGetFloat(s.cvar, s.fdef) * 100.0f));
+            } else {
+                snprintf(text, sizeof(text), "%.2f", CVarGetFloat(s.cvar, s.fdef));
+            }
+            return text;
+        }
     }
     return "";
 }
 
 // Left / right (dir -1 / 1), or A (dir 0: toggles, next choice, runs an action).
 void ChangeSetting(const Setting& s, int dir) {
+    if (s.disabled && s.disabled()) {
+        Audio_PlaySfx(NA_SE_SY_ERROR);
+        return;
+    }
     switch (s.kind) {
         case Kind::Toggle:
             SetCVarInt(s.cvar, CVarGetInteger(s.cvar, s.def) ? 0 : 1);
@@ -518,6 +536,21 @@ void ChangeSetting(const Setting& s, int dir) {
                 s.action();
             }
             break;
+        case Kind::Number: {
+            if (dir == 0) {
+                return;
+            }
+            if (s.integer) {
+                int step = std::max(1, (int)s.fstep);
+                int v = std::clamp(CVarGetInteger(s.cvar, (int)s.fdef) + dir * step, (int)s.fmin, (int)s.fmax);
+                SetCVarInt(s.cvar, v);
+            } else {
+                float v = CVarGetFloat(s.cvar, s.fdef) + dir * s.fstep;
+                v = std::clamp(std::round(v / s.fstep) * s.fstep, s.fmin, s.fmax);
+                SetCVarFloat(s.cvar, v);
+            }
+            break;
+        }
     }
     Audio_PlaySfx(NA_SE_SY_CURSOR);
     if (s.apply) {
@@ -530,7 +563,12 @@ std::shared_ptr<Ship::GuiWindow> InputEditor() {
     return Ship::Context::GetInstance()->GetWindow()->GetGui()->GetGuiWindow("2S2H Input Editor");
 }
 
+bool ShipWindowOpen();
+
 bool OtherWindowOpen() {
+    if (ShipWindowOpen()) {
+        return true;
+    }
     auto gui = Ship::Context::GetInstance()->GetWindow()->GetGui();
     auto menu = gui->GetMenu();
     if (menu != nullptr && menu->IsVisible()) {
@@ -713,7 +751,8 @@ std::vector<Tab>& SettingsTabs() {
               Action("Todas as opções", "Abre o menu completo do port, com todas as melhorias.",
                      []() { OpenSettingsMenu(); }),
           } });
-    tabs.push_back({ "Mods", {} }); // filled from the mods folder by RefreshModsTab
+    tabs.push_back({ "2Ship", {} }); // every option of the port's own menu, filled by RefreshShipTab
+    tabs.push_back({ "Mods", {} });  // filled from the mods folder by RefreshModsTab
     return tabs;
 }
 
@@ -932,6 +971,287 @@ void RefreshModsTab(bool visible) {
         sModsDirty = false;
         RebuildModsRows();
     }
+}
+
+// ----- Configurações > 2Ship: every option of the port's own settings menu (BenMenu), so none of them needs that
+// menu. The list shows each header and sidebar of the menu; A on one shows its options, read from the menu's own
+// widgets each frame: their CVars, defaults, limits, callbacks and the rules that hide or lock them.
+
+constexpr const char* kShipTabName = "2Ship";
+int sShipSection = -1;                        // the sidebar shown, or -1 for the list of sidebars
+int sShipListSel = 0;                         // the list's row to come back to
+int sShipPending = -2;                        // a choice made by a row's action, applied before the next rebuild
+std::shared_ptr<Ship::GuiWindow> sShipWindow; // a window opened from the tab: it takes the input while it is open
+
+bool IsShipTab(const Frame& f) {
+    auto& tabs = SettingsTabs();
+    return f.screen == Screen::Settings && f.page >= 0 && f.page < (int)tabs.size() &&
+           std::string(tabs[f.page].name) == kShipTabName;
+}
+
+Tab& ShipTab() {
+    for (Tab& t : SettingsTabs()) {
+        if (std::string(t.name) == kShipTabName) {
+            return t;
+        }
+    }
+    return SettingsTabs().back();
+}
+
+bool ShipWindowOpen() {
+    if (sShipWindow != nullptr && !sShipWindow->IsVisible()) {
+        sShipWindow = nullptr;
+    }
+    return sShipWindow != nullptr;
+}
+
+// The widget's label without the value format ("Volume: %.0f%%") or the ImGui id ("##...").
+std::string ShipLabel(const std::string& name) {
+    std::string s = BenGui::Tr(name);
+    size_t cut = std::min(s.find("##"), s.find('%'));
+    if (cut != std::string::npos) {
+        s.erase(cut);
+    }
+    while (!s.empty() && (s.back() == ' ' || s.back() == ':')) {
+        s.pop_back();
+    }
+    return s.empty() ? BenGui::Tr(name) : s;
+}
+
+struct ShipSidebar {
+    std::string header, name;
+    SidebarEntry* entry;
+};
+
+std::vector<ShipSidebar> ShipSidebars(Ship::Menu& menu) {
+    std::vector<ShipSidebar> out;
+    auto& entries = menu.GetMenuEntries();
+    for (const std::string& header : menu.GetMenuOrder()) {
+        auto it = entries.find(header);
+        if (it == entries.end()) {
+            continue;
+        }
+        for (const std::string& name : it->second.sidebarOrder) {
+            auto side = it->second.sidebars.find(name);
+            if (name.empty() || name == "Search" || side == it->second.sidebars.end()) {
+                continue;
+            }
+            out.push_back({ header, name, &side->second });
+        }
+    }
+    return out;
+}
+
+bool ShipConvertible(const WidgetInfo& w) {
+    switch (w.type) {
+        case WIDGET_CVAR_CHECKBOX:
+        case WIDGET_CVAR_COMBOBOX:
+        case WIDGET_CVAR_SLIDER_INT:
+        case WIDGET_CVAR_SLIDER_FLOAT:
+            return w.cVar != nullptr && w.cVar[0] != '\0' && w.options != nullptr;
+        case WIDGET_BUTTON:
+            return w.callback != nullptr;
+        case WIDGET_WINDOW_BUTTON:
+            return w.windowName != nullptr && w.windowName[0] != '\0';
+        default:
+            return false;
+    }
+}
+
+// One row for a widget, or false when it is hidden now or has no row form (colors, text, custom drawing).
+bool ShipRow(WidgetInfo& widget, std::vector<Setting>& rows) {
+    if (!ShipConvertible(widget)) {
+        return false;
+    }
+    WidgetInfo* w = &widget;
+    if (w->preFunc != nullptr) {
+        w->ResetDisables();
+        w->preFunc(*w);
+        if (w->isHidden) {
+            return false;
+        }
+    }
+    bool locked = (w->options != nullptr && w->options->disabled) || !w->activeDisables.empty();
+    std::string help = (w->options != nullptr && w->options->tooltip != nullptr) ? BenGui::Tr(w->options->tooltip) : "";
+    auto apply = [w]() {
+        if (w->callback != nullptr) {
+            w->callback(*w);
+        }
+    };
+    Setting s{ ShipLabel(w->name), help, Kind::Toggle };
+    s.cvar = w->cVar;
+    switch (w->type) {
+        case WIDGET_CVAR_CHECKBOX: {
+            auto o = std::static_pointer_cast<UIWidgets::CheckboxOptions>(w->options);
+            s.def = o->defaultValue ? 1 : 0;
+            s.apply = apply;
+            break;
+        }
+        case WIDGET_CVAR_COMBOBOX: {
+            auto o = std::static_pointer_cast<UIWidgets::ComboboxOptions>(w->options);
+            s.kind = Kind::Choice;
+            s.def = (int)o->defaultIndex;
+            if (std::holds_alternative<UIWidgets::ComboVec_t>(o->comboVariant)) {
+                auto vec = std::get<UIWidgets::ComboVec_t>(o->comboVariant);
+                if (vec == nullptr || vec->empty()) {
+                    return false;
+                }
+                for (const char* label : *vec) {
+                    s.choices.push_back(BenGui::Tr(label));
+                }
+            } else {
+                auto map = std::get<UIWidgets::ComboMap_t>(o->comboVariant);
+                if (map == nullptr || map->empty()) {
+                    return false;
+                }
+                std::vector<int> keys;
+                for (auto& [k, v] : *map) {
+                    keys.push_back(k);
+                }
+                std::sort(keys.begin(), keys.end());
+                for (int k : keys) {
+                    s.values.push_back(k);
+                    s.choices.push_back(BenGui::Tr(map->at(k)));
+                }
+            }
+            s.apply = apply;
+            break;
+        }
+        case WIDGET_CVAR_SLIDER_INT: {
+            auto o = std::static_pointer_cast<UIWidgets::IntSliderOptions>(w->options);
+            s.kind = Kind::Number;
+            s.integer = true;
+            s.fmin = (float)o->min;
+            s.fmax = (float)o->max;
+            s.fstep = (float)std::max(1, o->step);
+            s.fdef = (float)o->defaultValue;
+            s.apply = apply;
+            break;
+        }
+        case WIDGET_CVAR_SLIDER_FLOAT: {
+            auto o = std::static_pointer_cast<UIWidgets::FloatSliderOptions>(w->options);
+            s.kind = Kind::Number;
+            s.percent = o->isPercentage;
+            s.fmin = o->min;
+            s.fmax = o->max;
+            s.fstep = o->step > 0.0f ? o->step : 0.01f;
+            // A fine slider would take hundreds of presses on a pad: at most about 50 steps end to end.
+            if ((s.fmax - s.fmin) / s.fstep > 50.0f) {
+                s.fstep = (s.fmax - s.fmin) / 50.0f;
+                s.fstep = std::max(s.fstep, o->step);
+            }
+            s.fdef = o->defaultValue;
+            s.apply = apply;
+            break;
+        }
+        case WIDGET_BUTTON:
+            s.kind = Kind::Action;
+            s.cvar = nullptr;
+            s.action = apply;
+            break;
+        case WIDGET_WINDOW_BUTTON: {
+            s.kind = Kind::Action;
+            s.cvar = nullptr;
+            std::string windowName = w->windowName;
+            if (s.help.empty()) {
+                s.help = "Abre a janela " + BenGui::Tr(windowName) + ". Feche a janela para voltar a este menu.";
+            }
+            s.action = [windowName]() {
+                auto window = Ship::Context::GetInstance()->GetWindow()->GetGui()->GetGuiWindow(windowName);
+                if (window != nullptr) {
+                    Audio_PlaySfx(NA_SE_SY_DECIDE);
+                    window->Show();
+                    sShipWindow = window;
+                }
+            };
+            s.value = []() { return std::string("Abrir"); };
+            break;
+        }
+        default:
+            return false;
+    }
+    if (locked) {
+        std::string why = w->options->disabledTooltip != nullptr ? BenGui::Tr(w->options->disabledTooltip) : "";
+        s.help = "Bloqueada agora. " + (why.empty() ? s.help : why);
+        s.disabled = []() { return true; };
+    }
+    rows.push_back(std::move(s));
+    return true;
+}
+
+void RefreshShipTab(Frame& f) {
+    auto gui = Ship::Context::GetInstance()->GetWindow()->GetGui();
+    auto menu = std::static_pointer_cast<Ship::Menu>(gui->GetMenu());
+    Tab& tab = ShipTab();
+    tab.rows.clear();
+    if (menu == nullptr) {
+        return;
+    }
+    // The rules behind hidden and locked options, which the menu itself only works out while it is open.
+    for (auto& [reason, info] : menu->GetDisabledMap()) {
+        if (info.evaluation != nullptr) {
+            info.active = info.evaluation(info);
+        }
+    }
+    std::vector<ShipSidebar> sidebars = ShipSidebars(*menu);
+    if (sShipPending != -2) {
+        if (sShipPending >= 0) {
+            sShipListSel = f.sel;
+            f.sel = 0;
+            f.scroll = 0;
+        } else {
+            f.sel = sShipListSel;
+        }
+        sShipSection = sShipPending;
+        sShipPending = -2;
+    }
+    if (sShipSection >= (int)sidebars.size()) {
+        sShipSection = -1;
+    }
+    if (sShipSection < 0) {
+        for (int i = 0; i < (int)sidebars.size(); i++) {
+            std::vector<Setting> probe;
+            int count = 0;
+            for (auto& column : sidebars[i].entry->columnWidgets) {
+                for (WidgetInfo& w : column) {
+                    count += ShipRow(w, probe) ? 1 : 0;
+                }
+            }
+            if (count == 0) {
+                continue;
+            }
+            std::string label = BenGui::Tr(sidebars[i].header) + " › " + BenGui::Tr(sidebars[i].name);
+            std::string value = std::to_string(count) + (count == 1 ? " opção" : " opções");
+            tab.rows.push_back(Action(
+                label, "Todas as opções do menu do 2Ship, sem precisar abrir esse menu. A abre esta seção.",
+                [i]() {
+                    Audio_PlaySfx(NA_SE_SY_DECIDE);
+                    sShipPending = i;
+                },
+                [value]() { return value; }));
+        }
+        return;
+    }
+    const ShipSidebar& side = sidebars[sShipSection];
+    tab.rows.push_back(Action(("‹ " + BenGui::Tr(side.header) + " › " + BenGui::Tr(side.name)),
+                              "Volta à lista de seções. B também volta.", []() {
+                                  Audio_PlaySfx(NA_SE_SY_CANCEL);
+                                  sShipPending = -1;
+                              }));
+    for (auto& column : side.entry->columnWidgets) {
+        for (WidgetInfo& w : column) {
+            ShipRow(w, tab.rows);
+        }
+    }
+}
+
+// B inside a section goes back to the list instead of leaving Configurações.
+bool ShipTabBack(Frame& f) {
+    if (!IsShipTab(f) || sShipSection < 0) {
+        return false;
+    }
+    sShipPending = -1;
+    return true;
 }
 
 // ----- Controls: the game's buttons and what they do, drawn with the icons of the controller in use.
@@ -1498,7 +1818,9 @@ void Navigate(Nav nav) {
     };
 
     if (nav == Nav::Back) {
-        if (f.screen == Screen::Files && f.focus == 1) {
+        if (ShipTabBack(f)) {
+            Audio_PlaySfx(NA_SE_SY_CANCEL);
+        } else if (f.screen == Screen::Files && f.focus == 1) {
             f.focus = 0;
             Audio_PlaySfx(NA_SE_SY_CANCEL);
         } else if (f.screen == Screen::Gallery && f.zoom) {
@@ -2269,11 +2591,11 @@ std::string DrawSettingRows(const Page& pg, float a, Frame& f, const std::vector
         const Setting& s = rows[i];
         float y = y0 + (i - f.scroll) * rowH, cy = y + rowH / 2;
         bool selected = f.sel == i;
-        ImU32 col = Alpha(selected ? Col(255, 255, 255) : cText, a);
+        ImU32 col = Alpha(selected ? Col(255, 255, 255) : cText, a * (s.disabled && s.disabled() ? 0.45f : 1.0f));
         Txt(pg, x0 + 30, cy - 17, 28, col, s.label);
         std::string value = SettingValue(s);
         float vRight = x1 - 30;
-        bool arrows = s.kind == Kind::Choice || s.kind == Kind::Percent;
+        bool arrows = s.kind == Kind::Choice || s.kind == Kind::Percent || s.kind == Kind::Number;
         if (s.kind == Kind::Toggle || s.kind == Kind::Switch) {
             bool on = SettingOn(s);
             float pw = 150, px = vRight - pw;
@@ -2522,6 +2844,12 @@ std::string DrawSettings(const Page& pg, float a, Frame& f) {
     if (IsModsTab(f)) {
         RefreshModsTab(true);
     }
+    if (IsShipTab(f)) {
+        RefreshShipTab(f);
+    } else {
+        sShipSection = -1;
+        sShipPending = -2;
+    }
     return DrawSettingRows(pg, a, f, SettingsTabs()[f.page].rows, 300, 64);
 }
 
@@ -2691,7 +3019,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.10"
+#define EDITION_VERSION "4.0.2-mm3d.11"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;
