@@ -1,0 +1,79 @@
+name: Intro video (abertura)
+
+# Makes the opening video the Android app plays before the title menu, from Rafael's own video (his YouTube channel,
+# kept on his Google Drive): downloads it, compresses it to H.264/AAC that every Android phone decodes, transcribes
+# its speech for the subtitles, and publishes both on the release "intro-video". android.yml puts abertura.mp4 into
+# the APK from there. The source is set in intro/source.txt; a change to it runs this again.
+
+on:
+  push:
+    paths:
+      - intro/source.txt
+      - .github/workflows/intro-video.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  video:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg and the transcriber
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install --quiet faster-whisper==1.0.3
+
+      - name: Download the video
+        run: |
+          id=$(grep -v '^#' intro/source.txt | head -1 | tr -d '[:space:]')
+          curl -L --fail --retry 4 -o original.mp4 \
+            "https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t"
+          ls -la original.mp4
+          ffprobe -hide_banner original.mp4 2>&1 | tee probe.txt
+
+      - name: Compress (H.264 High 4.1, at most 1920x1080, AAC)
+        run: |
+          crf=20
+          while :; do
+            ffmpeg -hide_banner -loglevel error -y -i original.mp4 \
+              -vf "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+              -c:v libx264 -preset slow -crf $crf -profile:v high -level 4.1 -pix_fmt yuv420p \
+              -c:a aac -b:a 192k -movflags +faststart abertura.mp4
+            size=$(stat -c %s abertura.mp4)
+            echo "crf $crf: $size bytes"
+            if [ "$size" -lt 90000000 ] || [ "$crf" -ge 30 ]; then break; fi
+            crf=$((crf + 2))
+          done
+          ffprobe -hide_banner abertura.mp4 2>&1 | tee -a probe.txt
+
+      - name: Transcribe the speech
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vn -ac 1 -ar 16000 audio.wav
+          python3 - <<'PY'
+          from faster_whisper import WhisperModel
+          def ts(t):
+              ms = int(round(t * 1000))
+              return "%02d:%02d:%02d,%03d" % (ms // 3600000, ms // 60000 % 60, ms // 1000 % 60, ms % 1000)
+          model = WhisperModel("medium", device="cpu", compute_type="int8")
+          segments, info = model.transcribe("audio.wav", vad_filter=True, beam_size=5)
+          with open("transcricao.srt", "w", encoding="utf-8") as out:
+              n = 0
+              for s in segments:
+                  n += 1
+                  out.write("%d\n%s --> %s\n%s\n\n" % (n, ts(s.start), ts(s.end), s.text.strip()))
+          print("language", info.language, info.language_probability, "segments", n)
+          PY
+          cat transcricao.srt
+
+      - name: Publish on the release intro-video
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view intro-video > /dev/null 2>&1 || \
+            gh release create intro-video --target "$GITHUB_SHA" --prerelease --title "Vídeo de abertura" \
+              --notes "Vídeo de abertura da Definitive Edition (do canal do Rafael), comprimido para o APK, e a transcrição das falas."
+          gh release upload intro-video abertura.mp4 transcricao.srt probe.txt --clobber
