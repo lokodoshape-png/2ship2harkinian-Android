@@ -51,6 +51,9 @@ Phase sPhase = Phase::Start;
 float sTime = 0.0f;     // time in the phase
 bool sSkippable = true;
 float sHint = 0.0f;     // time the hint has been waited for
+float sHold = 0.0f;     // how long a button, key or click has been held (hold to skip)
+bool sReplay = false;   // after a reset: plays whatever "every launch" says
+constexpr float kHold = 1.0f;
 
 struct Tex {
     uint32_t id = 0;
@@ -261,8 +264,12 @@ void ExitToMenu() {
 }
 
 bool Start() {
+    bool replay = sReplay;
+    sReplay = false;
+    sHint = 0.0f;
+    sHold = 0.0f;
     if (CVarGetInteger("gEnhancements.TitleMenu.Intro", 1) == 0 ||
-        (CVarGetInteger("gEnhancements.TitleMenu.IntroEveryLaunch", 1) == 0 &&
+        (!replay && CVarGetInteger("gEnhancements.TitleMenu.IntroEveryLaunch", 1) == 0 &&
          CVarGetInteger("gEnhancements.TitleMenu.IntroPlayed", 0) != 0)) {
         return false;
     }
@@ -286,25 +293,26 @@ bool Start() {
     return true;
 }
 
-bool SkipPressed() {
+bool sPadHeld = false; // A, B, START... held on the game's controller, from the game frame
+
+// Something held down: a key, a controller button, a mouse button or a finger.
+bool SkipHeld() {
     ImGuiIO& io = ImGui::GetIO();
-    if (io.MouseClicked[0] || io.MouseClicked[1]) {
+    if (io.MouseDown[0] || io.MouseDown[1] || sPadHeld) {
         return true;
     }
     for (int k = ImGuiKey_Tab; k <= ImGuiKey_KeypadEqual; k++) {
-        if (ImGui::IsKeyPressed((ImGuiKey)k, false)) {
+        if (ImGui::IsKeyDown((ImGuiKey)k)) {
             return true;
         }
     }
     for (int k = ImGuiKey_GamepadStart; k <= ImGuiKey_GamepadR3; k++) {
-        if (ImGui::IsKeyPressed((ImGuiKey)k, false)) {
+        if (ImGui::IsKeyDown((ImGuiKey)k)) {
             return true;
         }
     }
     return false;
 }
-
-bool sPadSkip = false; // A, B, START... on the game's controller, from the game frame
 
 // The whole picture inside the window at its own proportions.
 void Fit(ImDrawList* dl, const Tex& tex, ImVec2 pos, ImVec2 size, float a) {
@@ -382,10 +390,16 @@ bool Draw() {
     }
     float dt = std::min(ImGui::GetIO().DeltaTime, 0.1f);
     sTime += dt;
-    if (sSkippable && sPhase != Phase::Moon && (SkipPressed() || sPadSkip)) {
-        ExitToMenu();
+    // Hold to skip: a second of holding anything goes to the moon.
+    if (sSkippable && sPhase != Phase::Moon && SkipHeld()) {
+        sHold += dt;
+        if (sHold >= kHold) {
+            sHold = 0.0f;
+            ExitToMenu();
+        }
+    } else {
+        sHold = std::max(0.0f, sHold - dt * 4.0f);
     }
-    sPadSkip = false;
 
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImVec2 pos = vp->Pos, size = vp->Size;
@@ -480,47 +494,97 @@ bool Draw() {
     // The hint, small in the corner.
     if (sSkippable && sPhase != Phase::Moon) {
         sHint += dt;
-        float ha = std::clamp((sHint - kHintDelay) / 0.5f, 0.0f, 1.0f) * 0.8f;
-        const char* hint = "Pressione qualquer botão para pular";
+        float ha = sHold > 0.0f ? 1.0f : std::clamp((sHint - kHintDelay) / 0.5f, 0.0f, 1.0f) * 0.8f;
+        const char* hint = "Segure qualquer botão para pular";
         float fs = 24.0f * scale;
         ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, hint);
-        ImVec2 p(pos.x + size.x - ts.x - 32 * scale, pos.y + size.y - ts.y - 20 * scale);
+        ImVec2 p(pos.x + size.x - ts.x - 32 * scale, pos.y + 20 * scale);
         dl->AddText(font, fs, ImVec2(p.x + 1.5f * scale, p.y + 1.5f * scale), IM_COL32(0, 0, 0, (int)(255 * ha)),
                     hint);
         dl->AddText(font, fs, p, IM_COL32(235, 225, 245, (int)(255 * ha)), hint);
+        // The bar under it fills while something is held.
+        if (sHold > 0.0f) {
+            float y = p.y + ts.y + 6 * scale;
+            float w = ts.x * std::clamp(sHold / kHold, 0.0f, 1.0f);
+            dl->AddRectFilled(ImVec2(p.x, y), ImVec2(p.x + ts.x, y + 3 * scale), IM_COL32(255, 255, 255, 50));
+            dl->AddRectFilled(ImVec2(p.x, y), ImVec2(p.x + w, y + 3 * scale), IM_COL32(255, 80, 60, 230));
+        }
     }
     return true;
 }
 
-} // namespace IntroVideo
-
-// A, B, START or any other button on the game's controller skips it, and nothing reaches the game meanwhile.
-static void RegisterIntroVideo() {
-    COND_HOOK(OnGameStateMainStart, true, []() {
-        if (!IntroVideo::Active() || gGameState == nullptr) {
-            return;
-        }
-        Input* input = CONTROLLER1(gGameState);
-        if (input->press.button != 0) {
-            IntroVideo::sPadSkip = true;
-        }
-        input->press.button = 0;
-        input->cur.button = 0;
-        input->rel.button = 0;
-    });
+void Replay() {
+    if (sPhase == Phase::Done) {
+        sReplay = true;
+        sPhase = Phase::Start;
+    }
 }
 
-static RegisterShipInitFunc sIntroVideoInit(RegisterIntroVideo, {});
+} // namespace IntroVideo
 
-#else // __ANDROID__: IntroPlayer.java plays the opening.
+#else // __ANDROID__: IntroPlayer.java plays the opening; the game only knows it is on while its sound is off.
+
+#include <jni.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_system.h>
+#include "2s2h/GameInteractor/GameInteractor.h"
+#include "2s2h/ShipInit.hpp"
+extern "C" {
+#include <z64.h>
+#include "macros.h"
+#include "variables.h"
+}
+extern "C" bool Intro_GameMuted();
 
 namespace IntroVideo {
+namespace {
+bool sPadHeld = false;
+}
 bool Draw() {
     return false;
 }
 bool Active() {
-    return false;
+    return Intro_GameMuted();
+}
+void Replay() {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (env == nullptr || activity == nullptr) {
+        return;
+    }
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(activityClass, "ReplayIntro", "()V");
+    if (method != nullptr) {
+        env->CallVoidMethod(activity, method);
+    } else {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
 }
 } // namespace IntroVideo
 
 #endif
+
+// Nothing the controller does reaches the game under the opening (PC: held, it skips it).
+static void RegisterIntroVideo() {
+    COND_HOOK(OnGameStateMainStart, true, []() {
+        if (gGameState == nullptr) {
+            return;
+        }
+        Input* input = CONTROLLER1(gGameState);
+        if (!IntroVideo::Active()) {
+            IntroVideo::sPadHeld = false;
+            return;
+        }
+        IntroVideo::sPadHeld = input->cur.button != 0;
+        input->press.button = 0;
+        input->cur.button = 0;
+        input->rel.button = 0;
+        input->cur.stick_x = input->cur.stick_y = 0;
+        input->press.stick_x = input->press.stick_y = 0;
+        input->rel.stick_x = input->rel.stick_y = 0;
+    });
+}
+
+static RegisterShipInitFunc sIntroVideoInit(RegisterIntroVideo, {});

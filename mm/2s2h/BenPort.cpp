@@ -428,6 +428,11 @@ extern "C" void Intro_SetGameMuted(bool muted) {
     sIntroPlaying = muted;
 }
 
+// Android: the opening is on screen while the game is muted for it.
+extern "C" bool Intro_GameMuted() {
+    return sIntroPlaying;
+}
+
 static void ApplyIntroGain(s16* samples, u32 count) {
     float target = sIntroPlaying ? 0.0f : 1.0f;
     if (sIntroGain == 1.0f && target == 1.0f) {

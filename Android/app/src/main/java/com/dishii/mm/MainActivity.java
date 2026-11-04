@@ -99,8 +99,29 @@ public class MainActivity extends SDLActivity{
 
     private void startIntro() {
         if (intro == null) {
-            intro = IntroPlayer.startIfWanted(this, preferences);
+            intro = IntroPlayer.startIfWanted(this, preferences, false);
         }
+    }
+
+    boolean introActive() {
+        return intro != null && intro.isActive();
+    }
+
+    // The opening goes under the touch controls (they drive it when no controller is plugged in).
+    int introLayerIndex() {
+        ViewGroup layout = (ViewGroup) getContentView();
+        int i = overlayView != null ? layout.indexOfChild(overlayView) : -1;
+        return i >= 0 ? i : layout.getChildCount();
+    }
+
+    // Called from the game (IntroVideo.cpp) when it is reset: the opening plays again, from the logo.
+    void ReplayIntro() {
+        runOnUiThread(() -> {
+            if (introActive()) {
+                return;
+            }
+            intro = IntroPlayer.startIfWanted(this, preferences, true);
+        });
     }
 
     // The opening video while it is on screen (IntroPlayer.java), null otherwise.
@@ -1070,6 +1091,18 @@ public class MainActivity extends SDLActivity{
         button.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                if (introActive()) {
+                    // Under the opening the buttons only skip it (held), and nothing reaches the game.
+                    int action = event.getActionMasked();
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        button.setPressed(true);
+                        intro.holdStart();
+                    } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        button.setPressed(false);
+                        intro.holdEnd();
+                    }
+                    return true;
+                }
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         setButton(buttonNum, true);
@@ -1142,9 +1175,9 @@ public class MainActivity extends SDLActivity{
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                if (TitleMenuShown) {
+                if (TitleMenuShown || introActive()) {
                     isTouching = false;
-                    return false; // the tap goes on to the title menu
+                    return false; // the tap goes on to the title menu, or the opening under the controls
                 }
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:

@@ -1,4 +1,5 @@
 #include "DebugConsole.h"
+#include "2s2h/Enhancements/TitleMenu/IntroVideo.h"
 
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <ship/window/Window.h>
@@ -128,6 +129,7 @@ static bool ResetHandler(std::shared_ptr<Ship::Console> Console, std::vector<std
 
     STOP_GAMESTATE(gGameState);
     SET_NEXT_GAMESTATE(gGameState, ConsoleLogo_Init, sizeof(ConsoleLogoState));
+    IntroVideo::Replay(); // the Definitive Edition's opening comes again, from the logo
     // GI-TODO
     // GameInteractor::Instance->ExecuteHooks<GameInteractor::OnExitGame>(gSaveContext.fileNum);
     return 0;

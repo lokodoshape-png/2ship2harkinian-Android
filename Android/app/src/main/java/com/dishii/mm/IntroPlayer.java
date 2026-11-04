@@ -89,7 +89,8 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
     }
 
     // Starts the video when it is on and there is one; returns null otherwise.
-    static IntroPlayer startIfWanted(MainActivity activity, SharedPreferences prefs) {
+    // replay: after the game was reset, the opening comes again whatever "every launch" says.
+    static IntroPlayer startIfWanted(MainActivity activity, SharedPreferences prefs, boolean replay) {
         File data = new File(Environment.getExternalStorageDirectory(), MainActivity.DATA_FOLDER);
         // The first launch (no game data yet) shows the setup and ROM steps, which the video would cover.
         if (!new File(data, "mm.o2r").isFile()) {
@@ -100,7 +101,7 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         boolean enabled = options.optInt("Intro", 1) != 0;
         boolean everyLaunch = options.optInt("IntroEveryLaunch", 1) != 0;
         boolean skippable = options.optInt("IntroSkippable", 1) != 0;
-        if (!enabled || (!everyLaunch && prefs.getBoolean(PREF_PLAYED, false))) {
+        if (!enabled || (!replay && !everyLaunch && prefs.getBoolean(PREF_PLAYED, false))) {
             MainActivity.startupLog("Abertura: desligada nas opções");
             return null;
         }
@@ -218,10 +219,13 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         root.setClickable(true);
         root.setFocusable(false);
         root.setOnTouchListener((v, e) -> {
-            if (e.getActionMasked() == MotionEvent.ACTION_UP) {
-                skip();
+            int action = e.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                holdStart();
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                holdEnd();
             }
-            return true; // nothing reaches the game or the touch controls under the video
+            return true; // nothing reaches the game under the video
         });
 
         texture = new TextureView(activity);
@@ -269,18 +273,28 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
 
         hint = new TextView(activity);
         hint.setTypeface(font);
-        hint.setText("Pressione qualquer botão para pular");
+        hint.setText("Segure qualquer botão ou a tela para pular");
         hint.setTextColor(Color.argb(200, 235, 225, 245));
         hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         hint.setShadowLayer(dp(2), 0, 0, Color.BLACK);
         hint.setAlpha(0f);
+        // At the top, clear of the touch controls, with a bar that fills while a button or the screen is held.
         FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END);
-        hp.bottomMargin = (int) dp(10);
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
+        hp.topMargin = (int) dp(12);
         hp.rightMargin = (int) dp(16);
         root.addView(hint, hp);
+        holdBar = new android.view.View(activity);
+        holdBar.setBackgroundColor(Color.argb(230, 255, 80, 60));
+        holdBar.setPivotX(0f);
+        holdBar.setScaleX(0f);
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams((int) dp(200), (int) dp(3), Gravity.TOP | Gravity.END);
+        bp.topMargin = (int) dp(34);
+        bp.rightMargin = (int) dp(16);
+        root.addView(holdBar, bp);
         if (!skippable) {
             hint.setVisibility(android.view.View.GONE);
+            holdBar.setVisibility(android.view.View.GONE);
         }
 
         if (skippable) {
@@ -303,7 +317,8 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
                     }, LOGO_HOLD_MS)).start();
         }
         root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitVideo());
-        ((ViewGroup) activity.getContentView()).addView(root,
+        // Under the touch controls, so A, B and START can be held to skip when no controller is plugged in.
+        ((ViewGroup) activity.getContentView()).addView(root, activity.introLayerIndex(),
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         MainActivity.startupLog("Abertura: começando (" + (fileVideo != null ? fileVideo : "APK") + ", " + cues.size()
                 + " legendas)");
@@ -485,11 +500,62 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
             return false;
         }
-        if (event.getAction() == KeyEvent.ACTION_UP) {
-            skip();
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            holdStart();
+        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+            holdEnd();
         }
         return true;
     }
+
+    // ----- Hold to skip: a button (physical or on screen) or the screen held for HOLD_MS skips the opening.
+
+    private static final long HOLD_MS = 1000;
+    private android.view.View holdBar;
+    private int holds;       // buttons and fingers held now
+    private long holdSince;
+
+    void holdStart() {
+        if (!skippable || finishing || done) {
+            return;
+        }
+        if (holds++ == 0) {
+            holdSince = android.os.SystemClock.uptimeMillis();
+            hint.animate().cancel();
+            hint.setAlpha(1f);
+            handler.post(holdTick);
+        }
+    }
+
+    void holdEnd() {
+        if (holds == 0) {
+            return;
+        }
+        if (--holds == 0) {
+            handler.removeCallbacks(holdTick);
+            if (holdBar != null) {
+                holdBar.animate().scaleX(0f).setDuration(150).start();
+            }
+        }
+    }
+
+    private final Runnable holdTick = new Runnable() {
+        @Override
+        public void run() {
+            if (holds == 0 || finishing || done) {
+                return;
+            }
+            float p = (android.os.SystemClock.uptimeMillis() - holdSince) / (float) HOLD_MS;
+            holdBar.animate().cancel();
+            holdBar.setScaleX(Math.min(1f, p));
+            if (p >= 1f) {
+                holds = 0;
+                skip();
+                return;
+            }
+            handler.postDelayed(this, 16);
+        }
+    };
 
     private void skip() {
         if (skippable && !finishing) {
@@ -537,6 +603,11 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         subtitle.setVisibility(android.view.View.GONE);
         hint.animate().cancel();
         hint.setVisibility(android.view.View.GONE);
+        holds = 0;
+        if (holdBar != null) {
+            holdBar.animate().cancel();
+            holdBar.setVisibility(android.view.View.GONE);
+        }
         root.setAlpha(1f);
         root.setBackgroundColor(Color.TRANSPARENT); // the moon's own view draws the dark from here on
 

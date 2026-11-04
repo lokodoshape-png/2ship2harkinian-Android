@@ -9,6 +9,12 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-11-04 — versão 4.0.2-mm3d.7
+- **Segurar para pular.** Um toque solto não pula mais a abertura: é preciso segurar um botão, uma tecla, o clique
+  ou a tela por 1 segundo. "Segure qualquer botão ou a tela para pular" fica no canto de cima, com uma barra que
+  enche enquanto você segura. Os botões A, B e START do controle touch aparecem por cima da abertura quando não há
+  controle conectado, e servem para pular. Nada do que se aperta durante a abertura chega ao menu.
+- **Reset volta para a logo.** Sempre que o jogo é resetado (pelo menu, pelo atalho ou pela combinação de botões),
+  a abertura toca de novo desde a logo, passando pelo vídeo e pela lua, e só depois a tela inicial aparece.
 - **Correção (Android):** depois de atualizar o app, a abertura fechava sozinha em 3 s, junto com a pergunta
   "Configuração inicial". Agora ela começa depois do OK, enquanto os arquivos são copiados. Se o app for para o
   segundo plano, o vídeo pausa e continua de onde parou, em vez de fechar.

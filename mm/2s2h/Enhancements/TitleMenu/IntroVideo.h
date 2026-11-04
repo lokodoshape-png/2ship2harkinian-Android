@@ -17,6 +17,8 @@ namespace IntroVideo {
 // Draws the opening on top of everything; true while it is on screen (the title menu takes no input then).
 bool Draw();
 bool Active();
+// The game was reset: the opening plays again, from the logo (Android: through MainActivity.ReplayIntro).
+void Replay();
 
 } // namespace IntroVideo
 
