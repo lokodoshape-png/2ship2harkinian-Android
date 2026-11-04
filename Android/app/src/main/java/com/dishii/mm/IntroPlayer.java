@@ -328,7 +328,20 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture st, int width, int height) {
-        if (done || player != null) {
+        if (done || finishing) {
+            return;
+        }
+        if (player != null) {
+            // Back from the background with a new surface: the same player goes on drawing into it.
+            if (surface != null) {
+                surface.release();
+            }
+            surface = new Surface(st);
+            try {
+                player.setSurface(surface);
+            } catch (IllegalStateException e) {
+                MainActivity.startupLog("Abertura: não voltou a desenhar o vídeo: " + e);
+            }
             return;
         }
         surface = new Surface(st);
@@ -353,7 +366,10 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
                 prepared = true;
                 startVideoWhenReady();
             });
-            player.setOnCompletionListener(mp -> finish(true));
+            player.setOnCompletionListener(mp -> {
+                MainActivity.startupLog("Abertura: o vídeo acabou (" + safePosition(mp) + " ms)");
+                finish(true);
+            });
             player.setOnErrorListener((mp, what, extra) -> {
                 MainActivity.startupLog("Abertura: o aparelho não tocou o vídeo (erro " + what + "/" + extra + ")");
                 finish(true);
@@ -366,12 +382,53 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         }
     }
 
+    private static int safePosition(MediaPlayer mp) {
+        try {
+            return mp.getCurrentPosition();
+        } catch (IllegalStateException e) {
+            return -1;
+        }
+    }
+
+    // The app went to the background: the video waits (the logo and the moon keep their own time).
+    private boolean paused;
+
+    void pause() {
+        MainActivity.startupLog("Abertura: app em segundo plano");
+        paused = true;
+        if (player != null && started) {
+            try {
+                player.pause();
+            } catch (IllegalStateException e) {
+                // not playing
+            }
+        }
+    }
+
+    void resume() {
+        if (!paused) {
+            return;
+        }
+        paused = false;
+        MainActivity.startupLog("Abertura: app de volta");
+        if (player != null && started && !finishing) {
+            try {
+                player.start();
+            } catch (IllegalStateException e) {
+                finish(true);
+            }
+        }
+    }
+
     // The video starts once it is ready and the logo is gone, whichever comes last.
     private void startVideoWhenReady() {
         if (done || finishing || started || !prepared || !logoDone || player == null) {
             return;
         }
         started = true;
+        if (paused) {
+            return; // resume() starts it
+        }
         player.start();
         handler.post(tick);
     }
@@ -435,7 +492,7 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
     }
 
     private void skip() {
-        if (skippable) {
+        if (skippable && !finishing) {
             MainActivity.startupLog("Abertura: pulada");
             finish(true);
         }
@@ -450,6 +507,7 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             return;
         }
         if (!animate || root == null) {
+            MainActivity.startupLog("Abertura: fechada sem transição");
             finishing = true;
             setGameMuted(false);
             release();

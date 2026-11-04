@@ -87,7 +87,20 @@ public class MainActivity extends SDLActivity{
         setButton(ControllerButtons.AXIS_RT, false);
 
         // The opening video goes over everything, including the touch controls, while the game boots under it.
-        intro = IntroPlayer.startIfWanted(this, preferences);
+        // After an update the setup question comes first; the video starts once it is answered, while the files are
+        // copied (see checkAndSetupFiles).
+        if (!setupQuestionShown) {
+            startIntro();
+        }
+    }
+
+    // The setup question ("Configuração inicial") is on screen: the opening waits for its answer.
+    private boolean setupQuestionShown = false;
+
+    private void startIntro() {
+        if (intro == null) {
+            intro = IntroPlayer.startIfWanted(this, preferences);
+        }
     }
 
     // The opening video while it is on screen (IntroPlayer.java), null otherwise.
@@ -96,14 +109,21 @@ public class MainActivity extends SDLActivity{
     // Mutes the game's sound while the opening video plays (BenPort.cpp); it fades back in after.
     static native void nativeSetIntroPlaying(boolean playing);
 
+    // The opening stops with the app and goes on where it was when the app comes back.
     @Override
     protected void onPause() {
-        // Leaving the app ends the video: it is not resumed over a game that kept going under it.
         if (intro != null && intro.isActive()) {
-            intro.finish(false);
+            intro.pause();
         }
-        intro = null;
         super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (intro != null && intro.isActive()) {
+            intro.resume();
+        }
     }
 
     // <data folder>/inicio.log: each launch starts it, the native side (mm/2s2h/Android/StartupLog.cpp) adds to it.
@@ -368,11 +388,14 @@ public class MainActivity extends SDLActivity{
 
         startupLog("Faltando: assets=" + isMissingAssets + ", 2ship.o2r=" + isMissingSohOtr);
         if (!targetRootFolder.exists() || isMissingAssets || isMissingSohOtr) {
+            setupQuestionShown = true;
             new AlertDialog.Builder(this)
                     .setTitle("Configuração inicial")
                     .setMessage("O app vai criar os arquivos necessários na pasta " + DATA_FOLDER + " (cerca de 30s). Toque em OK para começar.")
                     .setCancelable(false)
                     .setPositiveButton("OK", (dialog, which) -> {
+                        setupQuestionShown = false;
+                        startIntro();
                         Executors.newSingleThreadExecutor().execute(() -> {
                             runOnUiThread(() -> Toast.makeText(this, "Preparando os arquivos...", Toast.LENGTH_SHORT).show());
                             setupFilesInBackground(targetRootFolder);

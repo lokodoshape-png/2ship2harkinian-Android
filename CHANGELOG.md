@@ -9,6 +9,9 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-11-04 — versão 4.0.2-mm3d.7
+- **Correção (Android):** depois de atualizar o app, a abertura fechava sozinha em 3 s, junto com a pergunta
+  "Configuração inicial". Agora ela começa depois do OK, enquanto os arquivos são copiados. Se o app for para o
+  segundo plano, o vídeo pausa e continua de onde parou, em vez de fechar.
 - **Transição da lua antes do menu (Android e PC).** Toda saída da abertura passa pela mesma transição, de uns 4,6 s:
   quando o vídeo termina, quando é pulado (com botão, tecla, clique ou toque, também durante a logo) e quando o vídeo
   não pode ser tocado. O vídeo é parado e liberado, a tela escurece, a lua aparece de perto, os olhos acendem com
