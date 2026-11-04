@@ -325,6 +325,9 @@ OTRGlobals::OTRGlobals() {
     fontStandard = CreateFontWithSize(16.0f, "fonts/Montserrat-Regular.ttf");
     fontStandardLarger = CreateFontWithSize(20.0f, "fonts/Montserrat-Regular.ttf");
     fontStandardLargest = CreateFontWithSize(24.0f, "fonts/Montserrat-Regular.ttf");
+    // Large sizes so the quest menu stays sharp when it is scaled up to the window.
+    fontQuestBody = CreateFontWithSize(30.0f, "fonts/Alegreya-Regular.ttf");
+    fontQuestTitle = CreateFontWithSize(44.0f, "fonts/Alegreya-Bold.ttf");
     ImGui::GetIO().FontDefault = fontMono;
 }
 

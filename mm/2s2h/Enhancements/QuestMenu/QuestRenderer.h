@@ -58,30 +58,45 @@ struct Page {
     }
 };
 
-inline void Text(const Page& pg, float x, float y, float size, ImU32 col, const char* text, float wrap = 0.0f) {
-    pg.dl->AddText(ImGui::GetFont(), pg.S(size), pg.P(x, y), col, text, nullptr, wrap > 0 ? pg.S(wrap) : 0.0f);
+// The quest menu's fonts (Alegreya, set by the menu from OTRGlobals); the GUI font when they are missing.
+inline ImFont* gBodyFont = nullptr;
+inline ImFont* gTitleFont = nullptr;
+
+inline ImFont* BodyFont() {
+    return gBodyFont != nullptr ? gBodyFont : ImGui::GetFont();
 }
 
-inline void TextShadow(const Page& pg, float x, float y, float size, ImU32 col, const char* text) {
-    Text(pg, x + 1.5f, y + 2.0f, size, Col(0, 0, 0, 160), text);
-    Text(pg, x, y, size, col, text);
+inline ImFont* TitleFont() {
+    return gTitleFont != nullptr ? gTitleFont : BodyFont();
 }
 
-inline float TextWidth(const Page& pg, float size, const char* text) {
-    return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
+inline void Text(const Page& pg, float x, float y, float size, ImU32 col, const char* text, float wrap = 0.0f,
+                 ImFont* font = nullptr) {
+    pg.dl->AddText(font ? font : BodyFont(), pg.S(size), pg.P(x, y), col, text, nullptr, wrap > 0 ? pg.S(wrap) : 0.0f);
 }
 
-inline void TextCentered(const Page& pg, float cx, float y, float size, ImU32 col, const char* text, bool shadow = true) {
-    float w = TextWidth(pg, size, text);
+inline void TextShadow(const Page& pg, float x, float y, float size, ImU32 col, const char* text,
+                       ImFont* font = nullptr) {
+    Text(pg, x + 1.5f, y + 2.0f, size, Col(0, 0, 0, 160), text, 0.0f, font);
+    Text(pg, x, y, size, col, text, 0.0f, font);
+}
+
+inline float TextWidth(const Page& pg, float size, const char* text, ImFont* font = nullptr) {
+    return (font ? font : BodyFont())->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
+}
+
+inline void TextCentered(const Page& pg, float cx, float y, float size, ImU32 col, const char* text, bool shadow = true,
+                         ImFont* font = nullptr) {
+    float w = TextWidth(pg, size, text, font);
     if (shadow) {
-        TextShadow(pg, cx - w / 2, y, size, col, text);
+        TextShadow(pg, cx - w / 2, y, size, col, text, font);
     } else {
-        Text(pg, cx - w / 2, y, size, col, text);
+        Text(pg, cx - w / 2, y, size, col, text, 0.0f, font);
     }
 }
 
-inline float WrappedHeight(const Page& pg, float size, float wrap, const char* text) {
-    return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, wrap, text).y;
+inline float WrappedHeight(const Page& pg, float size, float wrap, const char* text, ImFont* font = nullptr) {
+    return (font ? font : BodyFont())->CalcTextSizeA(size, FLT_MAX, wrap, text).y;
 }
 
 // A gold frame: dark outline, bright gold band, thin highlight, with optional glow around it.

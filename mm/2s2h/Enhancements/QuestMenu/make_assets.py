@@ -399,6 +399,280 @@ def state_icons():
         finish(img, "mark_done.png" if done else "mark_todo.png")
 
 
+# ----- book layout (closer to the concept art): a carved purple frame, an open book, plaques and tiles.
+
+STONE_DARK = (34, 14, 50)
+STONE = (66, 30, 92)
+STONE_LIGHT = (104, 58, 136)
+
+
+def vgradient(size, top, bottom):
+    w, h = size
+    g = Image.new("RGBA", size)
+    gp = g.load()
+    for y in range(h):
+        t = y / max(1, h - 1)
+        c = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3)) + (255,)
+        for x in range(w):
+            gp[x, y] = c
+    return g
+
+
+def stone_fill(size, seed, base=STONE, light=STONE_LIGHT, dark=STONE_DARK):
+    w, h = size
+    img = Image.new("RGB", size, base)
+    img = Image.composite(Image.new("RGB", size, light), img, noise_layer(size, 24 * SS, seed).point(lambda v: int(v * 0.45)))
+    img = Image.composite(Image.new("RGB", size, dark), img, noise_layer(size, 6 * SS, seed + 1).point(lambda v: int(v * 0.35)))
+    return img.convert("RGBA")
+
+
+def zigzag_band(d, x0, x1, y, h, col):
+    # A carved band of chevrons and diamonds, like the tribal patterns on the frame of the concept.
+    step = h * 1.6
+    x = x0
+    while x < x1 - step:
+        d.line([(s(x), s(y + h)), (s(x + step / 2), s(y)), (s(x + step), s(y + h))], fill=col, width=s(2.2))
+        diamond(d, x + step / 2, y + h * 0.62, h * 0.22, col)
+        x += step
+
+
+def book_frame():
+    # 256x256, sliced 88 px: thick carved purple stone with gold trims and a chevron band; the middle is empty.
+    W = 256
+    B = 70
+    img = canvas(W, W)
+    stone = stone_fill(img.size, 31)
+    mask = Image.new("L", img.size, 0)
+    md = ImageDraw.Draw(mask)
+    md.rounded_rectangle([s(4), s(4), s(W - 4), s(W - 4)], s(26), fill=255)
+    md.rounded_rectangle([s(B), s(B), s(W - B), s(W - B)], s(10), fill=0)
+    img.paste(stone, (0, 0), mask)
+    d = ImageDraw.Draw(img)
+    # bevel: light top-left, dark bottom-right
+    d.rounded_rectangle([s(6), s(6), s(W - 6), s(W - 6)], s(24), outline=(150, 100, 180, 160), width=s(2))
+    # chevron band in the middle of the border, top and bottom (repeated by the slicing)
+    band = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    bd = ImageDraw.Draw(band)
+    for y in (24, W - 46):
+        zigzag_band(bd, 30, W - 30, y, 20, (30, 10, 44, 255))
+    for x in (24, W - 46):
+        rot = Image.new("RGBA", (img.size[1], img.size[0]), (0, 0, 0, 0))
+        rd = ImageDraw.Draw(rot)
+        zigzag_band(rd, 30, W - 30, x, 20, (30, 10, 44, 255))
+        band.alpha_composite(rot.transpose(Image.Transpose.ROTATE_90).transpose(Image.Transpose.FLIP_TOP_BOTTOM))
+    band = band.filter(ImageFilter.GaussianBlur(s(0.4)))
+    hi = band.point(lambda v: v)
+    img.alpha_composite(band)
+    # gold trims
+    gold_band(d, (4, 4, W - 4, W - 4), 5, 26)
+    gold_band(d, (B - 6, B - 6, W - B + 6, W - B + 6), 5, 12)
+    # corner medallions
+    for cx, cy in ((22, 22), (W - 22, 22), (22, W - 22), (W - 22, W - 22)):
+        d.ellipse([s(cx - 15), s(cy - 15), s(cx + 15), s(cy + 15)], fill=OUTLINE + (255,))
+        d.ellipse([s(cx - 13), s(cy - 13), s(cx + 13), s(cy + 13)], fill=GOLD_DARK + (255,))
+        d.ellipse([s(cx - 11), s(cy - 11), s(cx + 11), s(cy + 11)], fill=GOLD + (255,))
+        diamond(d, cx, cy, 8, WINE + (255,), GOLD_LIGHT + (255,))
+    finish(img, "book_frame.png")
+
+
+def page_left():
+    # Dark purple page with soft texture and faint corner ornaments.
+    W, H = 512, 512
+    base = stone_fill((W, H), 41, base=(54, 22, 74), light=(78, 38, 104), dark=(30, 10, 44))
+    vign = Image.new("L", (W, H), 0)
+    vd = ImageDraw.Draw(vign)
+    for i in range(60):
+        vd.rectangle([i, i, W - 1 - i, H - 1 - i], outline=int(150 * (1 - i / 60) ** 2))
+    base = Image.composite(Image.new("RGBA", (W, H), (14, 4, 22, 255)), base, vign)
+    img = base.resize((W * SS, H * SS), Image.BICUBIC)
+    d = ImageDraw.Draw(img)
+    for cx, cy, a0 in ((34, 34, 180), (W - 34, 34, 270), (34, H - 34, 90), (W - 34, H - 34, 0)):
+        curl(d, cx, cy, 14, a0, a0 + 270, 1.6, col=(150, 105, 40))
+    finish(img, "page_left.png")
+
+
+def page_right():
+    # Parchment with the gutter shadow on its left edge, as a right-hand page.
+    src = Image.open(os.path.join(OUT, "parchment.png")).convert("RGBA")
+    W, H = src.size
+    shade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sp = shade.load()
+    for x in range(70):
+        a = int(150 * (1 - x / 70) ** 2)
+        for y in range(H):
+            sp[x, y] = (60, 30, 10, a)
+    src.alpha_composite(shade)
+    src.save(os.path.join(OUT, "page_right.png"), optimize=True)
+
+
+def spine():
+    W, H = 48, 512
+    img = canvas(W, H)
+    g = Image.new("RGBA", (s(W), s(H)))
+    gp = g.load()
+    for x in range(s(W)):
+        t = abs(x / s(W) - 0.5) * 2
+        c = (int(20 + 50 * (1 - t)), int(8 + 20 * (1 - t)), int(30 + 50 * (1 - t)), 255)
+        for y in range(s(H)):
+            gp[x, y] = c
+    img.alpha_composite(g)
+    d = ImageDraw.Draw(img)
+    for y in range(40, H, 108):
+        d.rounded_rectangle([s(10), s(y), s(W - 10), s(y + 16)], s(6), fill=GOLD_DARK + (255,), outline=OUTLINE + (255,), width=s(1.5))
+        d.line([(s(13), s(y + 5)), (s(W - 13), s(y + 5))], fill=GOLD_LIGHT + (200,), width=s(1.5))
+    finish(img, "spine.png")
+
+
+def title_plaque():
+    W, H = 640, 112
+    img = canvas(W, H)
+    d = ImageDraw.Draw(img)
+    pts = [(70, 20), (W - 70, 20), (W - 14, 56), (W - 70, 92), (70, 92), (14, 56)]
+    fill = vgradient((s(W), s(H)), (118, 52, 136), (54, 18, 70))
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).polygon([(s(x), s(y)) for x, y in pts], fill=255)
+    img.paste(fill, (0, 0), mask)
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=OUTLINE + (255,), width=s(9), joint="curve")
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=GOLD_DARK + (255,), width=s(6), joint="curve")
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=GOLD + (255,), width=s(3), joint="curve")
+    inner = [(78, 28), (W - 78, 28), (W - 28, 56), (W - 78, 84), (78, 84), (28, 56)]
+    d.line([(s(x), s(y)) for x, y in inner + [inner[0]]], fill=(244, 204, 98, 120), width=s(1.4), joint="curve")
+    for side in (-1, 1):
+        cx = W / 2 + side * (W / 2 - 60)
+        curl(d, cx, 40, 10, 0, 360, 2.2)
+        curl(d, cx, 72, 10, 0, 360, 2.2)
+        curl(d, cx + side * 18, 56, 6, 0, 360, 1.8)
+    finish(img, "title_plaque.png")
+
+
+def emblem():
+    # A horned heart-shaped mask with big eyes, drawn from shapes: the crest over the title.
+    W, H = 200, 150
+    img = canvas(W, H)
+    d = ImageDraw.Draw(img)
+    cx, cy = W / 2, 84
+    spikes = [(-1.0, -0.15), (-0.92, 0.25), (-0.7, 0.62), (-0.35, 0.86), (0.35, 0.86), (0.7, 0.62), (0.92, 0.25), (1.0, -0.15),
+              (-0.42, -1.0), (0.42, -1.0)]
+    for sx, sy in spikes:
+        ang = math.atan2(sy, sx)
+        bx, by = cx + sx * 40, cy + sy * 34
+        tip = (cx + sx * 40 + math.cos(ang) * 30, cy + sy * 34 + math.sin(ang) * 30)
+        perp = (-math.sin(ang) * 8, math.cos(ang) * 8)
+        col = (90, 170, 60) if sy > 0.5 else (240, 200, 90)
+        poly(d, [(bx + perp[0], by + perp[1]), tip, (bx - perp[0], by - perp[1])], col + (255,), 2)
+    # heart-shaped face
+    face = [(cx, cy + 42)]
+    for i in range(0, 181, 6):
+        a = math.radians(i)
+        face.append((cx - 46 * math.sin(a) - 6 * math.sin(2 * a), cy - 30 * math.cos(a) * 0.9 - 8))
+    face2 = [(2 * cx - x, y) for x, y in reversed(face[1:])]
+    poly(d, face + face2, (120, 40, 140, 255), 3)
+    d.polygon([(s(cx - 30), s(cy - 4)), (s(cx), s(cy + 34)), (s(cx + 30), s(cy - 4)), (s(cx), s(cy + 10))], fill=(190, 40, 50, 255))
+    for side in (-1, 1):
+        ex = cx + side * 20
+        d.ellipse([s(ex - 15), s(cy - 26), s(ex + 15), s(cy + 4)], fill=OUTLINE + (255,))
+        d.ellipse([s(ex - 13), s(cy - 24), s(ex + 13), s(cy + 2)], fill=(250, 150, 40, 255))
+        d.ellipse([s(ex - 8), s(cy - 19), s(ex + 8), s(cy - 3)], fill=(255, 220, 60, 255))
+        d.ellipse([s(ex - 4.5), s(cy - 15.5), s(ex + 4.5), s(cy - 6.5)], fill=(90, 200, 70, 255))
+        d.ellipse([s(ex - 2), s(cy - 13), s(ex + 2), s(cy - 9)], fill=(10, 10, 10, 255))
+    d.line([(s(cx), s(cy - 34)), (s(cx), s(cy + 8))], fill=OUTLINE + (255,), width=s(2))
+    finish(img, "emblem.png")
+
+
+def keycap():
+    W = 64
+    img = canvas(W, W)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([s(4), s(8), s(W - 4), s(W - 2)], s(10), fill=(40, 34, 48, 255))
+    fill = vgradient((s(W), s(W)), (196, 190, 206), (120, 112, 134))
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([s(6), s(4), s(W - 6), s(W - 10)], s(9), fill=255)
+    img.paste(fill, (0, 0), mask)
+    d.rounded_rectangle([s(6), s(4), s(W - 6), s(W - 10)], s(9), outline=(60, 50, 70, 255), width=s(2))
+    d.rounded_rectangle([s(10), s(7), s(W - 10), s(16)], s(4), fill=(255, 255, 255, 60))
+    finish(img, "keycap.png")
+
+
+def hint_plaque():
+    W, H = 760, 96
+    img = canvas(W, H)
+    d = ImageDraw.Draw(img)
+    pts = [(46, 10), (W - 46, 10), (W - 8, 48), (W - 46, 86), (46, 86), (8, 48)]
+    fill = vgradient((s(W), s(H)), (78, 34, 98), (40, 14, 56))
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).polygon([(s(x), s(y)) for x, y in pts], fill=255)
+    img.paste(fill, (0, 0), mask)
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=OUTLINE + (255,), width=s(7), joint="curve")
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=GOLD + (255,), width=s(3.4), joint="curve")
+    for cx in (66, W - 66):
+        t = 18
+        for ox, oy in ((0, -t * 0.5), (-t * 0.5, t * 0.37), (t * 0.5, t * 0.37)):
+            x, y = cx + ox, 50 + oy
+            poly(d, [(x, y - t * 0.43), (x + t * 0.5, y + t * 0.43), (x - t * 0.5, y + t * 0.43)], GOLD + (255,), 1.5)
+    finish(img, "hint_plaque.png")
+
+
+def tile(name, current):
+    W = 96
+    img = canvas(W, W)
+    if current:
+        g = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        ImageDraw.Draw(g).rounded_rectangle([s(6), s(6), s(W - 6), s(W - 6)], s(18), outline=(255, 210, 90, 230), width=s(7))
+        img.alpha_composite(g.filter(ImageFilter.GaussianBlur(s(3.5))))
+    top, bottom = ((150, 80, 170), (70, 26, 92)) if current else ((236, 214, 168), (196, 160, 104))
+    fill = vgradient(img.size, top, bottom)
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([s(10), s(10), s(W - 10), s(W - 10)], s(14), fill=255)
+    img.paste(fill, (0, 0), mask)
+    d = ImageDraw.Draw(img)
+    gold_band(d, (10, 10, W - 10, W - 10), 4 if current else 3, 14)
+    finish(img, name)
+
+
+def portrait_ring():
+    W = 160
+    img = canvas(W, W)
+    d = ImageDraw.Draw(img)
+    d.ellipse([s(6), s(6), s(W - 6), s(W - 6)], outline=OUTLINE + (255,), width=s(12))
+    d.ellipse([s(8), s(8), s(W - 8), s(W - 8)], outline=GOLD_DARK + (255,), width=s(9))
+    d.ellipse([s(10), s(10), s(W - 10), s(W - 10)], outline=GOLD + (255,), width=s(5))
+    d.ellipse([s(12), s(12), s(W - 12), s(W - 12)], outline=GOLD_LIGHT + (200,), width=s(1.4))
+    for a in range(0, 360, 90):
+        x = W / 2 + math.cos(math.radians(a + 45)) * (W / 2 - 10)
+        y = W / 2 + math.sin(math.radians(a + 45)) * (W / 2 - 10)
+        diamond(d, x, y, 7, GOLD + (255,), WINE + (255,))
+    finish(img, "portrait_ring.png")
+
+
+def clock_box():
+    W, H = 280, 60
+    img = canvas(W, H)
+    d = ImageDraw.Draw(img)
+    pts = [(24, 6), (W - 24, 6), (W - 6, 30), (W - 24, 54), (24, 54), (6, 30)]
+    fill = vgradient((s(W), s(H)), (70, 40, 110), (28, 14, 60))
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).polygon([(s(x), s(y)) for x, y in pts], fill=255)
+    img.paste(fill, (0, 0), mask)
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=OUTLINE + (255,), width=s(6), joint="curve")
+    d.line([(s(x), s(y)) for x, y in pts + [pts[0]]], fill=(170, 150, 220, 255), width=s(2.6), joint="curve")
+    finish(img, "clock_box.png")
+
+
+def book_assets():
+    book_frame()
+    page_left()
+    page_right()
+    spine()
+    title_plaque()
+    emblem()
+    keycap()
+    hint_plaque()
+    tile("tile.png", False)
+    tile("tile_current.png", True)
+    portrait_ring()
+    clock_box()
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     frame()
@@ -417,6 +691,7 @@ def main():
     icon_items()
     icon_records()
     state_icons()
+    book_assets()
 
 
 if __name__ == "__main__":

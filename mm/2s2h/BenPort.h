@@ -35,6 +35,8 @@ class OTRGlobals {
     ImFont* fontMono;
     ImFont* fontMonoLarger;
     ImFont* fontMonoLargest;
+    ImFont* fontQuestBody;  // Alegreya, for the quest menu
+    ImFont* fontQuestTitle; // Alegreya Bold
 
     std::shared_ptr<Ship::Context> context;
 

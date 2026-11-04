@@ -16,6 +16,9 @@
 #include "2s2h/GameInteractor/GameInteractor.h"
 #include "2s2h/ShipInit.hpp"
 #include "2s2h/Enhancements/Controls/ButtonPrompts.h"
+#ifndef QUEST_MENU_PREVIEW
+#include "2s2h/BenPort.h"
+#endif
 
 extern "C" {
 #include <z64.h>
@@ -33,29 +36,34 @@ namespace {
 
 constexpr int kCategories = (int)Category::Count;
 
-// ----- Layout of the 1100x700 page.
+// ----- Layout of the 1100x700 page: a carved frame holding the category buttons and an open book, a title plaque
+// with the crest above it and a hint plaque below.
 
-constexpr float kSideX0 = 28, kSideX1 = 262, kSideY0 = 108, kSideButtonH = 64, kSideGap = 8;
-constexpr float kListX0 = 276, kListX1 = 606, kListY0 = 104, kListY1 = 616;
-constexpr float kRowsY0 = 166, kRowsY1 = 602, kRowH = 54;
-constexpr float kDetX0 = 620, kDetX1 = 1072, kDetY0 = 104, kDetY1 = 616;
-constexpr float kDetContentY0 = 124, kDetContentY1 = 560;
+constexpr float kFrameX0 = 6, kFrameY0 = 84, kFrameX1 = 1094, kFrameY1 = 646;
+constexpr float kSideX0 = 58, kSideX1 = 262, kSideY0 = 146, kSideButtonH = 58, kSideGap = 6;
+constexpr float kLeftX0 = 272, kLeftX1 = 566, kRightX0 = 562, kRightX1 = 1042, kBookY0 = 134, kBookY1 = 600;
+constexpr float kRowsY0 = 206, kRowH = 44;
+constexpr int kRowsPerPage = 8;
+constexpr float kRX0 = 600, kRX1 = 1022; // right page content
+constexpr int kTilesShown = 6;
+constexpr float kTile = 56, kTileGap = 8;
 
 // ----- State. The game thread (input hook) and the GUI draw run one after the other on the same thread.
 
 bool sOpen = false;
-int sPendingOpen = 0;      // frames left to wait for the pause menu after RequestOpen
+int sPendingOpen = 0; // frames left to wait for the pause menu after RequestOpen
 bool sStartInjected = false;
-float sAnim = 0.0f;        // 0 closed .. 1 open
+float sAnim = 0.0f; // 0 closed .. 1 open
 float sTime = 0.0f;
 int sCategory = 0;
 int sSelected[kCategories] = {};
-float sListScroll[kCategories] = {};
-float sCursorY = -1.0f;    // highlight position, follows the selection
+float sCursorY = -1.0f; // highlight position, follows the selection
 bool sDetailFocus = false;
-float sDetailScroll = 0.0f, sDetailScrollTarget = 0.0f, sDetailContentH = 0.0f;
+int sTile = 0; // step shown under the progress tiles
+bool sTileFollowsProgress = true;
 float sDetailFade = 1.0f;
 int sRepeatDir = 0, sRepeatTimer = 0;
+int sRepeatDirX = 0, sRepeatTimerX = 0;
 bool sBackHeld = false;
 
 int QuestCount(int category) {
@@ -63,8 +71,8 @@ int QuestCount(int category) {
 }
 
 void SelectionChanged() {
-    sDetailScroll = sDetailScrollTarget = 0.0f;
     sDetailFade = 0.0f;
+    sTileFollowsProgress = true;
 }
 
 void ChangeCategory(int delta) {
@@ -75,19 +83,32 @@ void ChangeCategory(int delta) {
     Audio_PlaySfx(NA_SE_SY_WIN_SCROLL_LEFT);
 }
 
-void Move(int delta) {
-    if (sDetailFocus) {
-        sDetailScrollTarget += delta * 46.0f;
-        return;
-    }
+void Select(int index) {
     int count = QuestCount(sCategory);
     if (count == 0) {
         return;
     }
-    int next = std::clamp(sSelected[sCategory] + delta, 0, count - 1);
-    if (next != sSelected[sCategory]) {
-        sSelected[sCategory] = next;
+    index = std::clamp(index, 0, count - 1);
+    if (index != sSelected[sCategory]) {
+        if (index / kRowsPerPage != sSelected[sCategory] / kRowsPerPage) {
+            sCursorY = -1.0f;
+        }
+        sSelected[sCategory] = index;
         SelectionChanged();
+        Audio_PlaySfx(NA_SE_SY_CURSOR);
+    }
+}
+
+void MoveTile(int delta) {
+    const auto& quests = Quests((Category)sCategory);
+    if (quests.empty()) {
+        return;
+    }
+    int steps = (int)quests[sSelected[sCategory]].objectives.size();
+    int next = std::clamp(sTile + delta, 0, std::max(0, steps - 1));
+    if (next != sTile) {
+        sTile = next;
+        sTileFollowsProgress = false;
         Audio_PlaySfx(NA_SE_SY_CURSOR);
     }
 }
@@ -110,11 +131,29 @@ void Open() {
     Audio_PlaySfx(NA_SE_SY_DECIDE);
 }
 
+// Held-direction repeat: the first press moves at once, then again after a pause and steadily while held.
+bool Repeat(int dir, int& lastDir, int& timer) {
+    if (dir == 0) {
+        lastDir = 0;
+        return false;
+    }
+    if (dir != lastDir) {
+        lastDir = dir;
+        timer = 8;
+        return true;
+    }
+    if (--timer <= 0) {
+        timer = 3;
+        return true;
+    }
+    return false;
+}
+
 // Reads the game's controller while the menu is open. The presses are then cleared so that nothing behind the menu
 // reacts to them (the pause menu is also held still through VB_KALEIDO_UPDATE).
 void HandlePad(Input* input) {
-    u16 press = input->press.button;
-    s8 stickY = input->cur.stick_y, stickX = input->rel.stick_x;
+    u16 press = input->press.button, cur = input->cur.button;
+    s8 stickX = input->cur.stick_x, stickY = input->cur.stick_y;
 
     if (CHECK_BTN_ANY(press, BTN_START)) {
         Close();
@@ -137,29 +176,19 @@ void HandlePad(Input* input) {
         ChangeCategory(-1);
     } else if (CHECK_BTN_ANY(press, BTN_R)) {
         ChangeCategory(1);
-    } else if (!sDetailFocus && (CHECK_BTN_ANY(press, BTN_DLEFT) || stickX < -30)) {
-        ChangeCategory(-1);
-    } else if (!sDetailFocus && (CHECK_BTN_ANY(press, BTN_DRIGHT) || stickX > 30)) {
-        ChangeCategory(1);
     }
 
-    int dir = 0;
-    if (stickY > 30 || CHECK_BTN_ANY(input->cur.button, BTN_DUP)) {
-        dir = -1;
-    } else if (stickY < -30 || CHECK_BTN_ANY(input->cur.button, BTN_DDOWN)) {
-        dir = 1;
+    int dirY = (stickY > 30 || CHECK_BTN_ANY(cur, BTN_DUP)) ? -1 : (stickY < -30 || CHECK_BTN_ANY(cur, BTN_DDOWN)) ? 1 : 0;
+    int dirX = (stickX < -30 || CHECK_BTN_ANY(cur, BTN_DLEFT)) ? -1 : (stickX > 30 || CHECK_BTN_ANY(cur, BTN_DRIGHT)) ? 1 : 0;
+    if (Repeat(dirY, sRepeatDir, sRepeatTimer) && !sDetailFocus) {
+        Select(sSelected[sCategory] + dirY);
     }
-    if (dir == 0) {
-        sRepeatDir = 0;
-    } else if (sDetailFocus) {
-        sDetailScrollTarget += dir * 14.0f; // smooth scroll while held
-    } else if (dir != sRepeatDir) {
-        sRepeatDir = dir;
-        sRepeatTimer = 8;
-        Move(dir);
-    } else if (--sRepeatTimer <= 0) {
-        sRepeatTimer = 3;
-        Move(dir);
+    if (Repeat(dirX, sRepeatDirX, sRepeatTimerX)) {
+        if (sDetailFocus) {
+            MoveTile(dirX); // through the steps of the quest
+        } else {
+            Select(sSelected[sCategory] + dirX * kRowsPerPage); // turn the page
+        }
     }
 }
 
@@ -234,6 +263,14 @@ ImU32 Alpha(ImU32 col, float a) {
     return (col & ~IM_COL32_A_MASK) | ((ImU32)alpha << IM_COL32_A_SHIFT);
 }
 
+ImU32 White(float a) {
+    return Alpha(IM_COL32_WHITE, a);
+}
+
+const ImU32 cCream = Col(250, 236, 200);
+const ImU32 cTitleInk = Col(96, 30, 52);
+const ImU32 cHeadInk = Col(92, 40, 120);
+
 // A button prompt: the icon of the physical button when the button icons are on, otherwise an N64-style badge.
 void Prompt(const Page& pg, ButtonPrompt prompt, float cx, float cy, float s) {
     const char* tex = ButtonPrompts_Icon(prompt);
@@ -254,13 +291,13 @@ void Prompt(const Page& pg, ButtonPrompt prompt, float cx, float cy, float s) {
     }
     pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(s * 0.5f), Col(20, 10, 20, 200));
     pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(s * 0.44f), face);
-    float size = s * 0.62f;
-    TextCentered(pg, cx, cy - size * 0.55f, size, Col(255, 255, 255), label, false);
+    float size = s * 0.66f;
+    TextCentered(pg, cx, cy - size * 0.6f, size, Col(255, 255, 255), label, false, TitleFont());
 }
 
 void ProgressBar(const Page& pg, float x0, float y0, float x1, float y1, float fraction, ImU32 fill) {
     float r = (y1 - y0) * 0.5f;
-    pg.dl->AddRectFilled(pg.P(x0, y0), pg.P(x1, y1), Col(30, 14, 40, 200), pg.S(r));
+    pg.dl->AddRectFilled(pg.P(x0, y0), pg.P(x1, y1), Col(60, 36, 30, 120), pg.S(r));
     if (fraction > 0.0f) {
         float xf = x0 + (x1 - x0) * std::clamp(fraction, 0.0f, 1.0f);
         pg.dl->AddRectFilled(pg.P(x0, y0), pg.P(std::max(xf, x0 + r * 2), y1), fill, pg.S(r));
@@ -268,14 +305,23 @@ void ProgressBar(const Page& pg, float x0, float y0, float x1, float y1, float f
     pg.dl->AddRect(pg.P(x0, y0), pg.P(x1, y1), Col(150, 105, 40, 200), pg.S(r), 0, pg.S(1));
 }
 
-// A quest's picture: the game's icon (from the player's files), our PNG, or the category's.
-void QuestIcon(const Page& pg, const Quest& quest, float cx, float cy, float s, float alpha) {
-    ImU32 tint = IM_COL32(255, 255, 255, (int)(alpha * 255));
+bool UsesPortraits(Category category) {
+    return category == Category::Side || category == Category::People;
+}
+
+// A quest's picture: the game's icon or notebook photo (from the player's files), our PNG, or the category's.
+void QuestIcon(const Page& pg, const Quest& quest, float cx, float cy, float s, float alpha, bool round = false) {
+    ImU32 tint = White(alpha);
     if (quest.icon != nullptr) {
         ImTextureID id = Texture(quest.icon);
         if (id != nullptr) {
-            pg.dl->AddImage(id, pg.P(cx - s / 2, cy - s / 2), pg.P(cx + s / 2, cy + s / 2), ImVec2(0, 0),
-                            ImVec2(1, 1), tint);
+            if (round) {
+                pg.dl->AddImageRounded(id, pg.P(cx - s / 2, cy - s / 2), pg.P(cx + s / 2, cy + s / 2), ImVec2(0, 0),
+                                       ImVec2(1, 1), tint, pg.S(s / 2));
+            } else {
+                pg.dl->AddImage(id, pg.P(cx - s / 2, cy - s / 2), pg.P(cx + s / 2, cy + s / 2), ImVec2(0, 0),
+                                ImVec2(1, 1), tint);
+            }
             return;
         }
     }
@@ -285,39 +331,98 @@ void QuestIcon(const Page& pg, const Quest& quest, float cx, float cy, float s, 
 
 ImU32 StatusColor(Status status) {
     switch (status) {
-        case Status::Locked: return Col(150, 140, 150);
-        case Status::Available: return Col(255, 226, 140);
-        case Status::InProgress: return Col(110, 190, 255);
-        case Status::Done: return cGreen;
+        case Status::Locked: return Col(130, 110, 120);
+        case Status::Available: return Col(196, 140, 40);
+        case Status::InProgress: return Col(70, 120, 200);
+        case Status::Done: return Col(60, 150, 50);
     }
     return cGold;
 }
 
-void DrawBackdrop(const Page& pg, float a) {
-    if (!Png(pg, "background", ImVec2(0, 0), ImVec2(kPageW, kPageH), Alpha(IM_COL32_WHITE, a), 128.0f)) {
-        Panel(pg, ImVec2(0, 0), ImVec2(kPageW, kPageH), Alpha(cPurple, a), Alpha(cPurpleDeep, a), 18);
+// ----- Frame, title, clock.
+
+void DrawFrame(const Page& pg, float a) {
+    if (!NineSlice(pg, "book_frame", ImVec2(kFrameX0, kFrameY0), ImVec2(kFrameX1, kFrameY1), 88, 50, White(a))) {
+        Panel(pg, ImVec2(kFrameX0, kFrameY0), ImVec2(kFrameX1, kFrameY1), Alpha(cPurple, a), Alpha(cPurpleDeep, a), 18);
+        GoldFrame(pg, ImVec2(kFrameX0, kFrameY0), ImVec2(kFrameX1, kFrameY1), 18, 4);
     }
-    if (!NineSlice(pg, "frame", ImVec2(0, 0), ImVec2(kPageW, kPageH), 64, 44, Alpha(IM_COL32_WHITE, a))) {
-        GoldFrame(pg, ImVec2(6, 6), ImVec2(kPageW - 6, kPageH - 6), 18, 5);
+    // the stone behind the buttons and the book
+    pg.dl->AddRectFilled(pg.P(kFrameX0 + 44, kFrameY0 + 44), pg.P(kFrameX1 - 44, kFrameY1 - 44),
+                         Col(30, 10, 44, (int)(235 * a)), pg.S(8));
+}
+
+void DrawTitle(const Page& pg, float a) {
+    if (!Png(pg, "title_plaque", ImVec2(318, 56), ImVec2(782, 138), White(a))) {
+        Panel(pg, ImVec2(330, 66), ImVec2(770, 130), cWine, cPurpleDeep, 12);
+    }
+    const char* title = CategoryName((Category)sCategory);
+    float size = 36;
+    while (size > 22 && TextWidth(pg, size, title, TitleFont()) > 380) {
+        size -= 2;
+    }
+    TextCentered(pg, 550, 97 - size * 0.62f, size, Alpha(cCream, a), title, true, TitleFont());
+    // the crest sits on the plaque
+    float bob = sinf(sTime * 1.6f) * 1.5f;
+    Png(pg, "emblem", ImVec2(484, -10 + bob), ImVec2(616, 89 + bob), White(a));
+
+    // L and R keycaps beside the plaque, clickable.
+    struct Key {
+        float x;
+        ButtonPrompt prompt;
+        const char* label;
+        int delta;
+        const char* id;
+    } keys[] = { { 270, BUTTON_PROMPT_L, "L", -1, "##qm_prev" }, { 782, BUTTON_PROMPT_R, "R", 1, "##qm_next" } };
+    for (const Key& k : keys) {
+        if (ButtonPrompts_Icon(k.prompt) != nullptr) {
+            Prompt(pg, k.prompt, k.x + 24, 98, 44);
+        } else if (Png(pg, "keycap", ImVec2(k.x, 74), ImVec2(k.x + 48, 122), White(a))) {
+            TextCentered(pg, k.x + 24, 76, 30, Alpha(Col(40, 30, 50), a), k.label, false, TitleFont());
+        } else {
+            Prompt(pg, k.prompt, k.x + 24, 98, 44);
+        }
+        if (Hit(pg, k.id, k.x, 74, 48, 48)) {
+            ChangeCategory(k.delta);
+        }
     }
 }
 
-void DrawBanner(const Page& pg, float a) {
-    if (!Png(pg, "banner", ImVec2(166, 4), ImVec2(934, 94), Alpha(IM_COL32_WHITE, a))) {
-        Panel(pg, ImVec2(230, 16), ImVec2(870, 84), cWine, cPurpleDeep, 12);
-        GoldFrame(pg, ImVec2(230, 16), ImVec2(870, 84), 12, 3);
+void DrawClock(const Page& pg, float a) {
+    if (!SaveLoaded()) {
+        return;
     }
-    TextCentered(pg, kPageW / 2, 24, 36, Alpha(cGold, a), "MISSÕES");
-    // Category switch prompts, also clickable.
-    Prompt(pg, BUTTON_PROMPT_L, 110, 50, 40);
-    Prompt(pg, BUTTON_PROMPT_R, 990, 50, 40);
-    if (Hit(pg, "##qm_prev", 86, 26, 48, 48)) {
-        ChangeCategory(-1);
+    float x0 = 856, y0 = 18, x1 = 1086, y1 = 70;
+    if (!Png(pg, "clock_box", ImVec2(x0, y0), ImVec2(x1, y1), White(a))) {
+        Panel(pg, ImVec2(x0, y0), ImVec2(x1, y1), cPurple, cPurpleDeep, 10);
     }
-    if (Hit(pg, "##qm_next", 966, 26, 48, 48)) {
-        ChangeCategory(1);
+    int minutes = (int)TIME_TO_MINUTES_F(CURRENT_TIME);
+    bool night = minutes < 6 * 60 || minutes >= 18 * 60;
+    char day[16], clock[16];
+    snprintf(day, sizeof(day), "Dia %d", std::max(1, (int)CURRENT_DAY));
+    snprintf(clock, sizeof(clock), "%d:%02d", minutes / 60, minutes % 60);
+    float cy = (y0 + y1) / 2;
+    IconSun(pg, x0 + 34, cy, 26);
+    Text(pg, x0 + 52, cy - 15, 26, Alpha(cCream, a), day, 0, TitleFont());
+    if (night) {
+        IconMoon(pg, x0 + 146, cy, 24, Col(40, 22, 80));
+    } else {
+        IconClock(pg, x0 + 146, cy, 24);
+    }
+    Text(pg, x0 + 164, cy - 15, 26, Alpha(cCream, a), clock, 0, TitleFont());
+}
+
+void DrawCloseButton(const Page& pg, float a) {
+    float cx = 40, cy = 44;
+    pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(22), Col(60, 20, 40, (int)(230 * a)));
+    pg.dl->AddCircle(pg.P(cx, cy), pg.S(22), Alpha(cGold, a), 0, pg.S(2.5f));
+    pg.dl->AddLine(pg.P(cx - 8, cy - 8), pg.P(cx + 8, cy + 8), Alpha(cGold, a), pg.S(3.5f));
+    pg.dl->AddLine(pg.P(cx + 8, cy - 8), pg.P(cx - 8, cy + 8), Alpha(cGold, a), pg.S(3.5f));
+    if (Hit(pg, "##qm_close", cx - 24, cy - 24, 48, 48)) {
+        Close();
     }
 }
+
+// ----- Category buttons.
 
 void DrawSidebar(const Page& pg, float a) {
     float pulse = 0.5f + 0.5f * sinf(sTime * 4.0f);
@@ -331,348 +436,402 @@ void DrawSidebar(const Page& pg, float a) {
         }
         ImGui::PopID();
 
-        float x0 = kSideX0 + (selected ? 0.0f : 8.0f);
+        float x0 = kSideX0, x1 = kSideX1;
         if (selected) {
-            for (int i = 3; i >= 1; i--) {
-                pg.dl->AddRect(pg.P(x0 - i * 2, y0 - i * 2), pg.P(kSideX1 + i * 2, y1 + i * 2),
-                               Col(255, 210, 90, (int)((20 + 30 * pulse) * (4 - i) * a)), pg.S(12 + i * 2), 0,
+            for (int i = 4; i >= 1; i--) {
+                pg.dl->AddRect(pg.P(x0 - i * 2.5f, y0 - i * 2.5f), pg.P(x1 + i * 2.5f, y1 + i * 2.5f),
+                               Col(255, 214, 90, (int)((26 + 34 * pulse) * (5 - i) * a)), pg.S(12 + i * 2.5f), 0,
                                pg.S(3));
             }
         }
-        if (!NineSlice(pg, selected ? "button_selected" : "button", ImVec2(x0, y0), ImVec2(kSideX1, y1), 28, 20,
-                       Alpha(hovered && !selected ? Col(255, 240, 220) : IM_COL32_WHITE, a))) {
-            Panel(pg, ImVec2(x0, y0), ImVec2(kSideX1, y1), selected ? cWine : cPurpleLight, cPurpleDeep, 10);
-            GoldFrame(pg, ImVec2(x0, y0), ImVec2(kSideX1, y1), 10, selected ? 3.0f : 1.5f);
+        if (!NineSlice(pg, selected ? "button_selected" : "button", ImVec2(x0, y0), ImVec2(x1, y1), 28, 18,
+                       White(a) & (hovered && !selected ? Col(255, 236, 255) : IM_COL32_WHITE))) {
+            Panel(pg, ImVec2(x0, y0), ImVec2(x1, y1), selected ? cWine : cPurpleLight, cPurpleDeep, 10);
+            GoldFrame(pg, ImVec2(x0, y0), ImVec2(x1, y1), 10, selected ? 3.0f : 1.5f);
         }
-        Png(pg, CategoryAsset((Category)c), ImVec2(x0 + 10, y0 + 8), ImVec2(x0 + 58, y0 + 56),
-              Alpha(IM_COL32_WHITE, a));
-        Text(pg, x0 + 66, y0 + 12, 17, Alpha(selected ? Col(255, 236, 170) : cParchment, a),
-             CategoryName((Category)c), kSideX1 - x0 - 74);
-
-        // How many are done in this category.
-        if (SaveLoaded()) {
-            int done = 0;
-            const auto& quests = Quests((Category)c);
-            for (const Quest& q : quests) {
-                done += Evaluate(q).status == Status::Done ? 1 : 0;
-            }
-            char count[24];
-            snprintf(count, sizeof(count), "%d / %d", done, (int)quests.size());
-            Text(pg, x0 + 66, y0 + 38, 13, Alpha(Col(220, 190, 140), a), count);
+        Png(pg, CategoryAsset((Category)c), ImVec2(x0 + 8, y0 + 6), ImVec2(x0 + 54, y0 + 52), White(a));
+        const char* name = CategoryName((Category)c);
+        float size = 21;
+        float wrap = x1 - x0 - 66;
+        float h = WrappedHeight(pg, size, wrap, name, TitleFont());
+        if (h > 30) {
+            size = 18;
+            h = WrappedHeight(pg, size, wrap, name, TitleFont());
         }
+        Text(pg, x0 + 60, (y0 + y1) / 2 - h / 2 - 1, size, Alpha(selected ? Col(255, 228, 140) : cCream, a), name, wrap,
+             TitleFont());
     }
 }
 
-void DrawList(const Page& pg, float a, const std::vector<QuestProgress>& progress) {
-    if (!NineSlice(pg, "frame", ImVec2(kListX0, kListY0), ImVec2(kListX1, kListY1), 64, 30, Alpha(IM_COL32_WHITE, a))) {
-        GoldFrame(pg, ImVec2(kListX0, kListY0), ImVec2(kListX1, kListY1), 12, 3);
+// ----- The left page: the list, with portraits or icons and a check box for each entry.
+
+void DrawLeftPage(const Page& pg, float a, const std::vector<QuestProgress>& progress) {
+    if (!Png(pg, "page_left", ImVec2(kLeftX0, kBookY0), ImVec2(kLeftX1, kBookY1), White(a))) {
+        Panel(pg, ImVec2(kLeftX0, kBookY0), ImVec2(kLeftX1, kBookY1), cPurple, cPurpleDeep, 8);
     }
-    pg.dl->AddRectFilled(pg.P(kListX0 + 14, kListY0 + 14), pg.P(kListX1 - 14, kListY1 - 14),
-                         Col(20, 8, 30, (int)(150 * a)), pg.S(8));
-    TextShadow(pg, kListX0 + 22, kListY0 + 18, 21, Alpha(cGold, a), CategoryName((Category)sCategory));
-    Png(pg, "divider", ImVec2(kListX0 + 16, kListY0 + 48), ImVec2(kListX1 - 16, kListY0 + 60), Alpha(IM_COL32_WHITE, a));
+    GoldFrame(pg, ImVec2(kLeftX0, kBookY0), ImVec2(kLeftX1 - 6, kBookY1), 6, 2.5f);
+
+    // Heading: the category's picture and its subtitle.
+    Png(pg, CategoryAsset((Category)sCategory), ImVec2(kLeftX0 + 14, kBookY0 + 12), ImVec2(kLeftX0 + 58, kBookY0 + 56),
+        White(a));
+    TextShadow(pg, kLeftX0 + 64, kBookY0 + 18, 26, Alpha(Col(255, 222, 150), a), CategorySubtitle((Category)sCategory),
+               TitleFont());
+    Png(pg, "divider", ImVec2(kLeftX0 + 12, kBookY0 + 58), ImVec2(kLeftX1 - 18, kBookY0 + 70), White(a));
 
     const auto& quests = Quests((Category)sCategory);
     int count = (int)quests.size();
     if (count == 0) {
-        TextCentered(pg, (kListX0 + kListX1) / 2, 300, 16, cParchment, "Nada por aqui ainda.");
+        TextCentered(pg, (kLeftX0 + kLeftX1) / 2, 320, 18, cCream, "Nada por aqui ainda.");
         return;
     }
     int& selected = sSelected[sCategory];
     selected = std::clamp(selected, 0, count - 1);
-
-    // Keep the selection in view, scrolling smoothly.
-    float viewH = kRowsY1 - kRowsY0;
-    float maxScroll = std::max(0.0f, count * kRowH - viewH);
-    float& scroll = sListScroll[sCategory];
-    float want = scroll;
-    float selTop = selected * kRowH, selBottom = selTop + kRowH;
-    if (selTop < want + kRowH * 0.5f) {
-        want = selTop - kRowH * 0.5f;
-    } else if (selBottom > want + viewH - kRowH * 0.5f) {
-        want = selBottom - viewH + kRowH * 0.5f;
-    }
-    want = std::clamp(want, 0.0f, maxScroll);
-    float dt = ImGui::GetIO().DeltaTime;
-    scroll += (want - scroll) * std::min(1.0f, dt * 14.0f);
+    int pages = (count + kRowsPerPage - 1) / kRowsPerPage;
+    int page = selected / kRowsPerPage;
+    int first = page * kRowsPerPage, last = std::min(count, first + kRowsPerPage);
 
     // Mouse wheel over the list moves the selection.
-    if (ImGui::IsMouseHoveringRect(pg.P(kListX0, kRowsY0), pg.P(kListX1, kRowsY1)) && ImGui::GetIO().MouseWheel != 0) {
-        Move(ImGui::GetIO().MouseWheel > 0 ? -1 : 1);
+    if (ImGui::IsMouseHoveringRect(pg.P(kLeftX0, kRowsY0), pg.P(kLeftX1, kRowsY0 + kRowsPerPage * kRowH)) &&
+        ImGui::GetIO().MouseWheel != 0) {
+        Select(selected + (ImGui::GetIO().MouseWheel > 0 ? -1 : 1));
     }
 
-    pg.dl->PushClipRect(pg.P(kListX0 + 14, kRowsY0), pg.P(kListX1 - 14, kRowsY1), true);
-    float targetY = kRowsY0 + selTop - scroll;
+    float dt = ImGui::GetIO().DeltaTime;
+    float targetY = kRowsY0 + (selected - first) * kRowH;
     if (sCursorY < 0) {
         sCursorY = targetY;
     }
     sCursorY += (targetY - sCursorY) * std::min(1.0f, dt * 18.0f);
-    float pulse = 0.5f + 0.5f * sinf(sTime * 5.0f);
-    float hx0 = kListX0 + 18, hx1 = kListX1 - 18;
-    pg.dl->AddRectFilled(pg.P(hx0, sCursorY + 2), pg.P(hx1, sCursorY + kRowH - 2),
-                         Col(255, 200, 90, (int)((40 + 30 * pulse) * a)), pg.S(8));
-    pg.dl->AddRect(pg.P(hx0, sCursorY + 2), pg.P(hx1, sCursorY + kRowH - 2),
-                   Col(255, 220, 120, (int)((150 + 100 * pulse) * a)), pg.S(8), 0, pg.S(sDetailFocus ? 1.5f : 2.5f));
 
-    int first = std::max(0, (int)(scroll / kRowH));
-    int last = std::min(count - 1, (int)((scroll + viewH) / kRowH) + 1);
-    for (int i = first; i <= last; i++) {
+    float rx0 = kLeftX0 + 12, rx1 = kLeftX1 - 18;
+    bool portraits = UsesPortraits((Category)sCategory);
+    for (int i = first; i < last; i++) {
+        float y = kRowsY0 + (i - first) * kRowH;
+        if (i + 1 < last) {
+            pg.dl->AddLine(pg.P(rx0 + 50, y + kRowH), pg.P(rx1 - 4, y + kRowH), Col(150, 105, 180, (int)(70 * a)),
+                           pg.S(1));
+        }
+    }
+
+    // Selection: a glowing gold box.
+    float pulse = 0.5f + 0.5f * sinf(sTime * 5.0f);
+    for (int i = 3; i >= 1; i--) {
+        pg.dl->AddRect(pg.P(rx0 - i * 2, sCursorY + 1 - i * 2), pg.P(rx1 + i * 2, sCursorY + kRowH - 1 + i * 2),
+                       Col(255, 214, 90, (int)((30 + 40 * pulse) * (4 - i) * a)), pg.S(10 + i * 2), 0, pg.S(3));
+    }
+    pg.dl->AddRectFilledMultiColor(pg.P(rx0, sCursorY + 1), pg.P(rx1, sCursorY + kRowH - 1),
+                                   Col(120, 70, 30, (int)(150 * a)), Col(80, 40, 60, (int)(120 * a)),
+                                   Col(80, 40, 60, (int)(120 * a)), Col(120, 70, 30, (int)(150 * a)));
+    pg.dl->AddRect(pg.P(rx0, sCursorY + 1), pg.P(rx1, sCursorY + kRowH - 1), Alpha(cGold, a), pg.S(8), 0,
+                   pg.S(sDetailFocus ? 1.5f : 2.5f));
+
+    for (int i = first; i < last; i++) {
         const Quest& q = quests[i];
         const QuestProgress& p = progress[i];
-        float y = kRowsY0 + i * kRowH - scroll;
+        float y = kRowsY0 + (i - first) * kRowH;
         bool locked = p.status == Status::Locked;
-        float rowAlpha = a * (locked ? 0.55f : 1.0f);
+        float rowAlpha = a * (locked ? 0.5f : 1.0f);
 
         ImGui::PushID(i);
-        if (y + kRowH > kRowsY0 && y < kRowsY1 &&
-            Hit(pg, "##qm_row", hx0, std::max(y, kRowsY0), hx1 - hx0, std::min(kRowH, kRowsY1 - std::max(y, kRowsY0)))) {
+        if (Hit(pg, "##qm_row", rx0, y, rx1 - rx0, kRowH)) {
             if (selected == i) {
                 sDetailFocus = true;
             } else {
-                selected = i;
-                SelectionChanged();
+                Select(i);
             }
-            Audio_PlaySfx(NA_SE_SY_CURSOR);
         }
         ImGui::PopID();
 
-        QuestIcon(pg, q, kListX0 + 44, y + kRowH / 2, 38, rowAlpha);
-        Text(pg, kListX0 + 72, y + 8, 16, Alpha(i == selected ? Col(255, 244, 210) : cParchment, rowAlpha),
-             q.name.c_str(), 0);
-        if (p.total > 0 && !locked) {
-            ProgressBar(pg, kListX0 + 72, y + 34, kListX1 - 70, y + 41, (float)p.done / p.total,
-                        Alpha(StatusColor(p.status), a));
-        } else if (locked) {
-            Text(pg, kListX0 + 72, y + 30, 13, Alpha(Col(200, 180, 200), a), "Bloqueada");
-        }
-        Png(pg, StatusAsset(p.status), ImVec2(kListX1 - 58, y + 13), ImVec2(kListX1 - 30, y + 41),
-              Alpha(IM_COL32_WHITE, a));
-    }
-    pg.dl->PopClipRect();
-
-    // Scroll bar.
-    if (maxScroll > 0) {
-        float bx = kListX1 - 20, h = viewH * viewH / (count * kRowH);
-        float by = kRowsY0 + (viewH - h) * (scroll / maxScroll);
-        pg.dl->AddRectFilled(pg.P(bx, kRowsY0), pg.P(bx + 4, kRowsY1), Col(0, 0, 0, (int)(90 * a)), pg.S(2));
-        pg.dl->AddRectFilled(pg.P(bx, by), pg.P(bx + 4, by + h), Alpha(cGold, a), pg.S(2));
-    }
-}
-
-// The details are laid out twice per frame at most: once to measure (draw = false), then drawn with the scroll.
-float DetailBody(const Page& pg, const Quest& q, const QuestProgress& p, float y, bool draw, float a) {
-    const float x0 = kDetX0 + 26, x1 = kDetX1 - 26, w = x1 - x0;
-    ImU32 ink = Alpha(cInk, a), soft = Alpha(Col(110, 72, 40), a), wine = Alpha(cWine, a);
-    bool locked = p.status == Status::Locked;
-
-    // Header: picture, name, region and time.
-    if (draw) {
-        pg.dl->AddCircleFilled(pg.P(x0 + 34, y + 34), pg.S(36), Col(60, 30, 20, (int)(40 * a)));
-        QuestIcon(pg, q, x0 + 34, y + 34, 60, a * (locked ? 0.5f : 1.0f));
-    }
-    float tx = x0 + 82, tw = x1 - tx;
-    float ty = y + 2;
-    if (draw) {
-        Text(pg, tx, ty, 24, ink, q.name.c_str(), tw);
-    }
-    ty += WrappedHeight(pg, 24, tw, q.name.c_str()) + 2;
-    if (!q.region.empty()) {
-        if (draw) {
-            IconPin(pg, tx + 7, ty + 9, 14);
-            Text(pg, tx + 20, ty, 15, soft, q.region.c_str(), tw - 20);
-        }
-        ty += WrappedHeight(pg, 15, tw - 20, q.region.c_str()) + 2;
-    }
-    if (!q.when.empty()) {
-        if (draw) {
-            IconClock(pg, tx + 7, ty + 9, 14);
-            Text(pg, tx + 20, ty, 15, soft, q.when.c_str(), tw - 20);
-        }
-        ty += WrappedHeight(pg, 15, tw - 20, q.when.c_str()) + 2;
-    }
-    y = std::max(y + 76, ty + 6);
-    if (draw) {
-        Png(pg, "divider", ImVec2(x0 - 6, y), ImVec2(x1 + 6, y + 12), Alpha(Col(150, 100, 60), a));
-    }
-    y += 20;
-
-    if (locked) {
-        const char* hint = q.lockedHint.empty() ? "Continue a aventura para liberar." : q.lockedHint.c_str();
-        float h = WrappedHeight(pg, 16, w - 60, hint) + 20;
-        if (draw) {
-            pg.dl->AddRectFilled(pg.P(x0, y), pg.P(x1, y + h), Col(90, 40, 60, (int)(40 * a)), pg.S(8));
-            pg.dl->AddRect(pg.P(x0, y), pg.P(x1, y + h), Alpha(Col(140, 90, 60), a), pg.S(8), 0, pg.S(1.5f));
-            Png(pg, "state_locked", ImVec2(x0 + 8, y + h / 2 - 18), ImVec2(x0 + 44, y + h / 2 + 18),
-                  Alpha(IM_COL32_WHITE, a));
-            Text(pg, x0 + 52, y + 10, 16, wine, hint, w - 60);
-        }
-        y += h + 14;
-    }
-
-    if (!q.description.empty()) {
-        if (draw) {
-            Text(pg, x0, y, 16, ink, q.description.c_str(), w);
-        }
-        y += WrappedHeight(pg, 16, w, q.description.c_str()) + 14;
-    }
-
-    if (!q.objectives.empty()) {
-        char head[48];
-        if (p.total > 0) {
-            snprintf(head, sizeof(head), "Objetivos  (%d / %d)", std::min(p.done, p.total), p.total);
+        float cx = rx0 + 26, cy = y + kRowH / 2;
+        if (portraits) {
+            pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(19), Col(230, 200, 150, (int)(255 * rowAlpha)));
+            QuestIcon(pg, q, cx, cy, 36, rowAlpha, true);
+            pg.dl->AddCircle(pg.P(cx, cy), pg.S(19), Alpha(cGoldDark, a), 0, pg.S(1.5f));
         } else {
-            snprintf(head, sizeof(head), "Objetivos");
+            QuestIcon(pg, q, cx, cy, 36, rowAlpha);
         }
-        if (draw) {
-            Text(pg, x0, y, 18, wine, head);
+        float nameSize = 23;
+        float maxW = rx1 - rx0 - (p.status == Status::InProgress && p.total > 0 ? 136 : 100);
+        while (nameSize > 15 && TextWidth(pg, nameSize, q.name.c_str()) > maxW) {
+            nameSize -= 1;
         }
-        y += 26;
-        for (size_t i = 0; i < q.objectives.size(); i++) {
-            const Objective& o = q.objectives[i];
-            bool done = p.objectiveDone[i];
-            float h = std::max(26.0f, WrappedHeight(pg, 15, w - 36, o.text.c_str()) + 8);
-            if (draw) {
-                if (!Png(pg, done ? "mark_done" : "mark_todo", ImVec2(x0, y), ImVec2(x0 + 24, y + 24),
-                           Alpha(IM_COL32_WHITE, a))) {
-                    CheckSquare(pg, x0 + 2, y + 2, 20, done);
-                }
-                Text(pg, x0 + 34, y + 3, 15, done ? Alpha(Col(70, 110, 50), a) : ink, o.text.c_str(), w - 36);
+        Text(pg, rx0 + 54, cy - nameSize * 0.62f, nameSize, Alpha(i == selected ? Col(255, 240, 200) : cCream, rowAlpha),
+             q.name.c_str());
+
+        // Status on the right: lock, check box, or the steps done so far.
+        float bx = rx1 - 34, by = cy - 12;
+        if (locked) {
+            Png(pg, "state_locked", ImVec2(bx - 1, by - 1), ImVec2(bx + 25, by + 25), White(a * 0.85f));
+        } else {
+            if (!Png(pg, p.status == Status::Done ? "mark_done" : "mark_todo", ImVec2(bx, by), ImVec2(bx + 24, by + 24),
+                     White(a))) {
+                CheckSquare(pg, bx, by, 24, p.status == Status::Done);
             }
-            y += h;
+            if (p.status == Status::InProgress && p.total > 0) {
+                char frac[16];
+                snprintf(frac, sizeof(frac), "%d/%d", p.done, p.total);
+                float w = TextWidth(pg, 15, frac);
+                Text(pg, bx - w - 6, cy - 9, 15, Alpha(Col(150, 200, 255), a), frac);
+            }
         }
-        y += 8;
     }
 
-    if (q.counter.value) {
-        char line[48];
-        snprintf(line, sizeof(line), "Progresso: %d / %d", locked ? 0 : p.counterValue, q.counter.max);
-        if (draw) {
-            Text(pg, x0, y, 16, wine, line);
-            ProgressBar(pg, x0, y + 24, x1, y + 34, locked ? 0.0f : (float)p.counterValue / q.counter.max,
-                        Alpha(StatusColor(p.status == Status::Done ? Status::Done : Status::InProgress), a));
+    // Pages: < 1 / 2 >
+    if (pages > 1) {
+        float cx = (kLeftX0 + kLeftX1) / 2 - 4, cy = kBookY1 - 22;
+        char label[16];
+        snprintf(label, sizeof(label), "%d / %d", page + 1, pages);
+        TextCentered(pg, cx, cy - 13, 22, Alpha(cCream, a), label, true, TitleFont());
+        float w = TextWidth(pg, 22, label, TitleFont());
+        float lx = cx - w / 2 - 22, rx = cx + w / 2 + 22;
+        ImU32 on = Alpha(Col(250, 230, 190), a), off = Alpha(Col(120, 90, 130), a);
+        pg.dl->AddTriangleFilled(pg.P(lx - 7, cy), pg.P(lx + 6, cy - 9), pg.P(lx + 6, cy + 9), page > 0 ? on : off);
+        pg.dl->AddTriangleFilled(pg.P(rx + 7, cy), pg.P(rx - 6, cy - 9), pg.P(rx - 6, cy + 9),
+                                 page < pages - 1 ? on : off);
+        if (Hit(pg, "##qm_pgprev", lx - 16, cy - 16, 32, 32) && page > 0) {
+            Select((page - 1) * kRowsPerPage);
         }
-        y += 46;
-    }
-
-    if (!q.reward.empty()) {
-        std::string line = "Recompensa: " + q.reward;
-        float h = WrappedHeight(pg, 15, w - 34, line.c_str());
-        if (draw) {
-            IconChest(pg, x0 + 12, y + 10, 22);
-            Text(pg, x0 + 34, y, 15, Alpha(Col(120, 70, 20), a), line.c_str(), w - 34);
+        if (Hit(pg, "##qm_pgnext", rx - 16, cy - 16, 32, 32) && page < pages - 1) {
+            Select((page + 1) * kRowsPerPage);
         }
-        y += h + 10;
     }
-    return y;
 }
 
-void DrawDetail(const Page& pg, float a, const std::vector<QuestProgress>& progress) {
+// ----- The right page: the selected quest on parchment.
+
+void SectionHeading(const Page& pg, float x, float y, const char* text, float a) {
+    Text(pg, x, y, 25, Alpha(cHeadInk, a), text, 0, TitleFont());
+}
+
+void DrawSteps(const Page& pg, const Quest& q, const QuestProgress& p, float y, float a) {
+    int steps = (int)q.objectives.size();
+    int next = 0;
+    while (next < steps && p.objectiveDone[next]) {
+        next++;
+    }
+    if (sTileFollowsProgress) {
+        sTile = std::min(next, std::max(0, steps - 1));
+    }
+    sTile = std::clamp(sTile, 0, std::max(0, steps - 1));
+
+    // Which tiles fit: a window around the one shown.
+    int firstTile = std::clamp(sTile - kTilesShown / 2, 0, std::max(0, steps - kTilesShown));
+    int lastTile = std::min(steps, firstTile + kTilesShown);
+    float pulse = 0.5f + 0.5f * sinf(sTime * 4.5f);
+    for (int i = firstTile; i < lastTile; i++) {
+        float x = kRX0 + (i - firstTile) * (kTile + kTileGap);
+        bool done = p.objectiveDone[i];
+        bool current = i == sTile;
+        if (current) {
+            for (int g = 3; g >= 1; g--) {
+                pg.dl->AddRect(pg.P(x - g * 2, y - g * 2), pg.P(x + kTile + g * 2, y + kTile + g * 2),
+                               Col(255, 210, 90, (int)((25 + 40 * pulse) * (4 - g) * a)), pg.S(12 + g * 2), 0,
+                               pg.S(3));
+            }
+        }
+        if (!NineSlice(pg, current ? "tile_current" : "tile", ImVec2(x, y), ImVec2(x + kTile, y + kTile), 30, 18,
+                       White(a))) {
+            Panel(pg, ImVec2(x, y), ImVec2(x + kTile, y + kTile), current ? cPurpleLight : cParchment, cParchmentDark, 8);
+        }
+        const Objective& o = q.objectives[i];
+        ImTextureID id = o.icon != nullptr ? Texture(o.icon) : nullptr;
+        float alpha = a * (done || current ? 1.0f : 0.75f);
+        if (id != nullptr) {
+            float s = kTile * 0.66f;
+            float cx = x + kTile / 2, cy = y + kTile / 2;
+            pg.dl->AddImage(id, pg.P(cx - s / 2, cy - s / 2), pg.P(cx + s / 2, cy + s / 2), ImVec2(0, 0), ImVec2(1, 1),
+                            White(alpha));
+        } else {
+            char num[8];
+            snprintf(num, sizeof(num), "%d", i + 1);
+            TextCentered(pg, x + kTile / 2, y + kTile / 2 - 19, 30,
+                         Alpha(current ? cCream : Col(110, 70, 40), alpha), num, false, TitleFont());
+        }
+        if (done) {
+            Png(pg, "mark_done", ImVec2(x + kTile - 22, y + kTile - 22), ImVec2(x + kTile + 4, y + kTile + 4), White(a));
+        }
+        ImGui::PushID(i);
+        if (Hit(pg, "##qm_tile", x, y, kTile, kTile)) {
+            sTile = i;
+            sTileFollowsProgress = false;
+            sDetailFocus = true;
+        }
+        ImGui::PopID();
+    }
+    if (firstTile > 0) {
+        float cy = y + kTile / 2;
+        pg.dl->AddTriangleFilled(pg.P(kRX0 - 16, cy), pg.P(kRX0 - 6, cy - 8), pg.P(kRX0 - 6, cy + 8),
+                                 Alpha(cTitleInk, a));
+    }
+    if (lastTile < steps) {
+        float x = kRX0 + kTilesShown * (kTile + kTileGap) - 2, cy = y + kTile / 2;
+        pg.dl->AddTriangleFilled(pg.P(x + 10, cy), pg.P(x, cy - 8), pg.P(x, cy + 8), Alpha(cTitleInk, a));
+    }
+
+    // The step shown, in words.
+    if (steps > 0) {
+        const Objective& o = q.objectives[sTile];
+        char head[32];
+        snprintf(head, sizeof(head), "Passo %d de %d", sTile + 1, steps);
+        float ty = y + kTile + 10;
+        Text(pg, kRX0, ty, 20, Alpha(cTitleInk, a), head, 0, TitleFont());
+        float hw = TextWidth(pg, 20, head, TitleFont());
+        if (p.objectiveDone[sTile]) {
+            Text(pg, kRX0 + hw + 10, ty, 20, Alpha(Col(60, 140, 50), a), "feito");
+        }
+        Text(pg, kRX0, ty + 24, 20, Alpha(cInk, a), o.text.c_str(), kRX1 - kRX0);
+    }
+}
+
+void DrawRightPage(const Page& pg, float a, const std::vector<QuestProgress>& progress) {
     float pulse = 0.5f + 0.5f * sinf(sTime * 4.0f);
     if (sDetailFocus) {
         for (int i = 4; i >= 1; i--) {
-            pg.dl->AddRect(pg.P(kDetX0 - i * 3, kDetY0 - i * 3), pg.P(kDetX1 + i * 3, kDetY1 + i * 3),
-                           Col(255, 210, 90, (int)((18 + 26 * pulse) * (5 - i) * a)), pg.S(14 + i * 3), 0, pg.S(3));
+            pg.dl->AddRect(pg.P(kRightX0 - i * 3, kBookY0 - i * 3), pg.P(kRightX1 + i * 3, kBookY1 + i * 3),
+                           Col(255, 210, 90, (int)((18 + 26 * pulse) * (5 - i) * a)), pg.S(10 + i * 3), 0, pg.S(3));
         }
     }
-    if (!Png(pg, "parchment", ImVec2(kDetX0 + 8, kDetY0 + 8), ImVec2(kDetX1 - 8, kDetY1 - 8),
-               Alpha(IM_COL32_WHITE, a))) {
-        Panel(pg, ImVec2(kDetX0, kDetY0), ImVec2(kDetX1, kDetY1), cParchment, cParchmentDark, 12);
+    if (!Png(pg, "page_right", ImVec2(kRightX0, kBookY0), ImVec2(kRightX1, kBookY1), White(a))) {
+        Panel(pg, ImVec2(kRightX0, kBookY0), ImVec2(kRightX1, kBookY1), cParchment, cParchmentDark, 8);
     }
-    if (!NineSlice(pg, "frame", ImVec2(kDetX0, kDetY0), ImVec2(kDetX1, kDetY1), 64, 30, Alpha(IM_COL32_WHITE, a))) {
-        GoldFrame(pg, ImVec2(kDetX0, kDetY0), ImVec2(kDetX1, kDetY1), 12, 3);
-    }
-    Png(pg, "corner", ImVec2(kDetX1 - 70, kDetY0 + 4), ImVec2(kDetX1 - 4, kDetY0 + 70), Alpha(IM_COL32_WHITE, a));
+    GoldFrame(pg, ImVec2(kRightX0, kBookY0), ImVec2(kRightX1, kBookY1), 6, 2.5f);
+    Png(pg, "spine", ImVec2(kLeftX1 - 22, kBookY0 - 6), ImVec2(kLeftX1 + 8, kBookY1 + 6), White(a));
 
     const auto& quests = Quests((Category)sCategory);
     if (quests.empty()) {
         return;
     }
-    if (Hit(pg, "##qm_detail", kDetX0, kDetContentY0, kDetX1 - kDetX0, kDetContentY1 - kDetContentY0)) {
+    if (Hit(pg, "##qm_detail", kRightX0, kBookY0, kRightX1 - kRightX0, 160)) {
         sDetailFocus = true;
     }
-    int index = sSelected[sCategory];
-    const Quest& q = quests[index];
-    const QuestProgress& p = progress[index];
+    const Quest& q = quests[sSelected[sCategory]];
+    const QuestProgress& p = progress[sSelected[sCategory]];
+    bool locked = p.status == Status::Locked;
 
     float dt = ImGui::GetIO().DeltaTime;
     sDetailFade = std::min(1.0f, sDetailFade + dt * 6.0f);
     float fa = a * Ease(sDetailFade);
-    float slide = (1.0f - Ease(sDetailFade)) * 16.0f;
+    float slide = (1.0f - Ease(sDetailFade)) * 12.0f;
 
-    // Scroll: wheel, the stick while focused, or touch drag.
-    float viewH = kDetContentY1 - kDetContentY0;
-    if (ImGui::IsMouseHoveringRect(pg.P(kDetX0, kDetContentY0), pg.P(kDetX1, kDetContentY1))) {
-        sDetailScrollTarget -= ImGui::GetIO().MouseWheel * 50.0f;
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-            sDetailScrollTarget -= ImGui::GetIO().MouseDelta.y / pg.k;
-            sDetailScroll = sDetailScrollTarget;
+    pg.dl->PushClipRect(pg.P(kRightX0 + 8, kBookY0 + 6), pg.P(kRightX1 - 8, kBookY1 - 6), true);
+
+    // Picture in a gold ring, top right.
+    float pcx = 950, pcy = 214 + slide, pr = 62;
+    pg.dl->AddCircleFilled(pg.P(pcx, pcy), pg.S(pr - 4), Col(236, 214, 170, (int)(255 * fa)));
+    QuestIcon(pg, q, pcx, pcy, UsesPortraits((Category)sCategory) ? (pr - 6) * 2 : pr * 1.4f,
+              fa * (locked ? 0.45f : 1.0f), UsesPortraits((Category)sCategory));
+    Png(pg, "portrait_ring", ImVec2(pcx - pr - 6, pcy - pr - 6), ImVec2(pcx + pr + 6, pcy + pr + 6), White(fa));
+
+    // Title and description.
+    float y = kBookY0 + 16 + slide;
+    float tw = 870 - kRX0;
+    float titleSize = 32;
+    while (titleSize > 22 && WrappedHeight(pg, titleSize, tw, q.name.c_str(), TitleFont()) > 80) {
+        titleSize -= 2;
+    }
+    Text(pg, kRX0, y, titleSize, Alpha(cTitleInk, fa), q.name.c_str(), tw, TitleFont());
+    y += WrappedHeight(pg, titleSize, tw, q.name.c_str(), TitleFont()) + 2;
+    pg.dl->AddLine(pg.P(kRX0, y), pg.P(870, y), Alpha(Col(150, 100, 60), fa), pg.S(1.5f));
+    y += 8;
+    if (locked) {
+        const char* hint = q.lockedHint.empty() ? "Continue a aventura para liberar." : q.lockedHint.c_str();
+        Png(pg, "state_locked", ImVec2(kRX0, y), ImVec2(kRX0 + 26, y + 26), White(fa));
+        Text(pg, kRX0 + 32, y + 2, 20, Alpha(cWine, fa), hint, tw - 32);
+        y += std::max(28.0f, WrappedHeight(pg, 20, tw - 32, hint)) + 6;
+    }
+    if (!q.description.empty()) {
+        float descSize = 21;
+        float room = 296 + slide - y;
+        while (descSize > 14 && WrappedHeight(pg, descSize, tw, q.description.c_str()) > room) {
+            descSize -= 1;
         }
-    }
-    float maxScroll = std::max(0.0f, sDetailContentH - viewH);
-    sDetailScrollTarget = std::clamp(sDetailScrollTarget, 0.0f, maxScroll);
-    sDetailScroll += (sDetailScrollTarget - sDetailScroll) * std::min(1.0f, dt * 14.0f);
-
-    pg.dl->PushClipRect(pg.P(kDetX0 + 12, kDetContentY0), pg.P(kDetX1 - 12, kDetContentY1), true);
-    float top = kDetContentY0 + 4 - sDetailScroll + slide;
-    float end = DetailBody(pg, q, p, top, true, fa);
-    sDetailContentH = end - top + 8;
-    pg.dl->PopClipRect();
-    if (maxScroll > 0) {
-        float bx = kDetX1 - 20, h = viewH * viewH / sDetailContentH;
-        float by = kDetContentY0 + (viewH - h) * (sDetailScroll / maxScroll);
-        pg.dl->AddRectFilled(pg.P(bx, kDetContentY0), pg.P(bx + 4, kDetContentY1), Col(80, 50, 30, (int)(60 * a)),
-                             pg.S(2));
-        pg.dl->AddRectFilled(pg.P(bx, by), pg.P(bx + 4, by + h), Alpha(Col(150, 100, 50), a), pg.S(2));
+        Text(pg, kRX0, y, descSize, Alpha(cInk, fa), q.description.c_str(), tw);
     }
 
-    // Status strip.
-    float sy0 = kDetContentY1 + 10, sy1 = kDetY1 - 20;
-    pg.dl->AddRectFilled(pg.P(kDetX0 + 22, sy0), pg.P(kDetX1 - 22, sy1), Col(60, 26, 40, (int)(200 * a)), pg.S(10));
-    pg.dl->AddRect(pg.P(kDetX0 + 22, sy0), pg.P(kDetX1 - 22, sy1), Alpha(cGoldDark, a), pg.S(10), 0, pg.S(1.5f));
-    float cy = (sy0 + sy1) / 2;
-    Png(pg, StatusAsset(p.status), ImVec2(kDetX0 + 30, cy - 15), ImVec2(kDetX0 + 60, cy + 15),
-          Alpha(IM_COL32_WHITE, a));
-    Text(pg, kDetX0 + 68, cy - 10, 18, Alpha(StatusColor(p.status), a), StatusName(p.status));
-    if (p.total > 0 && p.status != Status::Locked) {
-        ProgressBar(pg, kDetX0 + 230, cy - 5, kDetX1 - 90, cy + 5, (float)p.done / p.total,
-                    Alpha(StatusColor(p.status), a));
+    // Progress: tiles for the steps, or a bar for a count.
+    float py = 300 + slide;
+    IconTriforce(pg, kRX0 + 12, py + 13, 22);
+    if (!q.objectives.empty()) {
+        SectionHeading(pg, kRX0 + 30, py, "Progresso da Missão", fa);
+        DrawSteps(pg, q, p, py + 32, fa);
+    } else if (q.counter.value) {
+        SectionHeading(pg, kRX0 + 30, py, "Progresso", fa);
+        char line[32];
+        snprintf(line, sizeof(line), "%d / %d", locked ? 0 : p.counterValue, q.counter.max);
+        Text(pg, kRX0, py + 40, 30, Alpha(cTitleInk, fa), line, 0, TitleFont());
+        ProgressBar(pg, kRX0, py + 84, kRX1, py + 98, locked ? 0.0f : (float)p.counterValue / q.counter.max,
+                    Alpha(StatusColor(p.status == Status::Done ? Status::Done : Status::InProgress), fa));
+    }
+    if (q.counter.value && !q.objectives.empty()) {
+        char line[32];
+        snprintf(line, sizeof(line), "%d / %d", locked ? 0 : p.counterValue, q.counter.max);
+        float w = TextWidth(pg, 18, line, TitleFont());
+        Text(pg, kRX1 - w, py + 2, 18, Alpha(cTitleInk, fa), line, 0, TitleFont());
+    }
+
+    // When and where.
+    float iy = 470 + slide;
+    pg.dl->AddLine(pg.P(kRX0, iy - 6), pg.P(kRX1, iy - 6), Alpha(Col(150, 100, 60, 160), fa), pg.S(1));
+    float colW = (kRX1 - kRX0) / 2 - 10;
+    IconClock(pg, kRX0 + 11, iy + 12, 20);
+    SectionHeading(pg, kRX0 + 28, iy, "Horário", fa);
+    Text(pg, kRX0 + 4, iy + 28, 19, Alpha(cInk, fa), q.when.empty() ? "Qualquer hora" : q.when.c_str(), colW);
+    float lx = kRX0 + colW + 20;
+    pg.dl->AddLine(pg.P(lx - 10, iy), pg.P(lx - 10, iy + 60), Alpha(Col(150, 100, 60, 140), fa), pg.S(1));
+    IconPin(pg, lx + 10, iy + 12, 20);
+    SectionHeading(pg, lx + 26, iy, "Local", fa);
+    Text(pg, lx + 4, iy + 28, 19, Alpha(cInk, fa), q.region.empty() ? "Termina" : q.region.c_str(), colW);
+
+    // Reward and status.
+    float ry = 540 + slide;
+    pg.dl->AddLine(pg.P(kRX0, ry - 6), pg.P(kRX1, ry - 6), Alpha(Col(150, 100, 60, 160), fa), pg.S(1));
+    IconChest(pg, kRX0 + 12, ry + 12, 22);
+    SectionHeading(pg, kRX0 + 30, ry, "Recompensa", fa);
+    Text(pg, kRX0 + 4, ry + 28, 18, Alpha(Col(110, 60, 20), fa), q.reward.empty() ? "-" : q.reward.c_str(), colW);
+
+    float sx = lx - 4, sy = ry - 2;
+    pg.dl->AddRectFilled(pg.P(sx, sy), pg.P(kRX1, sy + 50), Col(70, 30, 60, (int)(40 * fa)), pg.S(10));
+    pg.dl->AddRect(pg.P(sx, sy), pg.P(kRX1, sy + 50), Alpha(Col(150, 100, 60), fa), pg.S(10), 0, pg.S(1.2f));
+    Png(pg, StatusAsset(p.status), ImVec2(sx + 8, sy + 9), ImVec2(sx + 40, sy + 41), White(fa));
+    Text(pg, sx + 46, sy + 4, 20, Alpha(StatusColor(p.status), fa), StatusName(p.status), 0, TitleFont());
+    if (p.total > 0 && !locked) {
+        ProgressBar(pg, sx + 48, sy + 32, kRX1 - 52, sy + 40, (float)p.done / p.total, Alpha(StatusColor(p.status), fa));
         char pct[16];
         snprintf(pct, sizeof(pct), "%d%%", p.done * 100 / p.total);
-        Text(pg, kDetX1 - 80, cy - 9, 16, Alpha(cParchment, a), pct);
+        Text(pg, kRX1 - 46, sy + 26, 15, Alpha(cInk, fa), pct);
     }
+    pg.dl->PopClipRect();
 }
 
+// ----- The plaque under the book: a line about the category and the controls.
+
 void DrawFooter(const Page& pg, float a) {
+    float x0 = 196, y0 = 618, x1 = 904, y1 = 700;
+    if (!Png(pg, "hint_plaque", ImVec2(x0, y0), ImVec2(x1, y1), White(a))) {
+        Panel(pg, ImVec2(x0, y0), ImVec2(x1, y1), cPurple, cPurpleDeep, 12);
+    }
+    TextCentered(pg, 550, y0 + 12, 22, Alpha(cCream, a), CategoryHint((Category)sCategory), true);
+
     struct Hint {
         ButtonPrompt prompt;
         const char* text;
     };
     Hint hints[] = { { BUTTON_PROMPT_R, "Categoria" },
-                     { BUTTON_PROMPT_STICK, sDetailFocus ? "Rolar" : "Escolher" },
+                     { BUTTON_PROMPT_STICK, sDetailFocus ? "Passos" : "Escolher" },
                      { BUTTON_PROMPT_A, "Detalhes" },
                      { BUTTON_PROMPT_B, sDetailFocus ? "Voltar" : "Fechar" } };
-    float total = 0;
+    float size = 18, icon = 22;
+    float total = icon + 4;
     for (const Hint& h : hints) {
-        total += 34 + TextWidth(pg, 16, h.text) + 30;
+        total += icon + 6 + TextWidth(pg, size, h.text) + 18;
     }
-    total += 34;
-    float x = kPageW / 2 - total / 2, cy = 656;
-    pg.dl->AddRectFilled(pg.P(x - 20, cy - 22), pg.P(x + total + 4, cy + 22), Col(20, 8, 30, (int)(170 * a)),
-                         pg.S(22));
-    Prompt(pg, BUTTON_PROMPT_L, x + 12, cy, 28);
-    x += 34;
+    float x = 550 - total / 2, cy = y0 + 54;
+    Prompt(pg, BUTTON_PROMPT_L, x + icon / 2, cy, icon);
+    x += icon + 4;
     for (const Hint& h : hints) {
-        Prompt(pg, h.prompt, x + 12, cy, 28);
-        Text(pg, x + 32, cy - 10, 16, Alpha(cParchment, a), h.text);
-        x += 34 + TextWidth(pg, 16, h.text) + 30;
-    }
-    // Touch: a close button in the corner.
-    pg.dl->AddCircleFilled(pg.P(1040, 52), pg.S(20), Col(60, 20, 30, (int)(220 * a)));
-    pg.dl->AddCircle(pg.P(1040, 52), pg.S(20), Alpha(cGold, a), 0, pg.S(2));
-    pg.dl->AddLine(pg.P(1032, 44), pg.P(1048, 60), Alpha(cGold, a), pg.S(3));
-    pg.dl->AddLine(pg.P(1048, 44), pg.P(1032, 60), Alpha(cGold, a), pg.S(3));
-    if (Hit(pg, "##qm_close", 1018, 30, 44, 44)) {
-        Close();
+        Prompt(pg, h.prompt, x + icon / 2, cy, icon);
+        Text(pg, x + icon + 6, cy - 9, size, Alpha(Col(230, 210, 230), a), h.text);
+        x += icon + 6 + TextWidth(pg, size, h.text) + 18;
     }
 }
 
@@ -684,6 +843,15 @@ bool GameRect(ImVec2& pos, ImVec2& size) {
     pos = gameWindow->InnerRect.Min;
     size = gameWindow->InnerRect.GetSize();
     return size.x > 0 && size.y > 0;
+}
+
+void UseFonts() {
+#ifndef QUEST_MENU_PREVIEW
+    if (OTRGlobals::Instance != nullptr) {
+        gBodyFont = OTRGlobals::Instance->fontQuestBody;
+        gTitleFont = OTRGlobals::Instance->fontQuestTitle;
+    }
+#endif
 }
 
 // The QUESTS button on the pause screen, for touch and mouse.
@@ -716,7 +884,7 @@ void DrawPauseButton() {
         GoldFrame(pg, ImVec2(0, 0), ImVec2(pw, 64), 10, 2);
     }
     Png(pg, "cat_main", ImVec2(8, 8), ImVec2(56, 56));
-    TextShadow(pg, 62, 20, 22, cGold, "MISSÕES");
+    TextShadow(pg, 62, 14, 30, cGold, "MISSÕES", TitleFont());
     ImGui::End();
     ImGui::PopStyleVar(2);
 }
@@ -733,7 +901,7 @@ void DrawMenu() {
         return;
     }
     float a = Ease(sAnim);
-    float k = std::min(size.x / kPageW, size.y / kPageH) * (0.92f + 0.06f * a);
+    float k = std::min(size.x / kPageW, size.y / kPageH) * (0.93f + 0.06f * a);
     ImVec2 origin(pos.x + (size.x - kPageW * k) / 2, pos.y + (size.y - kPageH * k) / 2);
 
     ImGui::SetNextWindowPos(pos);
@@ -746,7 +914,7 @@ void DrawMenu() {
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
                      (sOpen ? 0 : ImGuiWindowFlags_NoInputs));
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(8, 2, 14, (int)(170 * a)));
+    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(8, 2, 14, (int)(150 * a)));
     Page pg{ dl, origin, k };
 
     const auto& quests = Quests((Category)sCategory);
@@ -756,11 +924,13 @@ void DrawMenu() {
         progress.push_back(Evaluate(q));
     }
 
-    DrawBackdrop(pg, a);
-    DrawBanner(pg, a);
+    DrawFrame(pg, a);
     DrawSidebar(pg, a);
-    DrawList(pg, a, progress);
-    DrawDetail(pg, a, progress);
+    DrawLeftPage(pg, a, progress);
+    DrawRightPage(pg, a, progress);
+    DrawTitle(pg, a);
+    DrawClock(pg, a);
+    DrawCloseButton(pg, a);
     DrawFooter(pg, a);
     ImGui::End();
     ImGui::PopStyleVar(2);
@@ -799,6 +969,7 @@ bool IsOpen() {
 
 // The window is only a door: showing it (from the menu) opens the quest menu, and it draws the menu every frame.
 void QuestMenuWindow::Draw() {
+    QuestMenu::UseFonts();
     if (IsVisible()) {
         ToggleVisibility();
         QuestMenu::RequestOpen();

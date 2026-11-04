@@ -24,6 +24,10 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
     `QuestRenderer` (desenho) e `QuestMenu` (entrada, layout e animações). O menu de pausa para com o novo
     `VB_KALEIDO_UPDATE`.
   - A janela antiga do guia saiu; as dicas em notas dentro do Caderno dos Bombers continuam.
+  - Visual de livro aberto como na arte conceitual: moldura roxa entalhada, título com emblema, teclas L/R, dia e
+    hora, lista com retratos e caixas de marcar em páginas, e o progresso de cada missão em quadrinhos com o ícone do
+    jogo para cada passo (A e depois o direcional percorrem os passos). Fonte Alegreya (licença OFL, em
+    `assets/custom/fonts`).
 
 ### 2026-11-03
 - **MM3D: estátuas da coruja salvam e o jogo continua** (em vez de voltar à tela de título), e o save fica guardado.

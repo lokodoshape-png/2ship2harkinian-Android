@@ -640,6 +640,105 @@ const char* CategoryAsset(Category category) {
     }
 }
 
+const char* CategorySubtitle(Category category) {
+    switch (category) {
+        case Category::Main: return "A história de Termina";
+        case Category::Side: return "Pessoas de Termina";
+        case Category::Masks: return "As 24 máscaras";
+        case Category::People: return "Caderno dos Bombers";
+        case Category::Places: return "Estátuas da coruja";
+        case Category::Items: return "Equipamento de Link";
+        case Category::Records: return "Canções e coleções";
+        default: return "";
+    }
+}
+
+const char* CategoryHint(Category category) {
+    switch (category) {
+        case Category::Main: return "Liberte os quatro Gigantes antes que a Lua caia.";
+        case Category::Side: return "Acompanhe as pessoas e os eventos de Termina no Caderno dos Bombers.";
+        case Category::Masks: return "Cada máscara guarda a história de alguém. Encontre todas.";
+        case Category::People: return "Quem Link já conheceu e quem ainda espera por ajuda.";
+        case Category::Places: return "Acorde as estátuas da coruja para voar com a Canção do Voo.";
+        case Category::Items: return "Os itens que abrem caminho pelos templos e por Termina.";
+        case Category::Records: return "Canções, fadas perdidas, Skulltulas e corações.";
+        default: return "";
+    }
+}
+
+namespace {
+
+// The game's icon for a step, picked from the words in its text (Portuguese, or the English item names the guide
+// uses). Steps with no match show their number instead.
+const char* IconForStep(const std::string& text) {
+    struct Word {
+        const char* word;
+        s32 item;
+    };
+    static const Word kWords[] = {
+        { "Divindade Feroz", ITEM_MASK_FIERCE_DEITY }, { "Fierce Deity", ITEM_MASK_FIERCE_DEITY },
+        { "Máscara da Verdade", ITEM_MASK_TRUTH }, { "Mask of Truth", ITEM_MASK_TRUTH },
+        { "Máscara do Kafei", ITEM_MASK_KAFEIS_MASK }, { "Kafei's Mask", ITEM_MASK_KAFEIS_MASK },
+        { "Noite Toda", ITEM_MASK_ALL_NIGHT }, { "All-Night", ITEM_MASK_ALL_NIGHT },
+        { "Coelho", ITEM_MASK_BUNNY }, { "Bunny", ITEM_MASK_BUNNY },
+        { "Keaton", ITEM_MASK_KEATON }, { "Garo", ITEM_MASK_GARO },
+        { "Máscara da Romani", ITEM_MASK_ROMANI }, { "Romani's Mask", ITEM_MASK_ROMANI }, { "Romani Mask", ITEM_MASK_ROMANI },
+        { "Líder do Circo", ITEM_MASK_CIRCUS_LEADER }, { "Circus Leader", ITEM_MASK_CIRCUS_LEADER },
+        { "Chapéu do Carteiro", ITEM_MASK_POSTMAN }, { "Postman's Hat", ITEM_MASK_POSTMAN },
+        { "Casal", ITEM_MASK_COUPLE }, { "Couple's Mask", ITEM_MASK_COUPLE },
+        { "Máscara da Grande Fada", ITEM_MASK_GREAT_FAIRY }, { "Great Fairy's Mask", ITEM_MASK_GREAT_FAIRY },
+        { "Gibdo", ITEM_MASK_GIBDO }, { "Don Gero", ITEM_MASK_DON_GERO }, { "Kamaro", ITEM_MASK_KAMARO },
+        { "Capitão", ITEM_MASK_CAPTAIN }, { "Captain's Hat", ITEM_MASK_CAPTAIN },
+        { "Máscara de Pedra", ITEM_MASK_STONE }, { "Stone Mask", ITEM_MASK_STONE },
+        { "Bremen", ITEM_MASK_BREMEN }, { "Explosiva", ITEM_MASK_BLAST }, { "Blast Mask", ITEM_MASK_BLAST },
+        { "Aromas", ITEM_MASK_SCENTS }, { "Mask of Scents", ITEM_MASK_SCENTS },
+        { "Gigante", ITEM_MASK_GIANT }, { "Giant's Mask", ITEM_MASK_GIANT },
+        { "Máscara Deku", ITEM_MASK_DEKU }, { "Deku Mask", ITEM_MASK_DEKU }, { "Deku, Goron e Zora", ITEM_MASK_DEKU },
+        { "Máscara Goron", ITEM_MASK_GORON }, { "Goron Mask", ITEM_MASK_GORON },
+        { "Máscara Zora", ITEM_MASK_ZORA }, { "Zora Mask", ITEM_MASK_ZORA },
+        { "Ocarina", ITEM_OCARINA_OF_TIME },
+        { "Canção do Tempo", ITEM_SONG_TIME }, { "Song of Time", ITEM_SONG_TIME },
+        { "Canção da Cura", ITEM_SONG_HEALING }, { "Song of Healing", ITEM_SONG_HEALING },
+        { "Epona", ITEM_SONG_EPONA }, { "Sonata", ITEM_SONG_SONATA }, { "Ninar", ITEM_SONG_LULLABY },
+        { "Lullaby", ITEM_SONG_LULLABY }, { "Bossa Nova", ITEM_SONG_NOVA }, { "Elegia", ITEM_SONG_ELEGY },
+        { "Elegy", ITEM_SONG_ELEGY }, { "Juramento", ITEM_SONG_OATH }, { "Oath", ITEM_SONG_OATH },
+        { "Canção do Voo", ITEM_SONG_SOARING }, { "Canção das Tempestades", ITEM_SONG_STORMS },
+        { "Odolwa", ITEM_REMAINS_ODOLWA }, { "Goht", ITEM_REMAINS_GOHT }, { "Gyorg", ITEM_REMAINS_GYORG },
+        { "Twinmold", ITEM_REMAINS_TWINMOLD },
+        { "Flechas de Fogo", ITEM_ARROW_FIRE }, { "Fire Arrow", ITEM_ARROW_FIRE },
+        { "Flechas de Gelo", ITEM_ARROW_ICE }, { "Ice Arrow", ITEM_ARROW_ICE },
+        { "Flechas de Luz", ITEM_ARROW_LIGHT }, { "Light Arrow", ITEM_ARROW_LIGHT },
+        { "Arco", ITEM_BOW }, { "Hookshot", ITEM_HOOKSHOT }, { "Lente", ITEM_LENS_OF_TRUTH },
+        { "Lens of Truth", ITEM_LENS_OF_TRUTH },
+        { "Room Key", ITEM_ROOM_KEY }, { "Letter to Kafei", ITEM_LETTER_TO_KAFEI }, { "carta", ITEM_LETTER_TO_KAFEI },
+        { "Priority Mail", ITEM_LETTER_MAMA }, { "Express Mail", ITEM_LETTER_MAMA },
+        { "Pendant", ITEM_PENDANT_OF_MEMORIES }, { "Caderno", ITEM_BOMBERS_NOTEBOOK }, { "Notebook", ITEM_BOMBERS_NOTEBOOK },
+        { "Poção Vermelha", ITEM_POTION_RED }, { "Red Potion", ITEM_POTION_RED },
+        { "Chateau", ITEM_CHATEAU }, { "Leite", ITEM_MILK_BOTTLE }, { "Milk", ITEM_MILK_BOTTLE },
+        { "Piece of Heart", ITEM_HEART_PIECE }, { "Pedaço de Coração", ITEM_HEART_PIECE },
+        { "Skulltula", ITEM_SKULL_TOKEN }, { "Pictograph", ITEM_PICTOGRAPH_BOX }, { "foto", ITEM_PICTOGRAPH_BOX },
+        { "garrafa", ITEM_BOTTLE }, { "Bottle", ITEM_BOTTLE }, { "Bomb", ITEM_BOMB },
+    };
+    for (const Word& w : kWords) {
+        if (text.find(w.word) != std::string::npos && w.item >= 0 && w.item < 131) {
+            return (const char*)gItemIcons[w.item];
+        }
+    }
+    return nullptr;
+}
+
+void FillStepIcons(std::vector<Quest>& quests) {
+    for (Quest& q : quests) {
+        for (Objective& o : q.objectives) {
+            if (o.icon == nullptr) {
+                o.icon = IconForStep(o.text);
+            }
+        }
+    }
+}
+
+} // namespace
+
 const std::vector<Quest>& Quests(Category category) {
     static std::vector<Quest> sTables[(int)Category::Count];
     static bool sBuilt = false;
@@ -652,6 +751,9 @@ const std::vector<Quest>& Quests(Category category) {
         sTables[(int)Category::Places] = Places();
         sTables[(int)Category::Items] = Items();
         sTables[(int)Category::Records] = Records();
+        for (auto& table : sTables) {
+            FillStepIcons(table);
+        }
     }
     return sTables[(int)category];
 }

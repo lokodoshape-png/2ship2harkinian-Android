@@ -17,6 +17,7 @@ enum class Category { Main, Side, Masks, People, Places, Items, Records, Count }
 struct Objective {
     std::string text;
     std::function<bool()> done; // empty when the game keeps no flag for this step
+    const char* icon = nullptr; // item icon for the step, filled from its text (see QuestData.cpp)
 };
 
 // A number the game keeps, shown as "n / max" (stray fairies, hearts, skulltulas...).
@@ -43,6 +44,8 @@ struct Quest {
 
 const char* CategoryName(Category category);
 const char* CategoryAsset(Category category);
+const char* CategorySubtitle(Category category); // heading of the list page
+const char* CategoryHint(Category category);     // line on the plaque under the book
 const std::vector<Quest>& Quests(Category category);
 
 } // namespace QuestMenu
