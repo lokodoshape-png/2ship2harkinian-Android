@@ -605,7 +605,7 @@ index 2be60501..7f7f2da8 100644
      target_link_libraries(libultraship PRIVATE libgfxd)
  endif()
 diff --git a/src/fast/Fast3dWindow.cpp b/src/fast/Fast3dWindow.cpp
-index 9943170d..06a9ea9e 100644
+index 9943170d..a0f2ad2b 100644
 --- a/src/fast/Fast3dWindow.cpp
 +++ b/src/fast/Fast3dWindow.cpp
 @@ -11,6 +11,7 @@
@@ -637,7 +637,24 @@ index 9943170d..06a9ea9e 100644
      std::ifstream osReleaseFile("/etc/os-release");
      if (osReleaseFile.is_open()) {
          std::string line;
-@@ -143,6 +149,14 @@ void Fast3dWindow::InitWindowManager() {
+@@ -86,6 +92,16 @@ void Fast3dWindow::Init() {
+         width = Ship::Context::GetInstance()->GetConfig()->GetInt("Window.Width", 640);
+         height = Ship::Context::GetInstance()->GetConfig()->GetInt("Window.Height", 480);
+     }
++    // A window closed while minimized on Windows used to save a 32x32 size at -32000,-32000, which brings the game
++    // back as an invisible window. Fall back to the defaults for anything like that.
++    if (width < 320 || height < 240) {
++        width = isFullscreen ? 1920 : 640;
++        height = isFullscreen ? 1080 : 480;
++    }
++    if (posX <= -10000 || posY <= -10000) {
++        posX = 100;
++        posY = 100;
++    }
+     Ship::Context::GetInstance()->GetWindow()->SetFullscreenScancode(
+         Ship::Context::GetInstance()->GetConfig()->GetInt("Shortcuts.Fullscreen", Ship::KbScancode::LUS_KB_F11));
+     Ship::Context::GetInstance()->GetWindow()->SetMouseCaptureScancode(
+@@ -143,6 +159,14 @@ void Fast3dWindow::InitWindowManager() {
              mRenderingApi = new GfxRenderingAPIMetal();
              mWindowManagerApi = new GfxWindowBackendSDL2();
              break;
@@ -652,7 +669,7 @@ index 9943170d..06a9ea9e 100644
  #endif
          default:
              SPDLOG_ERROR("Could not load the correct rendering backend");
-@@ -290,7 +304,8 @@ bool Fast3dWindow::SupportsWindowedFullscreen() {
+@@ -290,7 +314,8 @@ bool Fast3dWindow::SupportsWindowedFullscreen() {
      return false;
  #endif
  
@@ -5466,6 +5483,22 @@ index 80a38853..26ea832d 100644
      if (!archive->IsLoaded()) {
          SPDLOG_WARN("Attempting to add unloaded Archive at {} to Archive Manager", archive->GetPath());
          return nullptr;
+diff --git a/src/ship/window/Window.cpp b/src/ship/window/Window.cpp
+index f5001ef7..9b5219c5 100644
+--- a/src/ship/window/Window.cpp
++++ b/src/ship/window/Window.cpp
+@@ -51,6 +51,11 @@ std::shared_ptr<Gui> Window::GetGui() {
+ 
+ void Window::SaveWindowToConfig() {
+     // This accepts conf in because it can be run in the destruction of LUS.
++    // A minimized window reports a tiny size far off screen (32x32 at -32000,-32000 on Windows); keep the last real
++    // geometry instead, or the next launch opens an invisible window.
++    if (GetWidth() < 320 || GetHeight() < 240 || GetPosX() <= -10000 || GetPosY() <= -10000) {
++        return;
++    }
+     mConfig->SetBool("Window.Fullscreen.Enabled", IsFullscreen());
+     if (IsFullscreen()) {
+         mConfig->SetInt("Window.Fullscreen.Width", (int32_t)GetWidth());
 diff --git a/src/ship/window/gui/GameOverlay.cpp b/src/ship/window/gui/GameOverlay.cpp
 index 8819c392..01bee2f2 100644
 --- a/src/ship/window/gui/GameOverlay.cpp
