@@ -12,6 +12,9 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 - **Vídeo de abertura (Android).** Ao abrir o app, o vídeo de abertura da Definitive Edition (do canal do Rafael) toca
   em tela cheia, na proporção original e com o áudio original, antes da tela inicial. O jogo carrega por baixo, sem
   som, e quando o vídeo acaba ele se dissolve na tela inicial e o som do menu volta aos poucos.
+  - Antes do vídeo, a logo da edição (a arte do Rafael com a Máscara de Majora, a lua e a Torre do Relógio, com a
+    placa "Definitive Edition") aparece da tela preta em 1,5 s, fica 3 s e some em 1 s. O vídeo é preparado
+    enquanto a logo está na tela e começa assim que ela some.
   - A, B, START, qualquer outro botão ou um toque na tela pulam o vídeo. "Pressione qualquer botão para pular"
     aparece discreto no canto.
   - Legendas em português na fonte dos títulos do menu (Alegreya), em tamanho médio.

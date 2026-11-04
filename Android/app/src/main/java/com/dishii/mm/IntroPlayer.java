@@ -4,6 +4,8 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.graphics.Typeface;
@@ -21,6 +23,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -37,7 +40,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// The opening video, played over the game when the app opens, before the title menu. The game boots underneath it
+// The opening, played over the game when the app opens, before the title menu: the edition's logo (assets/intro/
+// logo.jpg) fades in from black, stays, fades out, and the video starts. The video is made ready while the logo is up,
+// so it starts as soon as the logo is gone. The game boots underneath it
 // with its sound muted (nativeSetIntroPlaying), so when the video ends the menu is already there and the picture
 // fades from the video to it.
 //
@@ -50,6 +55,8 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
     private static final String PREF_PLAYED = "introPlayed";
     private static final long FADE_MS = 700;
     private static final long HINT_DELAY_MS = 1200;
+    private static final String LOGO_ASSET = "intro/logo.jpg";
+    private static final long LOGO_IN_MS = 1500, LOGO_HOLD_MS = 3000, LOGO_OUT_MS = 1000;
 
     private final MainActivity activity;
     private final boolean skippable;
@@ -62,6 +69,10 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
     private TextureView texture;
     private TextView subtitle;
     private TextView hint;
+    private ImageView logo;
+    private boolean prepared;  // the video is ready to start
+    private boolean logoDone;  // the logo has faded out (or there is none)
+    private boolean started;
     private MediaPlayer player;
     private Surface surface;
     private int videoW, videoH;
@@ -218,6 +229,23 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         texture.setSurfaceTextureListener(this);
         root.addView(texture, new FrameLayout.LayoutParams(1, 1, Gravity.CENTER));
 
+        Bitmap logoBitmap = null;
+        try (InputStream in = activity.getAssets().open(LOGO_ASSET)) {
+            logoBitmap = BitmapFactory.decodeStream(in);
+        } catch (IOException e) {
+            MainActivity.startupLog("Abertura: sem a logo, vai direto para o vídeo");
+        }
+        if (logoBitmap != null) {
+            logo = new ImageView(activity);
+            logo.setImageBitmap(logoBitmap);
+            logo.setScaleType(ImageView.ScaleType.FIT_CENTER); // the whole picture, at its own proportions
+            logo.setAlpha(0f);
+            root.addView(logo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            logoDone = true;
+        }
+
         Typeface font = null;
         try {
             font = Typeface.createFromAsset(activity.getAssets(), "fonts/Alegreya-Bold.ttf");
@@ -256,6 +284,25 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             hint.setVisibility(android.view.View.GONE);
         }
 
+        if (skippable) {
+            hint.animate().alpha(1f).setStartDelay(HINT_DELAY_MS).setDuration(500).start();
+        }
+        if (logo != null) {
+            logo.animate().alpha(1f).setDuration(LOGO_IN_MS).withEndAction(() ->
+                    handler.postDelayed(() -> {
+                        if (done || logo == null) {
+                            return;
+                        }
+                        logo.animate().alpha(0f).setDuration(LOGO_OUT_MS).withEndAction(() -> {
+                            if (root != null && logo != null) {
+                                root.removeView(logo);
+                            }
+                            logo = null;
+                            logoDone = true;
+                            startVideoWhenReady();
+                        }).start();
+                    }, LOGO_HOLD_MS)).start();
+        }
         root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitVideo());
         ((ViewGroup) activity.getContentView()).addView(root,
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -304,14 +351,8 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
                 fitVideo();
             });
             player.setOnPreparedListener(mp -> {
-                if (done) {
-                    return;
-                }
-                mp.start();
-                handler.post(tick);
-                if (skippable) {
-                    hint.animate().alpha(1f).setStartDelay(HINT_DELAY_MS).setDuration(500).start();
-                }
+                prepared = true;
+                startVideoWhenReady();
             });
             player.setOnCompletionListener(mp -> finish(true));
             player.setOnErrorListener((mp, what, extra) -> {
@@ -324,6 +365,16 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             MainActivity.startupLog("Abertura: erro ao abrir o vídeo: " + e);
             finish(false);
         }
+    }
+
+    // The video starts once it is ready and the logo is gone, whichever comes last.
+    private void startVideoWhenReady() {
+        if (done || finishing || started || !prepared || !logoDone || player == null) {
+            return;
+        }
+        started = true;
+        player.start();
+        handler.post(tick);
     }
 
     // Shows the subtitle of the moment.
@@ -409,6 +460,9 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
         subtitle.setVisibility(android.view.View.INVISIBLE);
         hint.animate().cancel();
         hint.setVisibility(android.view.View.GONE);
+        if (logo != null) {
+            logo.animate().cancel(); // the fade below takes the logo with the rest
+        }
         ValueAnimator anim = ValueAnimator.ofFloat(1f, 0f);
         anim.setDuration(FADE_MS);
         anim.addUpdateListener(a -> {
@@ -460,6 +514,10 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             root = null;
         }
         texture = null;
+        if (logo != null) {
+            logo.animate().cancel();
+            logo = null;
+        }
         MainActivity.startupLog("Abertura: terminou");
     }
 
