@@ -115,6 +115,7 @@ CrowdControl* CrowdControl::Instance;
 #include "2s2h/Enhancements/Audio/AudioCollection.h"
 #include "BenGui/BenInputEditorWindow.h"
 #include "2s2h/Android/StartupLog.h"
+#include "2s2h/Mods/ModInstaller.h"
 
 OTRGlobals* OTRGlobals::Instance;
 GameInteractor* GameInteractor::Instance;
@@ -173,6 +174,8 @@ OTRGlobals::OTRGlobals() {
                                             [](char c1, char c2) { return std::tolower(c1) < std::tolower(c2); });
     });
 
+    // Mods turned on or off from the menu are loaded live right after these (mm.o2r, 2ship.o2r).
+    ModInstaller::NoteStartup(archiveFiles.size());
     archiveFiles.insert(archiveFiles.end(), patchFiles.begin(), patchFiles.end());
 
     // Translation packs go last so their text overrides the game's and any mod's.
@@ -1076,6 +1079,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
         // TODO: skeleton patch, hooks
         // SOH::SkeletonPatcher::UpdateSkeletons();
         // GameInteractor::Instance->ExecuteHooks<GameInteractor::OnAssetAltChange>();
+    }
+
+    // Mods turned on or off from the menu, loaded between frames while the audio thread is idle.
+    if (ModInstaller::Update()) {
+        gfx_texture_cache_clear();
     }
 
     // OTRTODO: FIGURE OUT END FRAME POINT

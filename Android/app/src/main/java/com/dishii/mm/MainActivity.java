@@ -546,6 +546,7 @@ public class MainActivity extends SDLActivity{
                 } else if (data.getData() != null) {
                     installMod(data.getData());
                 }
+                nativeModsInstalled();
             }
         } else if (requestCode == FILE_PICKER_REQUEST_CODE && (resultCode != RESULT_OK || data == null)) {
             // Picker closed without a file: unblock the extractor, which reports that no ROM was chosen.
@@ -671,6 +672,118 @@ public class MainActivity extends SDLActivity{
 
     public native void nativeMusicFolderCopied(String path);
 
+    public native void nativeModsInstalled();
+    public native void nativeDriveLinkEntered(String link);
+    public native void nativeDownloadProgress(long done, long total);
+
+    // Settings > Mods > Baixar do Google Drive: a box for the link, filled with the clipboard when it holds one.
+    public void askDriveLink() {
+        runOnUiThread(() -> {
+            final android.widget.EditText input = new android.widget.EditText(this);
+            input.setSingleLine(true);
+            input.setHint("https://drive.google.com/...");
+            android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null && clipboard.hasPrimaryClip() && clipboard.getPrimaryClip().getItemCount() > 0) {
+                CharSequence clip = clipboard.getPrimaryClip().getItemAt(0).coerceToText(this);
+                if (clip != null && clip.toString().contains("drive.google.com")) {
+                    input.setText(clip.toString().trim());
+                }
+            }
+            int pad = (int) (20 * getResources().getDisplayMetrics().density);
+            FrameLayout box = new FrameLayout(this);
+            box.setPadding(pad, pad / 2, pad, 0);
+            box.addView(input);
+            new AlertDialog.Builder(this)
+                .setTitle("Baixar mod do Google Drive")
+                .setMessage("Cole o link de um arquivo de mod (.o2r, .otr, .zip) ou de uma pasta com mods. "
+                            + "No Drive, o compartilhamento deve estar em \"Qualquer pessoa com o link\".")
+                .setView(box)
+                .setPositiveButton("Baixar", (dialog, which) -> nativeDriveLinkEntered(input.getText().toString()))
+                .setNegativeButton("Cancelar", null)
+                .show();
+        });
+    }
+
+    // Called by the game on its own download thread: GET `url` into `path`, following redirects. Returns
+    // "ok\n<file name>\n<content type>" or "erro\n<message>".
+    public String httpDownload(String url, String path) {
+        java.net.HttpURLConnection connection = null;
+        try {
+            java.net.URL target = new java.net.URL(url);
+            for (int hops = 0; hops < 8; hops++) {
+                connection = (java.net.HttpURLConnection) target.openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(60000);
+                connection.setRequestProperty("User-Agent", "MajorasMaskDefinitive-Mods/1.0");
+                int code = connection.getResponseCode();
+                if (code >= 300 && code < 400 && connection.getHeaderField("Location") != null) {
+                    target = new java.net.URL(target, connection.getHeaderField("Location"));
+                    connection.disconnect();
+                    connection = null;
+                    continue;
+                }
+                if (code != 200) {
+                    return "erro\no Google Drive respondeu " + code;
+                }
+                break;
+            }
+            if (connection == null) {
+                return "erro\nredirecionamentos demais";
+            }
+            String disposition = connection.getHeaderField("Content-Disposition");
+            String type = connection.getContentType();
+            long total = connection.getContentLengthLong();
+            String name = "";
+            if (disposition != null) {
+                java.util.regex.Matcher star =
+                    java.util.regex.Pattern.compile("filename\\*\\s*=\\s*[^']*'[^']*'([^;]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                        .matcher(disposition);
+                java.util.regex.Matcher quoted =
+                    java.util.regex.Pattern.compile("filename\\s*=\\s*\"([^\"]+)\"", java.util.regex.Pattern.CASE_INSENSITIVE)
+                        .matcher(disposition);
+                if (star.find()) {
+                    name = java.net.URLDecoder.decode(star.group(1).trim().replace("+", "%2B"), "UTF-8");
+                } else if (quoted.find()) {
+                    name = quoted.group(1);
+                }
+            }
+            File file = new File(path);
+            File parent = file.getParentFile();
+            if (parent != null && !parent.isDirectory()) {
+                parent.mkdirs();
+            }
+            try (InputStream in = connection.getInputStream(); OutputStream out = new FileOutputStream(file)) {
+                byte[] buffer = new byte[65536];
+                long done = 0;
+                long lastReport = 0;
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                    done += read;
+                    if (done - lastReport > 262144) {
+                        nativeDownloadProgress(done, total);
+                        lastReport = done;
+                    }
+                }
+                nativeDownloadProgress(done, total);
+            }
+            return "ok\n" + name.replace("\n", " ") + "\n" + (type == null ? "" : type);
+        } catch (Exception e) {
+            Log.e("mods", "Download failed", e);
+            String message = e.getMessage();
+            if (e instanceof java.net.UnknownHostException) {
+                message = "sem internet";
+            }
+            return "erro\n" + (message == null ? e.getClass().getSimpleName() : message.replace("\n", " "));
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
     public void openModPicker() {
         runOnUiThread(() -> {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -777,7 +890,7 @@ public class MainActivity extends SDLActivity{
             return;
         }
 
-        Toast.makeText(this, "Mod instalado: " + android.text.TextUtils.join(", ", installed) + ". Feche e abra o jogo para usar.",
+        Toast.makeText(this, "Mod instalado: " + android.text.TextUtils.join(", ", installed) + ".",
                        Toast.LENGTH_LONG).show();
     }
 

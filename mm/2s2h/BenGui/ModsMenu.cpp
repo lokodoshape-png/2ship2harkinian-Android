@@ -48,9 +48,21 @@ void DrawModsMenu() {
             sNextScan = 0.0;
         }
     }
-    if (sChanged) {
+    if (sChanged && !ModInstaller::LiveApplyEnabled() && ModInstaller::PendingCount(appShortName) > 0) {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", Tr("Close and reopen the game to apply."));
+        ImGui::SameLine();
+        if (UIWidgets::Button("Apply Now", UIWidgets::ButtonOptions().Size(UIWidgets::Sizes::Inline))) {
+            ModInstaller::RequestApply();
+        }
     }
+    const ModInstaller::Notice notice = ModInstaller::LastNotice();
+    if (!notice.text.empty()) {
+        ImGui::TextWrapped("%s", notice.text.c_str());
+    }
+    UIWidgets::CVarCheckbox("Apply Mods Live", CVAR_MODS_LIVE_APPLY,
+                            UIWidgets::CheckboxOptions().DefaultValue(true).Tooltip(
+                                "Turns mods on and off without closing the game. Textures change at once, models "
+                                "and places on entering a new area, music on the next launch."));
 
     ImGui::SeparatorText(Tr("Textures"));
     UIWidgets::CVarCheckbox("Use Alternate Assets", "gEnhancements.Mods.AlternateAssets",

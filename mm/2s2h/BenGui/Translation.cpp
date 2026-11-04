@@ -994,6 +994,12 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
     { "Installed Mods", "Mods instalados" },
     { "No mods installed.", "Nenhum mod instalado." },
     { "Close and reopen the game to apply.", "Feche e abra o jogo para aplicar." },
+    { "Apply Now", "Aplicar agora" },
+    { "Apply Mods Live", "Aplicar mods na hora" },
+    { "Turns mods on and off without closing the game. Textures change at once, models and places on entering a new "
+      "area, music on the next launch.",
+      "Liga e desliga os mods sem fechar o jogo. Texturas mudam na hora; modelos e cenários, ao entrar numa nova "
+      "área; músicas, quando o jogo abrir de novo." },
     { "Button Icons", "Ícones dos botões" },
     { "Button Icon Style", "Estilo dos ícones" },
     { "Automatic", "Automático" },

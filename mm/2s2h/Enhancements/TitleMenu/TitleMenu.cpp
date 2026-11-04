@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <string>
@@ -31,6 +32,7 @@
 #include "2s2h/ShipInit.hpp"
 #include "2s2h/BenGui/Translation.h"
 #include "2s2h/Language/GameLanguage.h"
+#include "2s2h/Mods/ModInstaller.h"
 #include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "2s2h/Enhancements/QuestMenu/QuestRenderer.h"
 #include "IntroVideo.h"
@@ -159,6 +161,7 @@ struct Frame {
     int focus = 0;     // Files: 0 the list, 1 the file's buttons
     int action = 0;    // the button chosen among the file's buttons
     bool zoom = false; // Gallery: the picture fills the screen
+    int scroll = 0;    // Settings: the first row shown, when there are more than fit
 };
 std::vector<Frame> sStack;
 
@@ -222,7 +225,7 @@ bool Enabled() {
 
 void Toast(const std::string& text) {
     sToast = text;
-    sToastTime = 3.5f;
+    sToastTime = 3.5f + std::min(4.0f, text.size() / 40.0f);
 }
 
 void SaveCVars() {
@@ -379,11 +382,12 @@ std::string DayText(int day) {
 
 // ----- Settings: real options of the game and the port, read and written through their CVars.
 
-enum class Kind { Toggle, Choice, Percent, Action };
+// Switch: on / off like a Toggle, read and changed through functions instead of a CVar (a mod file).
+enum class Kind { Toggle, Choice, Percent, Action, Switch };
 
 struct Setting {
-    const char* label;
-    const char* help;
+    std::string label;
+    std::string help;
     Kind kind;
     const char* cvar = nullptr;
     int def = 0;                                                // Toggle / Choice default
@@ -393,6 +397,7 @@ struct Setting {
     std::function<void()> apply;                                // after a change
     std::function<void()> action;                               // Action
     std::function<std::string()> value;                         // Action: text on the right
+    std::function<bool()> get;                                  // Switch: on or off
 };
 
 Setting Toggle(const char* label, const char* help, const char* cvar, int def, std::function<void()> apply = nullptr) {
@@ -426,12 +431,24 @@ Setting Percent(const char* label, const char* help, const char* cvar, float def
     return s;
 }
 
-Setting Action(const char* label, const char* help, std::function<void()> action,
+Setting Action(const std::string& label, const std::string& help, std::function<void()> action,
                std::function<std::string()> value = nullptr) {
     Setting s{ label, help, Kind::Action };
     s.action = action;
     s.value = value;
     return s;
+}
+
+Setting Switch(const std::string& label, const std::string& help, std::function<bool()> get,
+               std::function<void()> toggle) {
+    Setting s{ label, help, Kind::Switch };
+    s.get = get;
+    s.action = toggle;
+    return s;
+}
+
+bool SettingOn(const Setting& s) {
+    return s.kind == Kind::Switch ? s.get() : CVarGetInteger(s.cvar, s.def) != 0;
 }
 
 // The choice the option is on; -1 when it holds a value set elsewhere (the full settings menu) that is not listed.
@@ -463,6 +480,8 @@ std::string SettingValue(const Setting& s) {
         }
         case Kind::Action:
             return s.value ? s.value() : "";
+        case Kind::Switch:
+            return s.get() ? "Ligado" : "Desligado";
     }
     return "";
 }
@@ -494,6 +513,11 @@ void ChangeSetting(const Setting& s, int dir) {
                 s.action();
             }
             return;
+        case Kind::Switch:
+            if (s.action) {
+                s.action();
+            }
+            break;
     }
     Audio_PlaySfx(NA_SE_SY_CURSOR);
     if (s.apply) {
@@ -689,7 +713,225 @@ std::vector<Tab>& SettingsTabs() {
               Action("Todas as opções", "Abre o menu completo do port, com todas as melhorias.",
                      []() { OpenSettingsMenu(); }),
           } });
+    tabs.push_back({ "Mods", {} }); // filled from the mods folder by RefreshModsTab
     return tabs;
+}
+
+// ----- Settings > Mods: the mods folder, live loading and Google Drive. The rows are rebuilt from the folder each
+// second (and after a change), so a mod copied in by the Android picker or a download shows up by itself. Rows are
+// only rebuilt before they are drawn, never from inside a row's own action.
+
+constexpr const char* kModsTabName = "Mods";
+std::vector<ModInstaller::ModFile> sMods;
+std::vector<ModInstaller::DriveEntry> sDriveFolder;
+float sModsScan = -1.0f;
+bool sModsDirty = true;
+int sModsNotice = 0;
+bool sDriveListed = false; // the remembered folder was listed this session
+
+Tab& ModsTab() {
+    return SettingsTabs().back();
+}
+
+bool IsModsTab(const Frame& f) {
+    return f.screen == Screen::Settings && f.page == (int)SettingsTabs().size() - 1;
+}
+
+std::string ShortName(const std::string& name, size_t max = 44) {
+    if (name.size() <= max) {
+        return name;
+    }
+    // Cut on a UTF-8 character boundary.
+    size_t cut = max - 3;
+    while (cut > 0 && (name[cut] & 0xC0) == 0x80) {
+        cut--;
+    }
+    return name.substr(0, cut) + "...";
+}
+
+std::string MegaBytes(uint64_t bytes) {
+    char text[32];
+    snprintf(text, sizeof(text), "%.1f MB", bytes / (1024.0 * 1024.0));
+    for (char& c : text) {
+        if (c == '.') {
+            c = ',';
+        }
+    }
+    return text;
+}
+
+std::string DownloadValue() {
+    ModInstaller::DownloadStatus st = ModInstaller::GetDownloadStatus();
+    if (!ModInstaller::DownloadBusy()) {
+        return "";
+    }
+    if (st.state == ModInstaller::DownloadState::Listing) {
+        return "Abrindo a pasta...";
+    }
+    if (st.total > 0) {
+        return "Baixando " + std::to_string((int)(st.done * 100 / st.total)) + "%";
+    }
+    return st.done > 0 ? "Baixando " + MegaBytes(st.done) : "Baixando...";
+}
+
+void RebuildModsRows() {
+    std::vector<Setting>& rows = ModsTab().rows;
+    rows.clear();
+    const bool live = ModInstaller::LiveApplyEnabled();
+    rows.push_back(Toggle("Aplicar na hora",
+                          "Liga e desliga os mods sem fechar o jogo. Texturas mudam na hora; modelos e cenários, ao "
+                          "entrar numa nova área; músicas, quando o jogo abrir de novo.",
+                          CVAR_MODS_LIVE_APPLY, 1, []() {
+                              sModsDirty = true;
+                              if (ModInstaller::LiveApplyEnabled()) {
+                                  ModInstaller::RequestApply();
+                              }
+                          }));
+    int pending = ModInstaller::PendingCount(appShortName);
+    if (pending > 0) {
+        rows.push_back(Action(
+            "Aplicar as mudanças agora", "Carrega no jogo os mods ligados e tira os desligados, sem fechar o jogo.",
+            []() {
+                Audio_PlaySfx(NA_SE_SY_DECIDE);
+                ModInstaller::RequestApply();
+                sModsDirty = true;
+            },
+            [pending]() { return std::to_string(pending) + (pending == 1 ? " mudança" : " mudanças"); }));
+    }
+    rows.push_back(Action(
+        "Baixar do Google Drive",
+#ifdef __ANDROID__
+        "Cole o link de um mod (.o2r, .otr, .zip) ou de uma pasta com mods. No Drive, compartilhe como \"Qualquer "
+        "pessoa com o link\".",
+#else
+        "Copie o link de um mod (.o2r, .otr, .zip) ou de uma pasta com mods e escolha esta opção. No Drive, "
+        "compartilhe como \"Qualquer pessoa com o link\".",
+#endif
+        []() {
+            if (ModInstaller::DownloadBusy()) {
+                Toast("Espere o download terminar.");
+                return;
+            }
+            Audio_PlaySfx(NA_SE_SY_DECIDE);
+            if (!ModInstaller::AskDriveLink()) {
+                Toast("Copie um link do Google Drive primeiro.");
+            }
+            sModsDirty = true;
+        },
+        []() { return DownloadValue(); }));
+    rows.push_back(Action("Adicionar do aparelho",
+#ifdef __ANDROID__
+                          "Abre os arquivos do celular para escolher um mod (.o2r, .otr ou .zip).",
+#else
+                          "Abre uma janela para escolher um mod (.o2r, .otr ou .zip) e o copia para a pasta mods.",
+#endif
+                          []() {
+                              Audio_PlaySfx(NA_SE_SY_DECIDE);
+                              std::string message = ModInstaller::OpenPicker(appShortName);
+                              if (!message.empty()) {
+                                  for (char& c : message) {
+                                      if (c == '\n') {
+                                          c = ' ';
+                                      }
+                                  }
+                                  Toast(message);
+                              }
+                              sModsDirty = true;
+                          }));
+    rows.push_back(Toggle("Texturas alternativas", "Pacotes de texturas HD costumam precisar disto ligado.",
+                          "gEnhancements.Mods.AlternateAssets", 0));
+
+    if (sMods.empty()) {
+        rows.push_back(Action("Nenhum mod instalado",
+                              "Os mods ficam na pasta: " + ModInstaller::GetModsFolder(appShortName), nullptr));
+    }
+    for (const ModInstaller::ModFile& mod : sMods) {
+        bool active = ModInstaller::IsActive(mod);
+        std::string help = mod.name + ". ";
+        if (active == mod.enabled) {
+            help += active ? "Está no jogo agora." : "Desligado.";
+        } else {
+            help += live ? "Aplicando..." : "Vale quando o jogo abrir de novo ou em \"Aplicar as mudanças agora\".";
+        }
+        ModInstaller::ModFile copy = mod;
+        rows.push_back(Switch(
+            ShortName(std::filesystem::path(mod.name).stem().string()), help, [copy]() { return copy.enabled; },
+            [copy]() {
+                if (!ModInstaller::SetEnabled(copy, !copy.enabled)) {
+                    Toast("Não foi possível mudar o arquivo do mod.");
+                } else if (!ModInstaller::LiveApplyEnabled()) {
+                    Toast("Vale quando o jogo abrir de novo.");
+                }
+                sModsDirty = true;
+            }));
+    }
+
+    if (ModInstaller::HasDriveFolder()) {
+        rows.push_back(Action(
+            "Pasta do Google Drive", "Os mods da pasta cujo link foi colado. Escolha para ver a lista de novo.",
+            []() {
+                Audio_PlaySfx(NA_SE_SY_DECIDE);
+                ModInstaller::RefreshDriveFolder();
+                sModsDirty = true;
+            },
+            []() {
+                if (ModInstaller::DownloadBusy() &&
+                    ModInstaller::GetDownloadStatus().state == ModInstaller::DownloadState::Listing) {
+                    return std::string("Abrindo...");
+                }
+                return std::string("Atualizar");
+            }));
+        for (const ModInstaller::DriveEntry& entry : sDriveFolder) {
+            bool installed = ModInstaller::IsInstalled(appShortName, entry.name);
+            ModInstaller::DriveEntry copy = entry;
+            rows.push_back(Action(
+                "Baixar: " + ShortName(entry.name, 38),
+                installed ? entry.name + " já está na pasta de mods. Escolha para baixar de novo (atualizar)."
+                          : "Baixa " + entry.name + " do Google Drive para a pasta de mods.",
+                [copy]() {
+                    if (ModInstaller::DownloadBusy()) {
+                        Toast("Espere o download terminar.");
+                        return;
+                    }
+                    Audio_PlaySfx(NA_SE_SY_DECIDE);
+                    ModInstaller::DownloadDriveFile(copy);
+                    sModsDirty = true;
+                },
+                [installed]() { return std::string(installed ? "Instalado" : "Baixar"); }));
+        }
+        rows.push_back(
+            Action("Esquecer a pasta do Google Drive", "Tira a pasta desta lista. Os mods baixados ficam.", []() {
+                Audio_PlaySfx(NA_SE_SY_CANCEL);
+                ModInstaller::ForgetDriveFolder();
+                sModsDirty = true;
+            }));
+    }
+}
+
+// Each frame: news from the mods (applied, downloaded) as a toast, and the rows when something changed.
+void RefreshModsTab(bool visible) {
+    ModInstaller::Notice notice = ModInstaller::LastNotice();
+    if (notice.serial != sModsNotice) {
+        sModsNotice = notice.serial;
+        if (!notice.text.empty() && sActive) {
+            Toast(notice.text);
+        }
+        sModsDirty = true;
+    }
+    if (!visible) {
+        return;
+    }
+    if (!sDriveListed && ModInstaller::HasDriveFolder() && !ModInstaller::DownloadBusy()) {
+        sDriveListed = true;
+        ModInstaller::RefreshDriveFolder();
+    }
+    if (sModsDirty || sTime >= sModsScan) {
+        sMods = ModInstaller::List(appShortName);
+        sDriveFolder = ModInstaller::GetDriveFolder();
+        sModsScan = sTime + 1.0f;
+        sModsDirty = false;
+        RebuildModsRows();
+    }
 }
 
 // ----- Controls: the game's buttons and what they do, drawn with the icons of the controller in use.
@@ -1818,12 +2060,16 @@ void DrawToast(const Page& pg, float dt, float a) {
     }
     sToastTime -= dt;
     float t = std::clamp(sToastTime / 0.4f, 0.0f, 1.0f) * a;
-    float size = 26, w = TxtW(pg, size, sToast) + 48;
-    float x = kW / 2 - w / 2, y = 930;
-    QuestUi::Panel(pg, ImVec2(x, y), ImVec2(x + w, y + 52), Alpha(Col(60, 24, 90, 235), t),
+    float size = 26, textW = TxtW(pg, size, sToast), maxW = 1500;
+    // Long messages (the mods') wrap over a few lines, growing upwards.
+    bool wrap = textW + 48 > maxW;
+    float w = wrap ? maxW : textW + 48;
+    float h = wrap ? QuestUi::WrappedHeight(pg, size, w - 48, sToast.c_str()) + 22 : 52;
+    float x = kW / 2 - w / 2, y = 982 - h;
+    QuestUi::Panel(pg, ImVec2(x, y), ImVec2(x + w, y + h), Alpha(Col(60, 24, 90, 235), t),
                    Alpha(Col(30, 10, 50, 235), t), 12);
-    pg.dl->AddRect(pg.P(x, y), pg.P(x + w, y + 52), Alpha(Col(200, 150, 255), t), pg.S(12), 0, pg.S(1.5f));
-    Txt(pg, x + 24, y + 10, size, Alpha(Col(255, 255, 255), t), sToast);
+    pg.dl->AddRect(pg.P(x, y), pg.P(x + w, y + h), Alpha(Col(200, 150, 255), t), pg.S(12), 0, pg.S(1.5f));
+    Txt(pg, x + 24, y + 10, size, Alpha(Col(255, 255, 255), t), sToast, nullptr, wrap ? w - 48 : 0.0f);
 }
 
 // ----- The main screen: the nine items over the painted panel.
@@ -1980,20 +2226,56 @@ std::string DrawSettingRows(const Page& pg, float a, Frame& f, const std::vector
     if (rows.empty()) {
         return "";
     }
-    f.sel = std::clamp(f.sel, 0, (int)rows.size() - 1);
+    const int count = (int)rows.size();
+    f.sel = std::clamp(f.sel, 0, count - 1);
     float x0 = kContentX0 + 40, x1 = kContentX1 - 40;
-    Highlight(pg, x0, y0 + f.sel * rowH + 4, x1 - x0, rowH - 8, a);
-    for (int i = 0; i < (int)rows.size(); i++) {
+    // More rows than fit (the Mods tab): the list scrolls with the selection, the arrows or the wheel.
+    const int visible = std::max(1, (int)((kContentY1 - 12 - y0) / rowH));
+    const int maxScroll = std::max(0, count - visible);
+    if (maxScroll > 0) {
+        float wheel = ImGui::GetIO().MouseWheel;
+        if (sPointerInputs && wheel != 0.0f) {
+            f.scroll = std::clamp(f.scroll + (wheel > 0 ? -1 : 1), 0, maxScroll);
+            f.sel = std::clamp(f.sel, f.scroll, f.scroll + visible - 1);
+        }
+    }
+    if (f.sel < f.scroll) {
+        f.scroll = f.sel;
+    } else if (f.sel >= f.scroll + visible) {
+        f.scroll = f.sel - visible + 1;
+    }
+    f.scroll = std::clamp(f.scroll, 0, maxScroll);
+    if (maxScroll > 0) {
+        float cx = kW / 2, top = y0 - 14, bottom = y0 + visible * rowH + 14;
+        bool hu = false, hd = false;
+        bool canUp = f.scroll > 0, canDown = f.scroll < maxScroll;
+        if (canUp && Tap(pg, cx - 80, top - 16, 160, 32, &hu)) {
+            f.scroll = std::max(0, f.scroll - (visible - 1));
+            f.sel = std::clamp(f.sel, f.scroll, f.scroll + visible - 1);
+            Audio_PlaySfx(NA_SE_SY_CURSOR);
+        }
+        if (canDown && Tap(pg, cx - 80, bottom - 16, 160, 32, &hd)) {
+            f.scroll = std::min(maxScroll, f.scroll + (visible - 1));
+            f.sel = std::clamp(f.sel, f.scroll, f.scroll + visible - 1);
+            Audio_PlaySfx(NA_SE_SY_CURSOR);
+        }
+        ImU32 up = Alpha(hu ? cGoldBright : cGold, a * (canUp ? 1.0f : 0.25f));
+        ImU32 down = Alpha(hd ? cGoldBright : cGold, a * (canDown ? 1.0f : 0.25f));
+        pg.dl->AddTriangleFilled(pg.P(cx, top - 9), pg.P(cx + 14, top + 7), pg.P(cx - 14, top + 7), up);
+        pg.dl->AddTriangleFilled(pg.P(cx - 14, bottom - 7), pg.P(cx + 14, bottom - 7), pg.P(cx, bottom + 9), down);
+    }
+    Highlight(pg, x0, y0 + (f.sel - f.scroll) * rowH + 4, x1 - x0, rowH - 8, a);
+    for (int i = f.scroll; i < std::min(count, f.scroll + visible); i++) {
         const Setting& s = rows[i];
-        float y = y0 + i * rowH, cy = y + rowH / 2;
+        float y = y0 + (i - f.scroll) * rowH, cy = y + rowH / 2;
         bool selected = f.sel == i;
         ImU32 col = Alpha(selected ? Col(255, 255, 255) : cText, a);
         Txt(pg, x0 + 30, cy - 17, 28, col, s.label);
         std::string value = SettingValue(s);
         float vRight = x1 - 30;
         bool arrows = s.kind == Kind::Choice || s.kind == Kind::Percent;
-        if (s.kind == Kind::Toggle) {
-            bool on = CVarGetInteger(s.cvar, s.def) != 0;
+        if (s.kind == Kind::Toggle || s.kind == Kind::Switch) {
+            bool on = SettingOn(s);
             float pw = 150, px = vRight - pw;
             QuestUi::Panel(pg, ImVec2(px, cy - 20), ImVec2(px + pw, cy + 20),
                            Alpha(on ? Col(60, 120, 60) : Col(60, 30, 70), a),
@@ -2237,6 +2519,9 @@ std::string DrawSettings(const Page& pg, float a, Frame& f) {
     }
     f.page = std::clamp(f.page, 0, (int)names.size() - 1);
     DrawTabs(pg, a, f, names);
+    if (IsModsTab(f)) {
+        RefreshModsTab(true);
+    }
     return DrawSettingRows(pg, a, f, SettingsTabs()[f.page].rows, 300, 64);
 }
 
@@ -2406,7 +2691,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.9"
+#define EDITION_VERSION "4.0.2-mm3d.10"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;
@@ -2686,6 +2971,7 @@ void DrawMenu() {
     }
     ImDrawList* dl = ImGui::GetWindowDrawList();
     Page pg{ dl, origin, k };
+    RefreshModsTab(false);
     sScreenT = std::min(1.0f, sScreenT + dt * 5.0f);
 
     bool zoom = Cur().screen == Screen::Gallery && Cur().zoom;
@@ -2956,7 +3242,6 @@ bool MenuScene(Scene& out) {
 void TitleMenuWindow::Draw() {
     TitleMenu::DrawMenu();
     IntroVideo::Draw(); // PC: the opening, on top of everything while the game boots
-
 }
 
 void TitleMenuWindow::InitElement() {

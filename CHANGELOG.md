@@ -8,6 +8,17 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.10
+- **Mods em Configurações.** A tela Configurações do menu inicial ganhou a aba **Mods**, no mesmo visual das outras:
+  cada mod da pasta `mods` aparece com Ligado/Desligado, e a lista rola quando há muitos.
+- **Aplicar na hora.** Com "Aplicar na hora" ligado (padrão), ligar ou desligar um mod carrega ou tira o arquivo do
+  jogo sem fechar. Texturas mudam na hora; modelos e cenários, ao entrar numa nova área; músicas, quando o jogo abrir
+  de novo. Com a opção desligada, aparece "Aplicar as mudanças agora". Também no menu do port (Mods).
+- **Baixar do Google Drive.** Cole o link de um mod (.o2r, .otr ou .zip) ou de uma pasta com mods (no Android abre uma
+  caixa para colar; no PC, copie o link e escolha a opção). Um link de pasta fica guardado e lista os mods dela, cada
+  um com "Baixar". Um .zip que só embrulha arquivos .o2r/.otr é aberto e os mods saem dele. No Drive, o arquivo ou a
+  pasta deve estar compartilhado como "Qualquer pessoa com o link".
+
 ### 2026-11-04 — versão 4.0.2-mm3d.9
 - **Os olhos da lua se abrem.** A transição para o menu começa no escuro total: os olhos da lua se abrem devagar,
   como pálpebras, primeiro um e depois o outro, acendem vermelho e laranja e iluminam um pouco a lua. O brilho então
