@@ -45,6 +45,9 @@ void TitleSetup_Main(GameState* thisx) {
     TitleSetupState* this = (TitleSetupState*)thisx;
 
     func_8012CF0C(this->state.gfxCtx, false, true, 0, 0, 0);
+    if (!GameInteractor_Should(VB_START_TITLE_SCREEN, true)) {
+        return;
+    }
     TitleSetup_SetupTitleScreen(this);
     func_80803EA0(this);
 }

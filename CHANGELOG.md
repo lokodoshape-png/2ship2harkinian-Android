@@ -8,7 +8,36 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
-### 2026-11-04
+### 2026-11-04 — versão 4.0.2-mm3d.1
+- **Tela inicial nova (menu principal).** Substitui a tela de título ("Press Start") e a tela principal da seleção de
+  arquivos por uma tela feita a partir da arte do Rafael, com o fundo, os ícones e a moldura de seleção tirados da
+  imagem e o subtítulo DEFINITIVE EDITION sob o logo. Itens:
+  - **Continuar** carrega o último arquivo jogado (ou o primeiro que existir).
+  - **Novo Jogo** pede confirmação e abre a entrada de nome do jogo no primeiro arquivo vazio; os outros saves não
+    são tocados. Sem arquivo vazio, avisa para apagar um em Carregar Jogo.
+  - **Carregar Jogo** mostra a seleção de arquivos original (corações, máscaras, dia, save da coruja, copiar e
+    apagar). B nela volta para a tela nova.
+  - **Bombers Book**, **Missões** e **Inventário** carregam o último arquivo e abrem, já no jogo, o Caderno dos
+    Bombers (pela página de missões do menu de pausa, com os dados do save), o menu de missões ou a página de itens do
+    menu de pausa. Se o save ainda não tem o caderno, o jogo avisa e abre a página de missões.
+  - **Opções** abre o menu de configurações (gráficos, resolução, áudio, controles e o resto).
+  - **Extras**: música do menu, opções de som e mira do jogo original, abertura original, créditos e versão.
+  - Música de fundo da trilha original: **Tema de Majora** por padrão; em Extras dá para trocar por Últimas Horas,
+    Torre do Relógio, Castelo de Ikana ou a música da seleção original.
+  - Controle (Bluetooth ou não: direcional, analógico, A / Start confirma, B volta), teclado (setas, Enter, Backspace
+    e as teclas do jogo), mouse e toque. No Android os botões de toque somem enquanto a tela está aberta, para o toque
+    chegar nos itens, e voltam no jogo e na seleção de arquivos original.
+  - Efeitos leves: a lua flutua e "respira", os olhos dela e a Tatl brilham, partículas sobem no ar, a seleção pulsa e
+    desliza, os painéis entram com transição. Desligáveis em Melhorias > Economia de tempo > Cenas > "Efeitos da tela inicial".
+  - Funciona em qualquer proporção de tela: a arte se ajusta à tela e uma cópia desfocada preenche as sobras.
+  - Liga e desliga em Melhorias > Economia de tempo > Cenas > "Tela inicial nova"; desligada, volta tudo como no jogo original.
+  - Arquivos novos: `mm/2s2h/Enhancements/TitleMenu/` (`TitleMenu.cpp`, `TitleMenu.h`, `make_assets.py`) e
+    `mm/assets/custom/overlays/titlemenu/` (arte). Alterados: `z_opening.c` e `z_file_choose_NES.c` (dois novos
+    `VB_START_TITLE_SCREEN` e `VB_FILE_SELECT_EXIT_TO_TITLE`), `GameInteractor_VanillaBehavior.h`, `BenGui.cpp`,
+    `BenMenu.cpp`, `Android/app/build.gradle` (versionName).
+  - O versionCode do Android continua 40 de propósito: subir ele faz o app apagar o `mm.o2r` e pedir a ROM de novo.
+    O `2ship.o2r` com a arte nova é trocado em qualquer atualização.
+
 - **Menu de missões dentro do jogo.** Com o jogo pausado, aperte N (teclado), Back / View / Select / - (controle) ou o
   botão MISSÕES no canto da tela de pausa. O menu de pausa fica parado por trás e o próprio controle do jogo navega:
   L / Z e R trocam a categoria, o direcional ou o analógico escolhem, A abre os detalhes, B volta e Start fecha. Mouse

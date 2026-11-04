@@ -635,6 +635,15 @@ typedef enum {
     // true
     // ```
     // #### `args`
+    // - None
+    // Pressing B on the file select's main screen goes back to the title screen.
+    VB_FILE_SELECT_EXIT_TO_TITLE,
+
+    // #### `result`
+    // ```c
+    // true
+    // ```
+    // #### `args`
     // - `*EnFish2`
     VB_FISH2_SPAWN_HEART_PIECE,
 
@@ -2024,6 +2033,15 @@ typedef enum {
     // - `*s16` (cutscene ID)
     // - `*Actor`
     VB_START_CUTSCENE,
+
+    // #### `result`
+    // ```c
+    // true
+    // ```
+    // #### `args`
+    // - None
+    // TitleSetup is about to start the title screen (the opening scene with the logo).
+    VB_START_TITLE_SCREEN,
 
     // #### `result`
     // ```c
