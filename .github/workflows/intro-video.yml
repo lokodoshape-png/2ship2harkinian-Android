@@ -27,6 +27,10 @@ jobs:
   video:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    env:
+      # The opening ends here, before the closing card (Majora's Mask with "the film / the music"), which starts
+      # going black at 264.88 s: the picture fades out over its last 0.6 s and the sound over its last 2 s.
+      END: "264.8"
     steps:
       - uses: actions/checkout@v4
 
@@ -47,9 +51,11 @@ jobs:
         if: ${{ inputs.only == '' || inputs.only == 'tudo' }}
         run: |
           crf=20
+          vfade=$(python3 -c "print($END - 0.6)"); afade=$(python3 -c "print($END - 2)")
           while :; do
-            ffmpeg -hide_banner -loglevel error -y -i original.mp4 \
-              -vf "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+            ffmpeg -hide_banner -loglevel error -y -i original.mp4 -t $END \
+              -vf "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2,fade=t=out:st=$vfade:d=0.6" \
+              -af "afade=t=out:st=$afade:d=2" \
               -c:v libx264 -preset slow -crf $crf -profile:v high -level 4.1 -pix_fmt yuv420p \
               -c:a aac -b:a 192k -movflags +faststart abertura.mp4
             size=$(stat -c %s abertura.mp4)
@@ -64,11 +70,12 @@ jobs:
         run: |
           # 1080p from the 4K original, two passes at about 8 Mbit/s with B-frames: MPEG-1 needs the bits to stay sharp
           # at full HD. pl_mpeg (IntroVideo.cpp) decodes it.
-          vf="scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
-          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vf "$vf" \
+          vfade=$(python3 -c "print($END - 0.6)"); afade=$(python3 -c "print($END - 2)")
+          vf="scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2,fade=t=out:st=$vfade:d=0.6"
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -t $END -vf "$vf" \
             -c:v mpeg1video -b:v 8000k -maxrate 12000k -bufsize 8000k -g 12 -bf 2 -mbd rd -trellis 2 -cmp 2 -subcmp 2 \
             -pass 1 -passlogfile mpg -an -f mpeg /dev/null
-          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vf "$vf" \
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 -t $END -vf "$vf" -af "afade=t=out:st=$afade:d=2" \
             -c:v mpeg1video -b:v 8000k -maxrate 12000k -bufsize 8000k -g 12 -bf 2 -mbd rd -trellis 2 -cmp 2 -subcmp 2 \
             -pass 2 -passlogfile mpg -c:a mp2 -b:a 256k -ar 44100 -ac 2 -f mpeg abertura.mpg
           ls -la abertura.mpg
@@ -104,7 +111,19 @@ jobs:
                       n += 1
                       out.write("%d\n%s --> %s\n%s\n\n" % (n, ts(s.start), ts(s.end), text))
               print(name, "segments", n)
+          # Each word with its time, from the voice alone, to set the subtitles' times by hand.
+          segments, info = model.transcribe("voice.wav", language="pt", beam_size=5, condition_on_previous_text=False,
+                                            no_speech_threshold=0.45, word_timestamps=True)
+          with open("palavras.txt", "w", encoding="utf-8") as out:
+              for s in segments:
+                  for w in s.words or []:
+                      out.write("%8.2f %8.2f  %s\n" % (w.start, w.end, w.word.strip()))
           PY
+          # Where the voice is heard (between the silences), measured on the voice alone.
+          ffmpeg -hide_banner -i sep/htdemucs/full/vocals.wav -af silencedetect=n=-38dB:d=0.4 -f null - 2>&1 \
+            | grep -o "silence_[a-z]*: [0-9.]*" > falas.txt || true
+          cat palavras.txt
+          cat falas.txt
           cat transcricao.srt
           echo ----
           cat transcricao_mix.srt
@@ -118,7 +137,7 @@ jobs:
               --notes "Vídeo de abertura da Definitive Edition (do canal do Rafael), comprimido para o APK, e a transcrição das falas."
           case "${{ inputs.only }}" in
             pc) gh release upload intro-video abertura.mpg --clobber ;;
-            legendas) gh release upload intro-video transcricao.srt transcricao_mix.srt --clobber ;;
-            *) gh release upload intro-video abertura.mp4 abertura.mpg transcricao.srt transcricao_mix.srt probe.txt \
-                 --clobber ;;
+            legendas) gh release upload intro-video transcricao.srt transcricao_mix.srt palavras.txt falas.txt --clobber ;;
+            *) gh release upload intro-video abertura.mp4 abertura.mpg transcricao.srt transcricao_mix.srt palavras.txt \
+                 falas.txt probe.txt --clobber ;;
           esac
