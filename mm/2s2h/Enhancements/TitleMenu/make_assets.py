@@ -7,6 +7,7 @@ game can draw the buttons itself (and move the highlight). The labels are render
 License). Run it again after changing the picture:
     python3 mm/2s2h/Enhancements/TitleMenu/make_assets.py <picture.png> [concept art...]
 The concept art after the picture (Rafael's other concept pictures) goes to the Extras gallery as concept_N.jpg.
+concept_4..19.jpg were cut from a 4x4 concept board (2x upscale of each cell, JPEG q90).
 """
 
 import os

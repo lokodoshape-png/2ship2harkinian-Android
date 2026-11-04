@@ -8,6 +8,11 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.5
+- **Artes conceituais**: 16 artes novas em Extras > Artes conceituais, cada uma numa página própria e com título
+  (a lua sobre a cidade, a Máscara de Majora, o Skull Kid, o Carnaval do Tempo, as transformações, Anju e Kafei, o
+  gigante, as quatro regiões, a ocarina, as máscaras, os quatro heróis e os esboços). Toque ou A amplia a arte.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.4
 - **Tela inicial refeita com telas próprias.** O menu não entra mais no jogo para mostrar nada: cada item abre uma
   tela própria, com título, caminho (Menu > Configurações > ...), botão Voltar, indicador de página, ajuda do item

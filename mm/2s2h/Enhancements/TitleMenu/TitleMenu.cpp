@@ -780,6 +780,22 @@ const std::vector<Picture>& GalleryPictures(int mode) {
         { "concept_1.jpg", "Tela inicial", "A arte conceitual desta tela inicial." },
         { "concept_2.jpg", "Ícone da Definitive Edition", "A arte do ícone e da identidade visual da edição." },
         { "concept_3.jpg", "Caderno dos Bombers", "A arte conceitual do menu de missões e do caderno." },
+        { "concept_4.jpg", "A lua sobre a Cidade do Relógio", "O Link num telhado, diante da lua que cai." },
+        { "concept_5.jpg", "Link e a Máscara de Majora", "O Link de perfil, com a máscara e a Tatl ao lado." },
+        { "concept_6.jpg", "A Máscara de Majora", "A máscara sozinha, no meio do céu roxo." },
+        { "concept_7.jpg", "Skull Kid", "O Skull Kid com a máscara, diante da lua, e a Tatl." },
+        { "concept_8.jpg", "O Carnaval do Tempo", "A praça da Cidade do Relógio enfeitada para o festival." },
+        { "concept_9.jpg", "As transformações", "As formas Deku, Goron, Zora e a Fierce Deity." },
+        { "concept_10.jpg", "Anju e Kafei", "Os dois juntos, com um ovo da máscara nas mãos." },
+        { "concept_11.jpg", "O gigante", "Um gigante atrás das ruínas, ao pôr do sol." },
+        { "concept_12.jpg", "Pântano do Sul", "As casas de madeira sobre a água do pântano." },
+        { "concept_13.jpg", "Montanhas Nevadas", "O pico de Snowhead coberto de neve." },
+        { "concept_14.jpg", "Great Bay", "O laboratório e o píer sobre o mar." },
+        { "concept_15.jpg", "Ikana", "As ruínas e a caveira de pedra do vale de Ikana." },
+        { "concept_16.jpg", "A ocarina e o livro", "A Ocarina do Tempo e um livro antigo, com a Tatl." },
+        { "concept_17.jpg", "As máscaras", "Uma prateleira com máscaras de Termina." },
+        { "concept_18.jpg", "Os quatro heróis", "As silhuetas do Link e das três formas sob a lua." },
+        { "concept_19.jpg", "Esboços", "Os desenhos a lápis do Link, da máscara e da Torre do Relógio." },
     };
     return mode == 0 ? gallery : concepts;
 }
@@ -2343,7 +2359,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.4"
+#define EDITION_VERSION "4.0.2-mm3d.5"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;
