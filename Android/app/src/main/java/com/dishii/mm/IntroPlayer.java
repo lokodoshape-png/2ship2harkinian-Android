@@ -564,7 +564,7 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             float pulse = 0.72f + 0.28f * (float) Math.sin(t * Math.PI * 2 * 1.6f);
             // The moon fills most of the width, drifting closer the whole time.
             float zoom = 1f + 0.06f * clamp01(t / TOTAL);
-            float scale = Math.min(w * 0.96f / bitmap.getWidth(), h * 0.9f / bitmap.getHeight()) * zoom;
+            float scale = Math.min(w * 0.84f / bitmap.getWidth(), h * 0.8f / bitmap.getHeight()) * zoom;
             float bw = bitmap.getWidth() * scale, bh = bitmap.getHeight() * scale;
             float x0 = (w - bw) / 2, y0 = (h - bh) / 2;
             // A violet haze behind the moon.
@@ -579,10 +579,10 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             float g = eyes * pulse;
             for (float[] e : EYES) {
                 float ex = x0 + e[0] * scale, ey = y0 + e[1] * scale;
-                float r = bh * 0.5f;
-                radial(c, ex, ey, r * 1.6f, argb(0.35f * g, 170, 60, 255), argb(0.18f * g, 110, 30, 200)); // violet
+                float r = bh * 0.3f;
+                radial(c, ex, ey, r * 1.8f, argb(0.35f * g, 170, 60, 255), argb(0.18f * g, 110, 30, 200)); // violet
                 radial(c, ex, ey, r, argb(0.85f * g, 255, 40, 20), argb(0.45f * g, 200, 0, 0));            // red
-                radial(c, ex, ey, r * 0.22f, argb(0.95f * g, 255, 210, 150), argb(0.7f * g, 255, 90, 30)); // core
+                radial(c, ex, ey, r * 0.18f, argb(0.95f * g, 255, 210, 150), argb(0.7f * g, 255, 90, 30)); // core
             }
         }
     }

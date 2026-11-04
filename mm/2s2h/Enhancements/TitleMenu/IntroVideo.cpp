@@ -346,7 +346,7 @@ void DrawMoon(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
     float eyes = Smooth((t - 1.0f) / 0.8f) * (1.0f - Smooth((t - 2.8f) / 0.9f));
     float pulse = 0.72f + 0.28f * std::sin(t * 3.14159265f * 2.0f * 1.6f);
     float zoom = 1.0f + 0.06f * std::clamp(t / kMoonTotal, 0.0f, 1.0f);
-    float k = std::min(size.x * 0.96f / sMoon.w, size.y * 0.9f / sMoon.h) * zoom;
+    float k = std::min(size.x * 0.84f / sMoon.w, size.y * 0.8f / sMoon.h) * zoom;
     ImVec2 s(sMoon.w * k, sMoon.h * k);
     ImVec2 p0(pos.x + (size.x - s.x) / 2, pos.y + (size.y - s.y) / 2);
     ImVec2 mid(pos.x + size.x / 2, pos.y + size.y / 2);
@@ -359,10 +359,10 @@ void DrawMoon(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
     }
     for (const ImVec2& e : kEyes) {
         ImVec2 c(p0.x + e.x * k, p0.y + e.y * k);
-        float r = s.y * 0.5f;
-        Light(dl, c, r * 1.6f, 160, 55, 255, 0.35f * g); // violet
+        float r = s.y * 0.3f;
+        Light(dl, c, r * 1.8f, 160, 55, 255, 0.35f * g); // violet
         Light(dl, c, r, 255, 35, 15, 0.8f * g);          // red
-        Light(dl, c, r * 0.22f, 255, 200, 140, 0.9f * g); // the burning middle
+        Light(dl, c, r * 0.18f, 255, 200, 140, 0.9f * g); // the burning middle
     }
 }
 
