@@ -344,15 +344,16 @@ index 1f03cb63..b4a12007 100644
      float mMouseWheelY = 0.0f;
 diff --git a/include/fast/backends/gfx_shader_disk_cache.h b/include/fast/backends/gfx_shader_disk_cache.h
 new file mode 100644
-index 00000000..0cbc967c
+index 00000000..c94bce09
 --- /dev/null
 +++ b/include/fast/backends/gfx_shader_disk_cache.h
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,25 @@
 +#pragma once
 +
 +#include <cstddef>
 +#include <cstdint>
 +#include <string>
++#include <utility>
 +#include <vector>
 +
 +// Compiled shaders kept on disk, so a shader is compiled once and later sessions load it instead of stalling a frame.
@@ -365,6 +366,11 @@ index 00000000..0cbc967c
 +// api names the renderer's folder ("dx11", "vulkan", "opengl"). Load returns false when nothing usable is stored.
 +bool Load(const char* api, uint64_t key, std::vector<uint8_t>& out);
 +void Store(const char* api, uint64_t key, const void* data, size_t size);
++
++// Every shader the game has used (its combiner ids), kept across sessions so they can all be prepared when the game
++// opens instead of on the frame that first needs them.
++std::vector<std::pair<uint64_t, uint64_t>> RecordedShaders();
++void RecordShader(uint64_t id0, uint64_t id1);
 +
 +} // namespace Fast::ShaderDiskCache
 diff --git a/include/fast/backends/gfx_vulkan.h b/include/fast/backends/gfx_vulkan.h
@@ -455,7 +461,7 @@ index 00000000..4d370188
 +
 +#endif
 diff --git a/include/fast/interpreter.h b/include/fast/interpreter.h
-index ee526729..81d20685 100644
+index ee526729..3b8e7baa 100644
 --- a/include/fast/interpreter.h
 +++ b/include/fast/interpreter.h
 @@ -83,6 +83,11 @@ enum class ShaderOpts {
@@ -479,6 +485,15 @@ index ee526729..81d20685 100644
  };
  
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features);
+@@ -391,6 +398,8 @@ class Interpreter {
+     // private: TODO make these private
+     void Flush();
+     ShaderProgram* LookupOrCreateShaderProgram(uint64_t id0, uint64_t id1);
++    void WarmUpShaders();
++    bool mWarmingShaders = false;
+     ColorCombiner* LookupOrCreateColorCombiner(const ColorCombinerKey& key);
+     void TextureCacheClear();
+     bool TextureCacheLookup(int i, const TextureCacheKey& key);
 diff --git a/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h b/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h
 index 75ec491c..8be8cbfa 100644
 --- a/include/ship/controller/controldevice/controller/mapping/sdl/SDLGyroMapping.h
@@ -2101,15 +2116,17 @@ index eb5df8b2..57aa4933 100644
      SDL_Quit();
 diff --git a/src/fast/backends/gfx_shader_disk_cache.cpp b/src/fast/backends/gfx_shader_disk_cache.cpp
 new file mode 100644
-index 00000000..bb846f47
+index 00000000..8b7f8730
 --- /dev/null
 +++ b/src/fast/backends/gfx_shader_disk_cache.cpp
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,129 @@
 +#include "fast/backends/gfx_shader_disk_cache.h"
 +
 +#include <cstdio>
 +#include <filesystem>
 +#include <fstream>
++#include <mutex>
++#include <set>
 +
 +#include "ship/Context.h"
 +
@@ -2190,6 +2207,45 @@ index 00000000..bb846f47
 +    if (ec) {
 +        std::filesystem::remove(temp, ec);
 +    }
++}
++
++static std::filesystem::path ListPath() {
++    return std::filesystem::path(Ship::Context::GetPathRelativeToAppDirectory("shadercache")) / "shaders.list";
++}
++
++static std::mutex sListMutex;
++static std::set<std::pair<uint64_t, uint64_t>> sRecorded;
++static bool sListLoaded = false;
++
++static void LoadList() {
++    if (sListLoaded) {
++        return;
++    }
++    sListLoaded = true;
++    std::ifstream file(ListPath(), std::ios::binary);
++    uint64_t ids[2];
++    while (file.read(reinterpret_cast<char*>(ids), sizeof(ids))) {
++        sRecorded.insert({ ids[0], ids[1] });
++    }
++}
++
++std::vector<std::pair<uint64_t, uint64_t>> RecordedShaders() {
++    std::lock_guard<std::mutex> lock(sListMutex);
++    LoadList();
++    return { sRecorded.begin(), sRecorded.end() };
++}
++
++void RecordShader(uint64_t id0, uint64_t id1) {
++    std::lock_guard<std::mutex> lock(sListMutex);
++    LoadList();
++    if (!sRecorded.insert({ id0, id1 }).second) {
++        return;
++    }
++    std::error_code ec;
++    std::filesystem::create_directories(ListPath().parent_path(), ec);
++    std::ofstream file(ListPath(), std::ios::binary | std::ios::app);
++    uint64_t ids[2] = { id0, id1 };
++    file.write(reinterpret_cast<const char*>(ids), sizeof(ids));
 +}
 +
 +} // namespace Fast::ShaderDiskCache
@@ -4900,10 +4956,54 @@ index 00000000..c29edd5d
 +
 +#endif
 diff --git a/src/fast/interpreter.cpp b/src/fast/interpreter.cpp
-index 19d9e12f..86513bfe 100644
+index 19d9e12f..d137e04a 100644
 --- a/src/fast/interpreter.cpp
 +++ b/src/fast/interpreter.cpp
-@@ -383,6 +383,14 @@ void Interpreter::GenerateCC(ColorCombiner* comb, const ColorCombinerKey& key) {
+@@ -1,3 +1,4 @@
++#include <chrono>
+ #define NOMINMAX
+ 
+ #include <math.h>
+@@ -10,6 +11,7 @@
+ 
+ #include <any>
+ #include <map>
++#include "fast/backends/gfx_shader_disk_cache.h"
+ #include <set>
+ #include <unordered_map>
+ #include <vector>
+@@ -138,10 +140,30 @@ ShaderProgram* Interpreter::LookupOrCreateShaderProgram(uint64_t id0, uint64_t i
+         mRapi->UnloadShader(mRenderingState.mShaderProgram);
+         prg = mRapi->CreateAndLoadNewShader(id0, id1);
+         mRenderingState.mShaderProgram = prg;
++        if (!mWarmingShaders) {
++            ShaderDiskCache::RecordShader(id0, id1);
++        }
+     }
+     return prg;
+ }
+ 
++// Prepares every shader used in earlier sessions, so none of them stalls a frame later. With the compiled shaders
++// already on disk this only loads them.
++void Interpreter::WarmUpShaders() {
++    auto shaders = ShaderDiskCache::RecordedShaders();
++    if (shaders.empty()) {
++        return;
++    }
++    auto start = std::chrono::steady_clock::now();
++    mWarmingShaders = true;
++    for (const auto& [id0, id1] : shaders) {
++        LookupOrCreateShaderProgram(id0, id1);
++    }
++    mWarmingShaders = false;
++    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
++    SPDLOG_INFO("Prepared {} shaders in {} ms", shaders.size(), ms);
++}
++
+ const char* Interpreter::CCMUXtoStr(uint32_t ccmux) {
+     static constexpr std::array tbl = {
+         "G_CCMUX_COMBINED",
+@@ -383,6 +405,14 @@ void Interpreter::GenerateCC(ColorCombiner* comb, const ColorCombinerKey& key) {
              }
          }
      }
@@ -4918,7 +5018,7 @@ index 19d9e12f..86513bfe 100644
      comb->shader_id0 = shaderId0;
      comb->shader_id1 = shaderId1;
      comb->usedTextures[0] = usedTextures[0];
-@@ -1499,6 +1507,9 @@ void Interpreter::GfxSpTri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx
+@@ -1499,6 +1529,9 @@ void Interpreter::GfxSpTri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx
          cc_options |= SHADER_OPT(USE_SHADER);
          cc_options |= (shader.id << 17);
      }
@@ -4928,7 +5028,16 @@ index 19d9e12f..86513bfe 100644
  
      ColorCombinerKey key;
      key.combine_mode = mRdp->combine_mode;
-@@ -4277,9 +4288,11 @@ void Interpreter::StartFrame() {
+@@ -4209,6 +4242,8 @@ void Interpreter::Init(class GfxWindowBackend* wapi, class GfxRenderingAPI* rapi
+     }
+ 
+     ucode_handler_index = UcodeHandlers::ucode_f3dex2;
++
++    WarmUpShaders();
+ }
+ 
+ void Interpreter::Destroy() {
+@@ -4277,9 +4312,11 @@ void Interpreter::StartFrame() {
  
      mPrvDimensions = mCurDimensions;
      mPrevNativeDimensions = mNativeDimensions;
@@ -4942,7 +5051,7 @@ index 19d9e12f..86513bfe 100644
              mRapi->UpdateFramebufferParameters(mGameFb, mCurDimensions.width, mCurDimensions.height, mMsaaLevel, true,
                                                 true, true, true);
          } else {
-@@ -4385,6 +4398,7 @@ void Interpreter::Run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_r
+@@ -4385,6 +4422,7 @@ void Interpreter::Run(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtx_r
      currentDir = std::stack<std::string>();
  
      if (mRendersToFb) {
@@ -4950,7 +5059,7 @@ index 19d9e12f..86513bfe 100644
          mRapi->StartDrawToFramebuffer(0, 1);
          mRapi->ClearFramebuffer(true, true);
          if (mMsaaLevel > 1) {
-@@ -4596,6 +4610,23 @@ void Interpreter::GetCurDimensions(uint32_t* width, uint32_t* height) {
+@@ -4596,6 +4634,23 @@ void Interpreter::GetCurDimensions(uint32_t* width, uint32_t* height) {
  
  } // namespace Fast
  
@@ -4974,7 +5083,7 @@ index 19d9e12f..86513bfe 100644
  void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeatures* cc_features) {
      for (int i = 0; i < 2; i++) {
          for (int j = 0; j < 2; j++) {
-@@ -4621,6 +4652,11 @@ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeat
+@@ -4621,6 +4676,11 @@ void gfx_cc_get_features(uint64_t shader_id0, uint32_t shader_id1, struct CCFeat
  
      if (shader_id1 & SHADER_OPT(USE_SHADER)) {
          cc_features->shader_id = (shader_id1 >> 17) & 0xFFFF;
