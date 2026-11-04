@@ -8,6 +8,34 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.4
+- **Tela inicial refeita com telas próprias.** O menu não entra mais no jogo para mostrar nada: cada item abre uma
+  tela própria, com título, caminho (Menu > Configurações > ...), botão Voltar, indicador de página, ajuda do item
+  selecionado, dicas de botão e transição. B, o botão Voltar ou Backspace sempre voltam uma tela.
+  - **Iniciar Jogo**: pede confirmação, abre a entrada de nome do jogo no primeiro arquivo vazio e começa o jogo assim
+    que o nome é confirmado.
+  - **Continuar**: carrega o último arquivo jogado.
+  - **Carregar Jogo** e **Arquivos de Jogo**: os arquivos com nome, corações, máscaras, restos dos chefes, canções,
+    rupias, dia e hora e ciclos de três dias, lidos dos saves. Jogar, criar jogo novo num arquivo vazio e excluir com
+    confirmação (os mesmos passos do Apagar do jogo). O save do MM não guarda tempo de jogo, então a tela mostra os
+    ciclos.
+  - **Configurações**: abas Vídeo, Resolução, Áudio, Idioma, Controles, Acessibilidade e Definitive Edition, com
+    opções reais aplicadas na hora, e "Todas as opções" para o menu completo.
+  - **Controles**: todos os botões e o que fazem, as combinações, e as opções de controle com o editor de botões.
+  - **Extras**: galeria, artes conceituais, informações da edição, conteúdos adicionais, música do menu e a abertura
+    original.
+  - **Créditos**: equipe da Definitive Edition, desenvolvedores originais e colaboradores do 2 Ship 2 Harkinian.
+  - **Sair**: pergunta e fecha o jogo.
+- Navegação por controle, teclado e toque: analógico ou direcional movem, A ou Start abrem, B volta, L/Z e R trocam
+  de página; setas, Enter, Backspace e Page Up/Down no teclado.
+- Saem do menu: Bombers Book, Missões e Inventário (eles entravam no jogo). O caderno, o menu de missões e o
+  inventário continuam no jogo como antes.
+- O gameplay, os menus internos e os controles dentro do jogo não mudam.
+- Arquivos: `mm/2s2h/Enhancements/TitleMenu/TitleMenu.cpp`, `TitleMenu.h`, `make_assets.py`, os novos
+  `mm/assets/custom/overlays/titlemenu/` (`icon_hourglass`, `icon_gamepad`, `icon_door`, `label_start`,
+  `label_files`, `label_settings`, `label_controls`, `label_quit`, `concept_1..3`), `Android/app/build.gradle`
+  (versionName), este CHANGELOG.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.3
 - **Tela inicial: os controles de toque ficam na tela.** O analógico, o direcional, o A e o B da tela agora mexem no
   menu como um controle. Um toque fora deles vai direto para o item do menu, em vez de girar a câmera. Com o botão do

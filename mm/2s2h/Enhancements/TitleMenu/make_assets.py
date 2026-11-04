@@ -5,7 +5,8 @@ The picture (1672x941, with the menu drawn on it) is scaled to the 1920x1080 pag
 buttons and the button hints are painted out of the background, and the icons are lifted from the picture so the
 game can draw the buttons itself (and move the highlight). The labels are rendered with Inter (SIL Open Font
 License). Run it again after changing the picture:
-    python3 mm/2s2h/Enhancements/TitleMenu/make_assets.py <picture.png>
+    python3 mm/2s2h/Enhancements/TitleMenu/make_assets.py <picture.png> [concept art...]
+The concept art after the picture (Rafael's other concept pictures) goes to the Extras gallery as concept_N.jpg.
 """
 
 import os
@@ -192,6 +193,43 @@ def draw_bag(d):
     d.ellipse([110, 140, 146, 176], fill=0)
 
 
+def draw_hourglass(d):
+    # Continue: an hourglass, for the three days.
+    d.rectangle([52, 22, 204, 44], fill=255)
+    d.rectangle([52, 212, 204, 234], fill=255)
+    d.polygon([(70, 44), (186, 44), (136, 128), (186, 212), (70, 212), (120, 128)], fill=255)
+    d.polygon([(92, 60), (164, 60), (128, 112)], fill=0)
+    d.polygon([(128, 150), (170, 196), (86, 196)], fill=0)
+    d.polygon([(128, 166), (150, 190), (106, 190)], fill=255)
+
+
+def draw_gamepad(d):
+    # Controls: a controller with a d-pad and two buttons.
+    d.rounded_rectangle([18, 74, 238, 190], 52, fill=255)
+    d.ellipse([18, 120, 98, 230], fill=255)
+    d.ellipse([158, 120, 238, 230], fill=255)
+    d.rectangle([56, 116, 76, 160], fill=0)
+    d.rectangle([44, 128, 88, 148], fill=0)
+    d.ellipse([168, 106, 194, 132], fill=0)
+    d.ellipse([190, 130, 216, 156], fill=0)
+
+
+def draw_door(d):
+    # Quit: a door with an arrow going out.
+    d.rectangle([40, 24, 150, 232], fill=255)
+    d.rectangle([62, 46, 128, 232], fill=0)
+    d.polygon([(62, 46), (128, 62), (128, 222), (62, 232)], fill=255)
+    d.ellipse([108, 130, 122, 144], fill=0)
+    d.rectangle([150, 118, 210, 138], fill=255)
+    d.polygon([(200, 92), (244, 128), (200, 164)], fill=255)
+
+
+def concept(path, name):
+    img = Image.open(path).convert("RGB")
+    img.thumbnail((1600, 1600), Image.LANCZOS)
+    img.save(os.path.join(OUT, name), quality=88, optimize=True)
+
+
 def moon_layer(bg, name):
     """The moon on its own, so the menu can let it drift and breathe. The clock tower in front of it is left out."""
     cx, cy, r = 1492, -43, 462
@@ -253,6 +291,11 @@ def main():
     white_icon("icon_book.png", draw_book)
     white_icon("icon_scroll.png", draw_scroll)
     white_icon("icon_bag.png", draw_bag)
+    white_icon("icon_hourglass.png", draw_hourglass)
+    white_icon("icon_gamepad.png", draw_gamepad)
+    white_icon("icon_door.png", draw_door)
+    for i, path in enumerate(sys.argv[2:]):
+        concept(path, "concept_%d.jpg" % (i + 1))
     bg.resize((240, 135), Image.LANCZOS).filter(ImageFilter.GaussianBlur(3)).save(
         os.path.join(OUT, "background_blur.jpg"), quality=85)
 
@@ -263,7 +306,9 @@ def main():
                        ("Voltar", "label_back.png"), ("Bombers Book", "label_bombers.png"),
                        ("Missões", "label_quests.png"), ("Inventário", "label_inventory.png"),
                        ("Créditos", "label_credits.png"), ("Versão", "label_version.png"), ("Sim", "label_yes.png"),
-                       ("Não", "label_no.png")):
+                       ("Não", "label_no.png"), ("Iniciar Jogo", "label_start.png"),
+                       ("Arquivos de Jogo", "label_files.png"), ("Configurações", "label_settings.png"),
+                       ("Controles", "label_controls.png"), ("Sair", "label_quit.png")):
         label(text, name)
     for text, name in (("Tema de Majora", "music_majora.png"), ("Últimas Horas", "music_final_hours.png"),
                        ("Torre do Relógio", "music_clock_tower.png"), ("Castelo de Ikana", "music_ikana_castle.png"),
