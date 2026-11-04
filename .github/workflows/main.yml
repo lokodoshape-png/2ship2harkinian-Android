@@ -256,6 +256,9 @@ jobs:
     needs: [ build-linux, build-windows ]
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
+      with:
+        path: source
     - uses: actions/download-artifact@v4
       with:
         name: 2ship-windows
@@ -273,6 +276,15 @@ jobs:
         exe=$(find 2ship-windows -name 2ship.exe | head -n 1)
         if [ -n "$exe" ]; then mv "$exe" "$(dirname "$exe")/$name.exe"; fi
         mv 2ship-linux/2ship.appimage "2ship-linux/$name.appimage"
+        # The opening video and its subtitles go beside the game (IntroVideo.cpp); intro-video.yml makes the video.
+        if gh release download intro-video -p abertura.mpg -R "$GITHUB_REPOSITORY"; then
+          for dir in "$(dirname "$(find 2ship-windows -name "$name.exe" | head -n 1)")" 2ship-linux; do
+            cp abertura.mpg source/Android/app/src/main/res/raw/abertura_legendas.srt "$dir/"
+            mv "$dir/abertura_legendas.srt" "$dir/abertura.srt"
+          done
+        else
+          echo "Sem o release intro-video: o PC sai sem a abertura."
+        fi
         (cd 2ship-windows && zip -qr "../$name-windows-$sha.zip" .)
         (cd 2ship-linux && chmod +x "$name.appimage" && zip -qr "../$name-linux-$sha.zip" .)
         tag="pc-4.0-build-${GITHUB_RUN_NUMBER}"

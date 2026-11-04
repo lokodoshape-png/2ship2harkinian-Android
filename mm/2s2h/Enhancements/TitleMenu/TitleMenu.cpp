@@ -33,6 +33,7 @@
 #include "2s2h/Language/GameLanguage.h"
 #include "2s2h/Enhancements/Controls/ButtonPrompts.h"
 #include "2s2h/Enhancements/QuestMenu/QuestRenderer.h"
+#include "IntroVideo.h"
 
 extern "C" {
 #include <z64.h>
@@ -2359,7 +2360,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.6"
+#define EDITION_VERSION "4.0.2-mm3d.7"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;
@@ -2593,7 +2594,7 @@ void DrawMenu() {
     float k = std::min(size.x / kW, size.y / kH);
     ImVec2 origin(pos.x + (size.x - kW * k) / 2, pos.y + (size.y - kH * k) / 2);
 
-    bool inputs = shown && !sLeaving && !OtherWindowOpen();
+    bool inputs = shown && !sLeaving && !OtherWindowOpen() && !IntroVideo::Active();
     if (inputs) {
         KeyboardNav(dt);
     }
@@ -2826,7 +2827,7 @@ void OnGameFrame() {
         }
         return;
     }
-    if (!sLeaving && !OtherWindowOpen()) {
+    if (!sLeaving && !OtherWindowOpen() && !IntroVideo::Active()) {
         HandlePad(input);
     }
     RunPending(fs);
@@ -2839,6 +2840,8 @@ void OnGameFrame() {
 
 void TitleMenuWindow::Draw() {
     TitleMenu::DrawMenu();
+    IntroVideo::Draw(); // PC: the opening, on top of everything while the game boots
+
 }
 
 void TitleMenuWindow::InitElement() {

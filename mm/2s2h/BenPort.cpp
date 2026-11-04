@@ -423,6 +423,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_nativeSetIntro
 }
 #endif
 
+// PC: IntroVideo.cpp plays the opening.
+extern "C" void Intro_SetGameMuted(bool muted) {
+    sIntroPlaying = muted;
+}
+
 static void ApplyIntroGain(s16* samples, u32 count) {
     float target = sIntroPlaying ? 0.0f : 1.0f;
     if (sIntroGain == 1.0f && target == 1.0f) {

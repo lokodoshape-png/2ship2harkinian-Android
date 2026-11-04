@@ -1,2 +1,2 @@
-# Google Drive id of the opening video (Rafael's own, from his YouTube channel). See .github/workflows/intro-video.yml.
+# Google Drive id (2026-11-04: also makes abertura.mpg for the PC) of the opening video (Rafael's own, from his YouTube channel). See .github/workflows/intro-video.yml.
 1uGKT3GbSHwiJLR5HhaOh9CvAKQAqmHHn

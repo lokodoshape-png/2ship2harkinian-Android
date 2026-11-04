@@ -3,13 +3,15 @@ name: Intro video (abertura)
 # Makes the opening video the Android app plays before the title menu, from Rafael's own video (his YouTube channel,
 # kept on his Google Drive): downloads it, compresses it to H.264/AAC that every Android phone decodes, transcribes
 # its speech for the subtitles, and publishes both on the release "intro-video". android.yml puts abertura.mp4 into
-# the APK from there. The source is set in intro/source.txt; a change to it runs this again.
+# the APK from there, and main.yml puts abertura.mpg (MPEG-1 and MP2, which the PC build's own decoder plays) and
+# abertura.srt beside the PC game. The source is set in intro/source.txt; a change to it on a work branch runs this
+# again (not on mm3d-4.0, where the release would be replaced while the app builds take it), or run it by hand.
 
 on:
   push:
+    branches-ignore: [ mm3d-4.0 ]
     paths:
       - intro/source.txt
-      - .github/workflows/intro-video.yml
   workflow_dispatch:
 
 permissions:
@@ -50,6 +52,15 @@ jobs:
           done
           ffprobe -hide_banner abertura.mp4 2>&1 | tee -a probe.txt
 
+      - name: Make the PC version (MPEG-1 720p and MP2)
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -i original.mp4 \
+            -vf "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+            -c:v mpeg1video -b:v 3500k -maxrate 4500k -bufsize 4000k -g 24 -bf 0 \
+            -c:a mp2 -b:a 256k -ar 44100 -ac 2 -f mpeg abertura.mpg
+          ls -la abertura.mpg
+          ffprobe -hide_banner abertura.mpg 2>&1 | tee -a probe.txt
+
       - name: Transcribe the speech
         run: |
           ffmpeg -hide_banner -loglevel error -y -i original.mp4 -vn -ac 1 -ar 16000 audio.wav
@@ -76,4 +87,4 @@ jobs:
           gh release view intro-video > /dev/null 2>&1 || \
             gh release create intro-video --target "$GITHUB_SHA" --prerelease --title "Vídeo de abertura" \
               --notes "Vídeo de abertura da Definitive Edition (do canal do Rafael), comprimido para o APK, e a transcrição das falas."
-          gh release upload intro-video abertura.mp4 transcricao.srt probe.txt --clobber
+          gh release upload intro-video abertura.mp4 abertura.mpg transcricao.srt probe.txt --clobber

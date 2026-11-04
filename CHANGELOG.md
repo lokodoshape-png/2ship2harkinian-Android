@@ -8,6 +8,14 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.7
+- **Abertura também no PC (Windows e Linux).** A mesma sequência do Android: tela preta, a logo da edição (1,5 s
+  aparecendo, 3 s, 1 s sumindo) e o vídeo de abertura em tela cheia, na proporção original, com o áudio original e
+  as legendas na fonte do menu, dissolvendo para a tela inicial. Qualquer tecla, botão do controle (A, B, START...)
+  ou clique pula. O jogo fica sem som enquanto isso. As mesmas três opções em Enhancements > Time Savers.
+  - O vídeo vem no zip, ao lado do jogo, como `abertura.mpg` (720p MPEG-1, que o próprio jogo decodifica, sem
+    instalar nada) com as legendas em `abertura.srt`. Sem o arquivo, só a logo aparece.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.6
 - **Vídeo de abertura (Android).** Ao abrir o app, o vídeo de abertura da Definitive Edition (do canal do Rafael) toca
   em tela cheia, na proporção original e com o áudio original, antes da tela inicial. O jogo carrega por baixo, sem

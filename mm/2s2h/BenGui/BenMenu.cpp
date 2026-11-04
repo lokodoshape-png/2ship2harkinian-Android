@@ -1455,7 +1455,7 @@ void BenMenu::AddEnhancements() {
     AddWidget(path, "Vídeo de abertura", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.TitleMenu.Intro")
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Android: toca o vídeo de abertura da Definitive Edition ao abrir o app, antes da tela inicial."));
+            "Toca a logo e o vídeo de abertura da Definitive Edition ao abrir o jogo, antes da tela inicial."));
     AddWidget(path, "Abertura em toda inicialização", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.TitleMenu.IntroEveryLaunch")
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
