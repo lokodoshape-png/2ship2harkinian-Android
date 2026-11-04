@@ -27,6 +27,7 @@
 #include "Enhancements/Trackers/TimeSplits/TimesplitsSettings.h"
 #include "BenMenu.h"
 #include "2s2h/Enhancements/MM3D/BombersNotebookGuide.h"
+#include "2s2h/Updater/Updater.h"
 #include "BenMenuBar.h"
 #include "DeveloperTools/HookDebugger.h"
 #include "DeveloperTools/SaveEditor.h"
@@ -50,6 +51,7 @@ std::shared_ptr<HookDebuggerWindow> mHookDebuggerWindow;
 std::shared_ptr<SaveEditorWindow> mSaveEditorWindow;
 std::shared_ptr<HudEditorWindow> mHudEditorWindow;
 std::shared_ptr<BombersNotebookGuideWindow> mBombersNotebookGuideWindow;
+std::shared_ptr<UpdaterWindow> mUpdaterWindow;
 std::shared_ptr<CosmeticEditorWindow> mCosmeticEditorWindow;
 std::shared_ptr<ActorViewerWindow> mActorViewerWindow;
 std::shared_ptr<CollisionViewerWindow> mCollisionViewerWindow;
@@ -172,6 +174,9 @@ void SetupGuiElements() {
         "gWindows.BombersNotebookGuide", "Bombers Notebook Guide", ImVec2(460, 520));
     gui->AddGuiWindow(mBombersNotebookGuideWindow);
 
+    mUpdaterWindow = std::make_shared<UpdaterWindow>("gWindows.Updater", "Updater");
+    gui->AddGuiWindow(mUpdaterWindow);
+
     mNotificationWindow = std::make_shared<Notification::Window>("gWindows.Notifications", "Notifications Window");
     gui->AddGuiWindow(mNotificationWindow);
     mNotificationWindow->Show();
@@ -215,6 +220,7 @@ void Destroy() {
     mSaveEditorWindow = nullptr;
     mHudEditorWindow = nullptr;
     mBombersNotebookGuideWindow = nullptr;
+    mUpdaterWindow = nullptr;
     mCosmeticEditorWindow = nullptr;
     mActorViewerWindow = nullptr;
     mDLViewerWindow = nullptr;

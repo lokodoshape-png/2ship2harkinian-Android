@@ -339,6 +339,14 @@ void BenMenu::AddSettings() {
                      .ComboVec(&interfaceSizeOptions)
                      .DefaultIndex(0));
 #endif
+#ifdef _WIN32
+    AddWidget(path, "Check for Updates When the Game Opens", WIDGET_CVAR_CHECKBOX)
+        .CVar("gSettings.CheckForUpdates")
+        .Options(CheckboxOptions()
+                     .Tooltip("When the game opens, look for a newer PC build on GitHub and offer to install it. "
+                              "Saves, mods and settings are kept.")
+                     .DefaultValue(true));
+#endif
     AddWidget(path, "Menu Theme", WIDGET_CVAR_COMBOBOX)
         .CVar("gSettings.Menu.Theme")
         .Options(ComboboxOptions()

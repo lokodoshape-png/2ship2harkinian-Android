@@ -1044,6 +1044,27 @@ static const std::unordered_map<std::string, const char*> sPortuguese = {
       "Como no Majora's Mask 3D, a Máscara do Gigante é recebida durante a luta contra o Twinmold, quando o primeiro "
       "Twinmold cai. O baú do Templo da Torre de Pedra que a guardava dá uma rupia roxa no lugar." },
     { "Giant's Mask", "Máscara do Gigante" },
+    { "Check for Updates When the Game Opens", "Procurar atualizações ao abrir o jogo" },
+    { "When the game opens, look for a newer PC build on GitHub and offer to install it. Saves, mods and settings "
+      "are kept.",
+      "Ao abrir o jogo, procura uma build nova do PC no GitHub e oferece instalar. Saves, mods e configurações são "
+      "mantidos." },
+    { "Update available", "Atualização disponível" },
+    { "A new version of the game is available:", "Tem uma versão nova do jogo:" },
+    { "The game will download it, close, install it and open again. Your saves, mods and settings are kept.",
+      "O jogo vai baixar, fechar, instalar e abrir de novo. Seus saves, mods e configurações continuam." },
+    { "Update now", "Atualizar agora" },
+    { "Not now", "Agora não" },
+    { "Downloading", "Baixando" },
+    { "Installing. The game closes now and opens again when it is done.",
+      "Instalando. O jogo vai fechar agora e abrir de novo quando terminar." },
+    { "Could not download the update. Check the internet connection and try again.",
+      "Não consegui baixar a atualização. Confira a internet e tente de novo." },
+    { "Could not unpack the update.", "Não consegui extrair a atualização." },
+    { "The downloaded update has no game executable.", "A atualização baixada não tem o executável do jogo." },
+    { "Could not start the installer.", "Não consegui iniciar o instalador." },
+    { "Try again", "Tentar de novo" },
+    { "Close", "Fechar" },
     { "Put it on to grow huge!", "Coloque-a para ficar gigante!" },
     { "Swap Koume's and Dampe's Rewards", "Trocar os prêmios da Koume e do Dampé" },
     { "Like in Majora's Mask 3D, Koume's boat archery gives an empty bottle and the chest under Dampe's house gives a "

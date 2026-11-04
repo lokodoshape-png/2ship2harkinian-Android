@@ -586,6 +586,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 		"imm32;"
 		"version;"
 		"setupapi;"
+		"winhttp;"
         "Ogg::ogg"
         "Opus::opus"
         "Vorbis::vorbis"
@@ -679,6 +680,14 @@ INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION ../MacOS COMP
 INSTALL(FILES ${CMAKE_BINARY_DIR}/mm/2ship.o2r DESTINATION ../Resources COMPONENT 2s2h)
 elseif(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "NintendoSwitch|CafeOS|Android")
 INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION . COMPONENT 2s2h)
+endif()
+
+
+# The PC build number of the CI run, so the game's updater knows which release it is (pc-4.0-build-N).
+if (DEFINED ENV{GITHUB_RUN_NUMBER} AND "$ENV{GITHUB_WORKFLOW}" STREQUAL "generate-builds")
+    # Only on this one file, so the compiler cache still covers the rest of the game.
+    set_source_files_properties(2s2h/Updater/Updater.cpp PROPERTIES COMPILE_DEFINITIONS
+                                "MMADE_PC_BUILD=$ENV{GITHUB_RUN_NUMBER}")
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
