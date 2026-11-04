@@ -9,6 +9,12 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
 ### 2026-11-04 — versão 4.0.2-mm3d.7
+- **Transição da lua antes do menu (Android e PC).** Toda saída da abertura passa pela mesma transição, de uns 4,6 s:
+  quando o vídeo termina, quando é pulado (com botão, tecla, clique ou toque, também durante a logo) e quando o vídeo
+  não pode ser tocado. O vídeo é parado e liberado, a tela escurece, a lua aparece de perto, os olhos acendem com
+  brilho vermelho e violeta e pulsam, vão apagando, e quando apagam a tela inicial aparece com um fade-in. Uma única
+  rotina faz isso (`exitToMenu` no Android, `ExitToMenu` no PC) e só roda uma vez, mesmo com o fim do vídeo e um
+  botão ao mesmo tempo. Botões durante a transição não fazem nada. A lua é a da arte da tela inicial.
 - **Abertura também no PC (Windows e Linux).** A mesma sequência do Android: tela preta, a logo da edição (1,5 s
   aparecendo, 3 s, 1 s sumindo) e o vídeo de abertura em tela cheia, na proporção original, com o áudio original e
   as legendas na fonte do menu, dissolvendo para a tela inicial. Qualquer tecla, botão do controle (A, B, START...)

@@ -40,12 +40,15 @@ extern "C" void Intro_SetGameMuted(bool muted);
 namespace IntroVideo {
 namespace {
 
-constexpr float kLogoIn = 1.5f, kLogoHold = 3.0f, kLogoOut = 1.0f, kFadeOut = 0.7f, kHintDelay = 1.2f;
+constexpr float kLogoIn = 1.5f, kLogoHold = 3.0f, kLogoOut = 1.0f, kHintDelay = 1.2f;
+// The moon (see DrawMoon): the whole transition, and when the dark starts to lift off the menu.
+constexpr float kMoonTotal = 4.6f, kMoonReveal = 3.9f;
+// The eyes in intro_moon.png (840 x 300).
+const ImVec2 kEyes[] = { ImVec2(232, 165), ImVec2(604, 17) };
 
-enum class Phase { Start, Logo, Video, FadeOut, Done };
+enum class Phase { Start, Logo, Video, Moon, Done };
 Phase sPhase = Phase::Start;
 float sTime = 0.0f;     // time in the phase
-float sFadeFrom = 1.0f; // FadeOut: how much of the picture was up when it began
 bool sSkippable = true;
 float sHint = 0.0f;     // time the hint has been waited for
 
@@ -54,7 +57,7 @@ struct Tex {
     ImTextureID im = nullptr;
     int w = 0, h = 0;
 };
-Tex sLogo, sFrame;
+Tex sLogo, sFrame, sMoon;
 
 plm_t* sPlm = nullptr;
 SDL_AudioDeviceID sAudio = 0;
@@ -109,8 +112,7 @@ void Free(Tex& tex) {
     tex = Tex();
 }
 
-bool LoadLogo() {
-    const std::string path = "overlays/titlemenu/intro_logo.jpg";
+bool LoadImage(const std::string& path, Tex& out) {
     auto context = Ship::Context::GetInstance();
     auto archives = context->GetResourceManager()->GetArchiveManager();
     if (archives == nullptr || !archives->HasFile(path)) {
@@ -126,9 +128,9 @@ bool LoadLogo() {
     if (image == nullptr || image->Data == nullptr) {
         return false;
     }
-    Upload(sLogo, image->Data, image->Metadata.Width, image->Metadata.Height);
+    Upload(out, image->Data, image->Metadata.Width, image->Metadata.Height);
     context->GetResourceManager()->UnloadResource(path);
-    return sLogo.im != nullptr;
+    return out.im != nullptr;
 }
 
 std::string Beside(const char* name) {
@@ -238,19 +240,24 @@ void End() {
     CloseVideo();
     Free(sLogo);
     Free(sFrame);
+    Free(sMoon);
     sCues.clear();
     sPhase = Phase::Done;
     Intro_SetGameMuted(false);
 }
 
-void BeginFadeOut(float from) {
-    if (sPhase == Phase::FadeOut || sPhase == Phase::Done) {
+// The one way into the title menu, from every way out of the opening (the video ended, a skip during the logo or the
+// video, a video that could not be read): the video is stopped and let go, the screen goes dark, and the moon's red
+// eyes burn, pulse and go out before the menu fades in. Only the first call counts.
+void ExitToMenu() {
+    if (sPhase == Phase::Moon || sPhase == Phase::Done) {
         return;
     }
-    sFadeFrom = from;
-    sPhase = Phase::FadeOut;
+    CloseVideo();
+    Free(sFrame);
+    Free(sLogo);
+    sPhase = Phase::Moon;
     sTime = 0.0f;
-    Intro_SetGameMuted(false); // the menu's sound comes in as the picture goes
 }
 
 bool Start() {
@@ -260,7 +267,8 @@ bool Start() {
         return false;
     }
     bool video = OpenVideo();
-    bool logo = LoadLogo();
+    bool logo = LoadImage("overlays/titlemenu/intro_logo.jpg", sLogo);
+    LoadImage("overlays/titlemenu/intro_moon.png", sMoon);
     if (!video && !logo) {
         return false;
     }
@@ -310,6 +318,54 @@ void Fit(ImDrawList* dl, const Tex& tex, ImVec2 pos, ImVec2 size, float a) {
                  IM_COL32(255, 255, 255, (int)(255 * std::clamp(a, 0.0f, 1.0f))));
 }
 
+float Smooth(float v) {
+    v = std::clamp(v, 0.0f, 1.0f);
+    return v * v * (3.0f - 2.0f * v);
+}
+
+// A soft round light: rings from the edge in, each adding a little, so the middle is brightest.
+void Light(ImDrawList* dl, ImVec2 c, float r, int red, int green, int blue, float a) {
+    if (a <= 0.003f) {
+        return;
+    }
+    const int steps = 18;
+    for (int i = 0; i < steps; i++) {
+        float k = 1.0f - (float)i / steps;
+        dl->AddCircleFilled(c, r * k, IM_COL32(red, green, blue, (int)(255 * std::clamp(a * 2.2f / steps, 0.0f, 1.0f))),
+                            48);
+    }
+}
+
+// The moon close up, from the dark; its eyes kindle, burn red and violet and pulse, then dim and go out.
+void DrawMoon(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
+    float t = sTime;
+    if (sMoon.im == nullptr || t >= kMoonReveal) {
+        return;
+    }
+    float moonA = Smooth((t - 0.4f) / 1.0f) * (1.0f - Smooth((t - 3.2f) / 0.7f));
+    float eyes = Smooth((t - 1.0f) / 0.8f) * (1.0f - Smooth((t - 2.8f) / 0.9f));
+    float pulse = 0.72f + 0.28f * std::sin(t * 3.14159265f * 2.0f * 1.6f);
+    float zoom = 1.0f + 0.06f * std::clamp(t / kMoonTotal, 0.0f, 1.0f);
+    float k = std::min(size.x * 0.96f / sMoon.w, size.y * 0.9f / sMoon.h) * zoom;
+    ImVec2 s(sMoon.w * k, sMoon.h * k);
+    ImVec2 p0(pos.x + (size.x - s.x) / 2, pos.y + (size.y - s.y) / 2);
+    ImVec2 mid(pos.x + size.x / 2, pos.y + size.y / 2);
+    Light(dl, mid, std::max(s.x, s.y) * 0.7f, 110, 35, 190, 0.4f * moonA * (0.6f + 0.4f * eyes)); // violet haze
+    dl->AddImage(sMoon.im, p0, ImVec2(p0.x + s.x, p0.y + s.y), ImVec2(0, 0), ImVec2(1, 1),
+                 IM_COL32(255, 255, 255, (int)(255 * moonA)));
+    float g = eyes * pulse;
+    if (g <= 0.0f) {
+        return;
+    }
+    for (const ImVec2& e : kEyes) {
+        ImVec2 c(p0.x + e.x * k, p0.y + e.y * k);
+        float r = s.y * 0.5f;
+        Light(dl, c, r * 1.6f, 160, 55, 255, 0.35f * g); // violet
+        Light(dl, c, r, 255, 35, 15, 0.8f * g);          // red
+        Light(dl, c, r * 0.22f, 255, 200, 140, 0.9f * g); // the burning middle
+    }
+}
+
 } // namespace
 
 bool Active() {
@@ -326,13 +382,8 @@ bool Draw() {
     }
     float dt = std::min(ImGui::GetIO().DeltaTime, 0.1f);
     sTime += dt;
-    if (sSkippable && sPhase != Phase::FadeOut && (SkipPressed() || sPadSkip)) {
-        float from = sPhase == Phase::Logo
-                         ? std::clamp(std::min(sTime / kLogoIn, (kLogoIn + kLogoHold + kLogoOut - sTime) / kLogoOut),
-                                      0.0f, 1.0f)
-                         : 1.0f;
-        CloseVideo();
-        BeginFadeOut(from);
+    if (sSkippable && sPhase != Phase::Moon && (SkipPressed() || sPadSkip)) {
+        ExitToMenu();
     }
     sPadSkip = false;
 
@@ -360,8 +411,8 @@ bool Draw() {
                     sTime = 0.0f;
                     shown = nullptr;
                 } else {
-                    End();
-                    return false;
+                    ExitToMenu();
+                    shown = nullptr;
                 }
             }
             break;
@@ -374,20 +425,20 @@ bool Draw() {
             }
             shown = &sFrame;
             if (plm_has_ended(sPlm)) {
-                CloseVideo();
-                BeginFadeOut(1.0f);
+                ExitToMenu();
+                shown = nullptr;
             }
             break;
         }
-        case Phase::FadeOut: {
-            float t = 1.0f - sTime / kFadeOut;
-            cover = std::max(0.0f, t);
-            picture = sFadeFrom * cover;
-            shown = sFrame.im != nullptr ? &sFrame : &sLogo;
-            if (sTime >= kFadeOut) {
+        case Phase::Moon: {
+            if (sTime >= kMoonReveal) {
+                Intro_SetGameMuted(false); // the menu's sound fades in with its picture
+            }
+            if (sTime >= kMoonTotal) {
                 End();
                 return false;
             }
+            cover = 1.0f - Smooth((sTime - kMoonReveal) / (kMoonTotal - kMoonReveal));
             break;
         }
         default:
@@ -395,8 +446,11 @@ bool Draw() {
     }
 
     dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, (int)(255 * cover)));
-    if (shown != nullptr) {
+    if (shown != nullptr && shown->im != nullptr) {
         Fit(dl, *shown, pos, size, picture);
+    }
+    if (sPhase == Phase::Moon) {
+        DrawMoon(dl, pos, size);
     }
     ImFont* font = OTRGlobals::Instance != nullptr ? OTRGlobals::Instance->fontQuestTitle : nullptr;
     if (font == nullptr) {
@@ -424,7 +478,7 @@ bool Draw() {
         }
     }
     // The hint, small in the corner.
-    if (sSkippable && sPhase != Phase::FadeOut) {
+    if (sSkippable && sPhase != Phase::Moon) {
         sHint += dt;
         float ha = std::clamp((sHint - kHintDelay) / 0.5f, 0.0f, 1.0f) * 0.8f;
         const char* hint = "Pressione qualquer botão para pular";

@@ -42,9 +42,9 @@ import java.util.regex.Pattern;
 
 // The opening, played over the game when the app opens, before the title menu: the edition's logo (assets/intro/
 // logo.jpg) fades in from black, stays, fades out, and the video starts. The video is made ready while the logo is up,
-// so it starts as soon as the logo is gone. The game boots underneath it
-// with its sound muted (nativeSetIntroPlaying), so when the video ends the menu is already there and the picture
-// fades from the video to it.
+// so it starts as soon as the logo is gone. Every way out (the end, a skip, an error) goes through the moon: its red
+// eyes burn, pulse and go out, and the title menu fades in (exitToMenu). The game boots underneath it
+// with its sound muted (nativeSetIntroPlaying), so the menu is already there when the moon's eyes go out.
 //
 // The video is res/raw/abertura.mp4, which android.yml takes from the release "intro-video"; a file abertura.mp4 in
 // the data folder replaces it. The subtitles are res/raw/abertura_legendas.srt, or abertura.srt in the data folder.
@@ -53,7 +53,6 @@ import java.util.regex.Pattern;
 final class IntroPlayer implements TextureView.SurfaceTextureListener {
 
     private static final String PREF_PLAYED = "introPlayed";
-    private static final long FADE_MS = 700;
     private static final long HINT_DELAY_MS = 1200;
     private static final String LOGO_ASSET = "intro/logo.jpg";
     private static final long LOGO_IN_MS = 1500, LOGO_HOLD_MS = 3000, LOGO_OUT_MS = 1000;
@@ -357,13 +356,13 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             player.setOnCompletionListener(mp -> finish(true));
             player.setOnErrorListener((mp, what, extra) -> {
                 MainActivity.startupLog("Abertura: o aparelho não tocou o vídeo (erro " + what + "/" + extra + ")");
-                finish(false);
+                finish(true);
                 return true;
             });
             player.prepareAsync();
         } catch (IOException | RuntimeException e) {
             MainActivity.startupLog("Abertura: erro ao abrir o vídeo: " + e);
-            finish(false);
+            finish(true);
         }
     }
 
@@ -444,55 +443,151 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
 
     // ----- End
 
-    // fade: the video and its sound fade out over the menu; otherwise everything goes at once (the app went away,
-    // or the video could not be played).
-    void finish(boolean fade) {
-        if (done || (finishing && fade)) {
+    // Every way out of the opening comes here: the video ended, a button or a tap skipped it (during the logo too),
+    // or it could not be played. animate false only when the app goes away (nothing would be seen).
+    void finish(boolean animate) {
+        if (done) {
             return;
         }
-        finishing = true;
-        handler.removeCallbacks(tick);
-        setGameMuted(false); // the game's sound fades back in on the native side
-        if (!fade || root == null) {
+        if (!animate || root == null) {
+            finishing = true;
+            setGameMuted(false);
             release();
             return;
         }
-        subtitle.setVisibility(android.view.View.INVISIBLE);
+        exitToMenu();
+    }
+
+    // The one way into the title menu: the video is stopped and let go, the screen goes dark, the moon looks out
+    // with its red eyes burning and pulsing, they dim, and the menu fades in once they are out. Runs only once.
+    private void exitToMenu() {
+        if (finishing || done) {
+            return;
+        }
+        finishing = true;
+        handler.removeCallbacksAndMessages(null); // the subtitles and the logo's own timing
+        releasePlayer();
+        if (texture != null) {
+            root.removeView(texture);
+            texture = null;
+        }
+        if (logo != null) {
+            logo.animate().cancel();
+            root.removeView(logo);
+            logo = null;
+        }
+        subtitle.setVisibility(android.view.View.GONE);
         hint.animate().cancel();
         hint.setVisibility(android.view.View.GONE);
-        if (logo != null) {
-            logo.animate().cancel(); // the fade below takes the logo with the rest
-        }
-        ValueAnimator anim = ValueAnimator.ofFloat(1f, 0f);
-        anim.setDuration(FADE_MS);
+        root.setAlpha(1f);
+        root.setBackgroundColor(Color.TRANSPARENT); // the moon's own view draws the dark from here on
+
+        final MoonView moon = new MoonView(activity);
+        root.addView(moon, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        ValueAnimator anim = ValueAnimator.ofFloat(0f, MoonView.TOTAL);
+        anim.setDuration((long) (MoonView.TOTAL * 1000));
+        anim.setInterpolator(null); // linear: the view shapes the timing itself
         anim.addUpdateListener(a -> {
-            float v = (float) a.getAnimatedValue();
-            if (root != null) {
-                root.setAlpha(v);
+            moon.t = (float) a.getAnimatedValue();
+            if (moon.t >= MoonView.REVEAL) {
+                setGameMuted(false); // the menu's sound fades in with its picture
             }
-            if (player != null) {
-                try {
-                    player.setVolume(v, v);
-                } catch (IllegalStateException e) {
-                    // already stopped
-                }
-            }
+            moon.invalidate();
         });
         anim.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
+                setGameMuted(false);
                 release();
             }
         });
+        MainActivity.startupLog("Abertura: transição da lua");
         anim.start();
     }
 
-    private void release() {
-        if (done) {
-            return;
+    // The moon close up (assets/intro/moon.png, from the title screen's art) and the light of its eyes.
+    private static final class MoonView extends android.view.View {
+        static final float TOTAL = 4.6f;   // seconds
+        static final float REVEAL = 3.9f;  // the dark starts to lift off the menu
+        // The eyes in moon.png (840 x 300).
+        static final float[][] EYES = { { 232f, 165f }, { 604f, 17f } };
+
+        float t = 0f;
+        private final Bitmap bitmap;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+        private final android.graphics.Paint glow = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.RectF dst = new android.graphics.RectF();
+
+        MoonView(MainActivity activity) {
+            super(activity);
+            Bitmap b = null;
+            try (InputStream in = activity.getAssets().open("intro/moon.png")) {
+                b = BitmapFactory.decodeStream(in);
+            } catch (IOException e) {
+                MainActivity.startupLog("Abertura: sem a lua da transição");
+            }
+            bitmap = b;
         }
-        done = true;
-        handler.removeCallbacksAndMessages(null);
+
+        private static float clamp01(float v) {
+            return Math.max(0f, Math.min(1f, v));
+        }
+
+        private static float smooth(float v) {
+            v = clamp01(v);
+            return v * v * (3f - 2f * v);
+        }
+
+        private void radial(android.graphics.Canvas c, float x, float y, float r, int inner, int outer) {
+            glow.setShader(new android.graphics.RadialGradient(x, y, r, new int[] { inner, outer, Color.TRANSPARENT },
+                    new float[] { 0f, 0.35f, 1f }, android.graphics.Shader.TileMode.CLAMP));
+            c.drawCircle(x, y, r, glow);
+        }
+
+        private static int argb(float a, int r, int g, int b) {
+            return Color.argb(Math.round(255 * clamp01(a)), r, g, b);
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas c) {
+            int w = getWidth(), h = getHeight();
+            // The dark: whole until REVEAL, then it lifts off the menu.
+            float cover = 1f - smooth((t - REVEAL) / (TOTAL - REVEAL));
+            c.drawColor(argb(cover, 0, 0, 0));
+            if (bitmap == null || t >= REVEAL) {
+                return;
+            }
+            float moonA = smooth((t - 0.4f) / 1.0f) * (1f - smooth((t - 3.2f) / 0.7f));
+            // Eyes: they kindle, burn and pulse, then go out.
+            float eyes = smooth((t - 1.0f) / 0.8f) * (1f - smooth((t - 2.8f) / 0.9f));
+            float pulse = 0.72f + 0.28f * (float) Math.sin(t * Math.PI * 2 * 1.6f);
+            // The moon fills most of the width, drifting closer the whole time.
+            float zoom = 1f + 0.06f * clamp01(t / TOTAL);
+            float scale = Math.min(w * 0.96f / bitmap.getWidth(), h * 0.9f / bitmap.getHeight()) * zoom;
+            float bw = bitmap.getWidth() * scale, bh = bitmap.getHeight() * scale;
+            float x0 = (w - bw) / 2, y0 = (h - bh) / 2;
+            // A violet haze behind the moon.
+            radial(c, w / 2f, h / 2f, Math.max(bw, bh) * 0.7f, argb(0.45f * moonA * (0.6f + 0.4f * eyes), 120, 40, 200),
+                    argb(0.25f * moonA * (0.6f + 0.4f * eyes), 70, 20, 140));
+            dst.set(x0, y0, x0 + bw, y0 + bh);
+            paint.setAlpha(Math.round(255 * moonA));
+            c.drawBitmap(bitmap, null, dst, paint);
+            if (eyes <= 0f) {
+                return;
+            }
+            float g = eyes * pulse;
+            for (float[] e : EYES) {
+                float ex = x0 + e[0] * scale, ey = y0 + e[1] * scale;
+                float r = bh * 0.5f;
+                radial(c, ex, ey, r * 1.6f, argb(0.35f * g, 170, 60, 255), argb(0.18f * g, 110, 30, 200)); // violet
+                radial(c, ex, ey, r, argb(0.85f * g, 255, 40, 20), argb(0.45f * g, 200, 0, 0));            // red
+                radial(c, ex, ey, r * 0.22f, argb(0.95f * g, 255, 210, 150), argb(0.7f * g, 255, 90, 30)); // core
+            }
+        }
+    }
+
+    private void releasePlayer() {
         if (player != null) {
             try {
                 player.stop();
@@ -506,6 +601,15 @@ final class IntroPlayer implements TextureView.SurfaceTextureListener {
             surface.release();
             surface = null;
         }
+    }
+
+    private void release() {
+        if (done) {
+            return;
+        }
+        done = true;
+        handler.removeCallbacksAndMessages(null);
+        releasePlayer();
         if (root != null) {
             ViewGroup parent = (ViewGroup) root.getParent();
             if (parent != null) {
