@@ -8,6 +8,15 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.2
+- **Tela inicial: o toque funciona.** Os toques e cliques agora são lidos direto da tela, e a tela inicial fica sempre
+  na frente da janela do jogo, que antes podia ficar por cima e engolir os toques.
+- **Dicas de botão conforme o controle.** Com controle (Xbox, PlayStation, Nintendo) ou teclado, o rodapé mostra os
+  botões do aparelho em uso. Depois de um toque, mostra "Toque numa opção para escolher" e um botão **Voltar** para
+  tocar, já que os botões de toque ficam escondidos na tela inicial. As dicas de A e B também aceitam toque e clique.
+- Junto, na mesma versão, o menu de missões novo do branch `mm3d-4.0`.
+- Arquivos: `mm/2s2h/Enhancements/TitleMenu/TitleMenu.cpp`, `Android/app/build.gradle` (versionName), este CHANGELOG.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.1
 - **Tela inicial nova (menu principal).** Substitui a tela de título ("Press Start") e a tela principal da seleção de
   arquivos por uma tela feita a partir da arte do Rafael, com o fundo, os ícones e a moldura de seleção tirados da

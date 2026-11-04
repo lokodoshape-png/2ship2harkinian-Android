@@ -123,6 +123,15 @@ int sRepeatY = 0, sRepeatYTimer = 0, sRepeatX = 0, sRepeatXTimer = 0;
 float sKeyboardNavTime = 0.0f; // seconds left in which the keyboard, not the controller, drives the menu
 std::string sToast;
 float sToastTime = 0.0f;
+// The footer shows touch hints after a tap, and the controller's (or keyboard's) buttons after a press. On Android
+// the menu starts in touch mode; the first press on a controller switches it.
+#ifdef __ANDROID__
+bool sTouchMode = true;
+#else
+bool sTouchMode = false;
+#endif
+bool sPointerInputs = false; // taps and clicks reach the menu this frame
+bool sTapTaken = false;      // one tap triggers one button
 
 bool Enabled() {
     return CVarGetInteger(CVAR_ENABLED, 1) != 0;
@@ -457,6 +466,9 @@ void HandlePad(Input* input) {
     }
     u16 press = input->press.button, held = input->cur.button;
     s8 stickX = input->cur.stick_x, stickY = input->cur.stick_y;
+    if (press != 0 || std::abs(stickX) > 30 || std::abs(stickY) > 30) {
+        sTouchMode = false;
+    }
 
     if (CHECK_BTN_ANY(press, BTN_A | BTN_START)) {
         Confirm();
@@ -497,6 +509,7 @@ void KeyboardNav(float dt) {
         return;
     }
     sKeyboardNavTime = 0.3f;
+    sTouchMode = false;
     if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
         MoveVertical(-1);
     } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
@@ -842,7 +855,24 @@ ImU32 RowTint(bool selected, float a) {
     return Alpha(selected ? Col(255, 255, 255) : Col(222, 212, 228), a);
 }
 
-// One row: icon and label, plus an invisible button for the mouse and touch. Returns true when clicked.
+// A tap or click on a rectangle of the page. The pointer is read directly rather than through ImGui's hovered
+// window, so the game's own full-screen window can never end up in front of the menu and swallow the taps.
+bool Tap(const Page& pg, float x, float y, float w, float h, bool* hovered = nullptr) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 p0 = pg.P(x, y), p1 = pg.P(x + w, y + h);
+    auto inside = [&](ImVec2 m) { return m.x >= p0.x && m.x < p1.x && m.y >= p0.y && m.y < p1.y; };
+    bool over = sPointerInputs && ImGui::IsMousePosValid(&io.MousePos) && inside(io.MousePos);
+    if (hovered != nullptr) {
+        *hovered = over;
+    }
+    if (over && !sTapTaken && io.MouseReleased[0] && inside(io.MouseClickedPos[0])) {
+        sTapTaken = true;
+        return true;
+    }
+    return false;
+}
+
+// One row: icon and label, and the area that takes a tap or click. Returns true when tapped.
 bool Row(const Page& pg, int index, const char* id, const char* icon, const char* label, float a, float dim = 1.0f) {
     float cy = RowY(index);
     bool selected = Selection() == index;
@@ -857,7 +887,7 @@ bool Row(const Page& pg, int index, const char* id, const char* icon, const char
     }
     bool hovered = false;
     bool inputs = sModal == Modal::None;
-    bool clicked = inputs && QuestUi::Hit(pg, id, kPlateX0, cy - kPlateH / 2, kPlateW, kPlateH, &hovered);
+    bool clicked = inputs && Tap(pg, kPlateX0, cy - kPlateH / 2, kPlateW, kPlateH, &hovered);
     ImGuiIO& io = ImGui::GetIO();
     if (inputs && hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0 || clicked)) {
         if (Selection() != index) {
@@ -952,7 +982,10 @@ void DrawExtras(const Page& pg, float dt, float a) {
 }
 
 // A button hint like the picture's: a ring with the letter, or the controller's own icon when button icons are on.
-float Hint(const Page& pg, ButtonPrompt prompt, const char* letter, const char* label, float x, float cy, float a) {
+// The whole hint also takes a tap or click. Returns the right edge.
+float Hint(const Page& pg, ButtonPrompt prompt, const char* letter, const char* label, float x, float cy, float a,
+           void (*action)()) {
+    float x0 = x;
     const char* tex = ButtonPrompts_Icon(prompt);
     ImU32 col = Alpha(Col(235, 228, 240), a);
     if (tex == nullptr || !QuestUi::GameIcon(pg, tex, x + 18, cy, 38)) {
@@ -960,15 +993,51 @@ float Hint(const Page& pg, ButtonPrompt prompt, const char* letter, const char* 
         QuestUi::TextCentered(pg, x + 18, cy - 12, 24, col, letter, false);
     }
     x += 44;
-    return x + Image(pg, label, x, cy, col);
+    x += Image(pg, label, x, cy, col);
+    if (Tap(pg, x0 - 8, cy - 28, x - x0 + 16, 56)) {
+        action();
+    }
+    return x;
+}
+
+// A rounded button for the touch footer. Returns true when tapped.
+bool Pill(const Page& pg, const char* text, float x, float cy, float a) {
+    float size = 28, w = QuestUi::TextWidth(pg, size, text) + 70, h = 56;
+    ImVec2 p0(x, cy - h / 2), p1(x + w, cy + h / 2);
+    bool hovered = false;
+    bool tapped = Tap(pg, p0.x, p0.y, w, h, &hovered);
+    bool down = hovered && ImGui::IsMouseDown(0);
+    QuestUi::Panel(pg, p0, p1, Alpha(down ? Col(150, 60, 200) : Col(60, 24, 90), a * 0.92f),
+                   Alpha(down ? Col(90, 30, 140) : Col(30, 12, 48), a * 0.92f), 28);
+    pg.dl->AddRect(pg.P(p0.x, p0.y), pg.P(p1.x, p1.y), Alpha(Col(215, 170, 255), a), pg.S(28), 0, pg.S(2));
+    ImU32 col = Alpha(Col(245, 238, 250), a);
+    Arrow(pg, x + 30, cy, -1, col);
+    QuestUi::Text(pg, x + 48, cy - size * 0.62f, size, col, text);
+    return tapped;
 }
 
 void DrawFooter(const Page& pg, float a) {
-    // Right-aligned like the picture: (A) Selecionar   (B) Voltar
+    bool canGoBack = sModal != Modal::None || sPanel == Panel::Extras;
+    if (sTouchMode) {
+        // Touch: no buttons to name, so say what to do, and give B a button of its own.
+        const char* hint = "Toque numa opção para escolher";
+        float size = 28, tw = QuestUi::TextWidth(pg, size, hint);
+        float right = 1860;
+        if (canGoBack) {
+            float pw = QuestUi::TextWidth(pg, size, "Voltar") + 70;
+            if (Pill(pg, "Voltar", right - pw, 1028, a)) {
+                Back();
+            }
+            right -= pw + 34;
+        }
+        QuestUi::Text(pg, right - tw, 1028 - size * 0.62f, size, Alpha(Col(235, 228, 240), a * 0.9f), hint);
+        return;
+    }
+    // Right-aligned like the picture: (A) Selecionar   (B) Voltar, with the icons of the controller in use.
     float wSel = Size("hint_select.png").x, wBack = Size("hint_back.png").x;
     float x = 1860 - (44 + wSel + 34 + 44 + wBack);
-    x = Hint(pg, BUTTON_PROMPT_A, "A", "hint_select.png", x, 1032, a);
-    Hint(pg, BUTTON_PROMPT_B, "B", "hint_back.png", x + 34, 1032, a);
+    x = Hint(pg, BUTTON_PROMPT_A, "A", "hint_select.png", x, 1032, a, Confirm);
+    Hint(pg, BUTTON_PROMPT_B, "B", "hint_back.png", x + 34, 1032, a, Back);
 }
 
 void DrawToast(const Page& pg, float dt, float a) {
@@ -1041,7 +1110,8 @@ bool CardButton(const Page& pg, const char* id, const char* label, float cx, flo
     }
     float lw = Size(label).x * 0.8f;
     Image(pg, label, cx - lw / 2, cy - 2, RowTint(selected, a), 0.8f);
-    return QuestUi::Hit(pg, id, p0.x, p0.y, w, h, hovered);
+    (void)id;
+    return Tap(pg, p0.x, p0.y, w, h, hovered);
 }
 
 void DrawModal(const Page& pg, float dt, float a) {
@@ -1144,6 +1214,16 @@ void DrawMenu() {
     if (inputs) {
         KeyboardNav(dt);
     }
+    ImGuiIO& io = ImGui::GetIO();
+    sPointerInputs = inputs && sFade >= 0.6f;
+    sTapTaken = false;
+    if (sPointerInputs && io.MouseClicked[0]) {
+#ifdef __ANDROID__
+        sTouchMode = true;
+#else
+        sTouchMode = io.MouseSource == ImGuiMouseSource_TouchScreen;
+#endif
+    }
     ImGui::SetNextWindowPos(pos);
     ImGui::SetNextWindowSize(size);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -1153,6 +1233,10 @@ void DrawMenu() {
                      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing |
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoScrollWithMouse | (inputs ? 0 : ImGuiWindowFlags_NoInputs));
+    if (inputs) {
+        // Keep the menu in front of the game's window (and so its taps away from the game) while it is in use.
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    }
     ImDrawList* dl = ImGui::GetWindowDrawList();
     Page pg{ dl, origin, k };
 
