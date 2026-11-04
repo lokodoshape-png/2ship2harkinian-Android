@@ -26,7 +26,11 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
   Igual no Android e no PC.
 - **A abertura termina antes do quadro final** (a máscara com "the film / the music"). O vídeo acaba aos 4:24,8, com
   a imagem e o som saindo em fade.
-- **Legendas no tempo da voz.** Os tempos das legendas foram acertados pelo tempo de cada palavra falada.
+- **Legendas no tempo da voz.** Os tempos das legendas foram acertados pelo tempo de cada palavra falada (a terceira
+  fala é aos 0:43, não aos 0:30), e as falas longas foram divididas em duas legendas.
+- **Correção (PC): controles mortos no menu depois da abertura.** Segurar Esc para pular a abertura também abria o
+  menu de configurações, que ficava aberto e invisível por baixo dela e bloqueava toda tecla e botão da tela inicial.
+  Agora ele fica fechado enquanto a abertura está na tela.
 
 ### 2026-11-04 — versão 4.0.2-mm3d.8
 - **Correção (PC): vídeo de abertura preto.** O vídeo era decodificado, mas cada quadro saía transparente (o canal

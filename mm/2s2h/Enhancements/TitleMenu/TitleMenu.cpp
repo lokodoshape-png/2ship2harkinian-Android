@@ -2939,11 +2939,15 @@ void DrawMenu() {
             sBlocked += dt;
             if (sBlocked >= 4.0f) {
                 sBlocked = -1000.0f;
-                SPDLOG_INFO("Title menu: input blocked (leaving {}, other window {}, opening {}, keyboard {}, pad {})",
-                            sLeaving, OtherWindowOpen(), IntroVideo::Active(), keyboard, pad);
+                auto gui = Ship::Context::GetInstance()->GetWindow()->GetGui();
+                auto editor = InputEditor();
+                SPDLOG_INFO("Title menu: input blocked (leaving {}, settings menu {}, input editor {}, opening {}, "
+                            "keyboard {}, pad {})",
+                            sLeaving, gui->GetMenu() != nullptr && gui->GetMenu()->IsVisible(),
+                            editor != nullptr && editor->IsVisible(), IntroVideo::Active(), keyboard, pad);
             }
-        } else if (sBlocked > 0.0f) {
-            sBlocked = 0.0f;
+        } else {
+            sBlocked = 0.0f; // logged again the next time it happens
         }
     }
     ImGuiIO& io = ImGui::GetIO();

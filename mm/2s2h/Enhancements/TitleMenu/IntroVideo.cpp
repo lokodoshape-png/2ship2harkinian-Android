@@ -487,6 +487,12 @@ bool Draw() {
         sPhase = Phase::Done;
         return false;
     }
+    // Esc (or the controller's Back) held to skip also opens the settings menu, which then stayed open, unseen,
+    // under the opening and kept the title menu from every key and button: it stays shut while the opening is on.
+    if (auto menu = Ship::Context::GetInstance()->GetWindow()->GetGui()->GetMenu(); menu != nullptr && menu->IsVisible()) {
+        menu->ToggleVisibility();
+        SPDLOG_INFO("Abertura: o menu de configurações abriu (Esc) e foi fechado");
+    }
     float dt = std::min(ImGui::GetIO().DeltaTime, 0.1f);
     sTime += dt;
     // Hold to skip: a second of holding anything goes to the moon.

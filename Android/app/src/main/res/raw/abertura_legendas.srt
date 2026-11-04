@@ -1,21 +1,28 @@
 1
-00:00:03,180 --> 00:00:12,060
+00:00:03,250 --> 00:00:07,900
 Aqui, no fim de todas as coisas,
-ainda consigo sentir o poder dela.
 
 2
-00:00:22,240 --> 00:00:29,180
-Quando a encontrei, senti a dor de um homem,
-uma escuridão que brilhava.
+00:00:09,900 --> 00:00:12,600
+ainda consigo sentir o poder dela.
 
 3
-00:00:30,000 --> 00:00:36,000
-E agora aquele império a tem.
+00:00:21,950 --> 00:00:24,200
+Quando a encontrei,
 
 4
-00:04:00,000 --> 00:04:06,240
-Eu deveria ter ouvido o aviso do ancião.
+00:00:25,250 --> 00:00:29,900
+senti a dor de um homem,
+uma escuridão que brilhava.
 
 5
-00:04:11,240 --> 00:04:17,420
+00:00:42,750 --> 00:00:48,900
+E agora aquele império a tem.
+
+6
+00:04:03,050 --> 00:04:07,200
+Eu deveria ter ouvido o aviso do ancião.
+
+7
+00:04:12,250 --> 00:04:17,800
 Nada resiste ao poder dela.
