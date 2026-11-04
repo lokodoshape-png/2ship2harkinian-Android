@@ -1410,7 +1410,7 @@ const std::vector<ContentEntry>& ContentEntries() {
         { "Tela inicial da Definitive Edition", "Esta tela, com arquivos, configurações, controles, extras e créditos.",
           "Ao abrir o jogo" },
         { "Menu de missões", "Missões principais e secundárias, máscaras, pessoas, lugares e registros, lidos do save.",
-          "Pause, botão MISSÕES (ou Back / Select)" },
+          "Pause, pergaminho QUESTS (ou L, Back / Select)" },
         { "Recursos do Majora's Mask 3D",
           "Caderno dos Bombers desde o início, estátuas que salvam e continuam, "
           "Goron que rola sem segurar A, prêmios trocados como no 3DS e mais.",
@@ -3019,7 +3019,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.11"
+#define EDITION_VERSION "4.0.2-mm3d.12"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;

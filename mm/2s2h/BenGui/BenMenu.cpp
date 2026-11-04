@@ -1949,8 +1949,9 @@ void BenMenu::AddEnhancements() {
         .WindowName("Quest Menu")
         .Options(ButtonOptions()
                      .Tooltip("Opens the quest menu inside the pause menu (the game is paused first). While paused, "
-                              "L, N on the keyboard, Back (View / Select / -) on a controller or the QUESTS entry under "
-                              "the Bombers' Notebook on the Quest Status page open it too.")
+                              "L, N on the keyboard, Back (View / Select / -) on a controller or the QUESTS scroll "
+                              "between the quiver and the bomb bag on the Quest Status page open it too. Holding N or "
+                              "Back for a second on the pause screen goes back to the title menu.")
                      .Size(Sizes::Inline));
 
     path.column = SECTION_COLUMN_2;

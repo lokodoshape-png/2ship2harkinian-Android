@@ -658,12 +658,239 @@ def clock_box():
     finish(img, "clock_box.png")
 
 
+# ----- The QUESTS entry on the pause menu's quest page (under the Bombers' Notebook, z_kaleido_collect.c).
+# These are game Texture resources written directly (no extension), in the resource format's version 1, which carries
+# a scale: the pause menu loads them at their N64 size (what the texture coordinates of the quads read) and the
+# renderer samples the 4x larger image behind it, like an HD texture pack. Sizes are N64 texels; the art is HD x4.
+
+import struct
+
+HD = 4
+PAPER = (232, 208, 156)
+PAPER_DARK = (170, 128, 76)
+INK = (70, 36, 22)
+RED = (200, 34, 28)
+RED_DARK = (112, 14, 16)
+MASK_PURPLE = (96, 40, 120)
+MASK_ORANGE = (236, 120, 40)
+SYS_FONTS = "/usr/share/fonts"
+
+
+def font(path_in_repo=None, system=None, size=16):
+    from PIL import ImageFont
+    for p in ([os.path.join(OUT, "..", "..", "fonts", path_in_repo)] if path_in_repo else []) + (
+            [os.path.join(SYS_FONTS, system)] if system else []):
+        if os.path.exists(p):
+            return ImageFont.truetype(p, size)
+    return ImageFont.load_default()
+
+
+def write_texture(name, img, w, h):
+    """img (RGBA, w*HD x h*HD) as an RGBA32 Texture resource of w x h texels with an HD scale of HD."""
+    img = img.convert("RGBA")
+    assert img.size == (w * HD, h * HD), (name, img.size)
+    data = img.tobytes()
+    head = struct.pack("<BBBBIIQ", 0, 0, 0, 0, 0x4F544558, 1, 0xDEADBEEFDEADBEEF)
+    head += b"\0" * (0x40 - len(head))
+    body = struct.pack("<IIIIffI", 1, w, h, 0, float(HD), float(HD), len(data)) + data
+    with open(os.path.join(OUT, name), "wb") as f:
+        f.write(head + body)
+    preview = os.environ.get("QUEST_PREVIEW")
+    if preview:
+        img.save(os.path.join(preview, name + ".png"))
+
+
+def hd_canvas(w, h, ss=2):
+    return Image.new("RGBA", (w * HD * ss, h * HD * ss), (0, 0, 0, 0)), HD * ss
+
+
+def down(img, w, h):
+    return img.resize((w * HD, h * HD), Image.LANCZOS)
+
+
+def grain(img, seed, strength=0.10):
+    rng = random.Random(seed)
+    noise = Image.new("L", (img.size[0] // 4, img.size[1] // 4))
+    noise.putdata([int(128 + rng.uniform(-1, 1) * 127) for _ in range(noise.size[0] * noise.size[1])])
+    noise = noise.resize(img.size, Image.BICUBIC).filter(ImageFilter.GaussianBlur(img.size[0] / 200))
+    r, g, bl, a = img.split()
+    out = []
+    for ch in (r, g, bl):
+        out.append(Image.composite(ch.point(lambda v: int(v * (1 - strength))), ch, noise.point(lambda v: 255 - v)))
+    return Image.merge("RGBA", out + [a])
+
+
+def mask_emblem(d, cx, cy, r, u):
+    """A small heart-shaped mask with spikes and staring eyes (original drawing, in the spirit of the game)."""
+    for i in range(-3, 4):
+        ang = math.radians(90 + i * 24)
+        x0, y0 = cx + math.cos(ang) * r * 0.55, cy - math.sin(ang) * r * 0.40
+        x1, y1 = cx + math.cos(ang) * r * 1.25, cy - math.sin(ang) * r * 0.95
+        d.polygon([(x0 - r * 0.10 * u / u, y0), (x1, y1), (x0 + r * 0.10, y0)], fill=MASK_ORANGE + (255,),
+                  outline=OUTLINE + (255,))
+    pts = []
+    for k in range(64):
+        t = k / 64 * 2 * math.pi
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        pts.append((cx + x / 16 * r, cy - y / 16 * r * 0.9 + r * 0.1))
+    d.polygon(pts, fill=MASK_PURPLE + (255,), outline=OUTLINE + (255,))
+    for sx in (-1, 1):
+        ex, ey = cx + sx * r * 0.38, cy - r * 0.02
+        d.ellipse([ex - r * 0.26, ey - r * 0.20, ex + r * 0.26, ey + r * 0.20], fill=(255, 210, 60, 255),
+                  outline=OUTLINE + (255,), width=max(1, int(r * 0.06)))
+        d.ellipse([ex - r * 0.09, ey - r * 0.09, ex + r * 0.09, ey + r * 0.09], fill=(200, 30, 20, 255))
+    d.polygon([(cx - r * 0.3, cy + r * 0.42), (cx, cy + r * 0.66), (cx + r * 0.3, cy + r * 0.42)],
+              fill=(230, 210, 120, 255), outline=OUTLINE + (255,))
+
+
+def scroll_art(w, h, seed, dark=0.0):
+    img, u = hd_canvas(w, h)
+    d = ImageDraw.Draw(img)
+    x0, x1 = 5.0 * u, (w - 5.0) * u
+    y0, y1 = 3.6 * u, (h - 3.6) * u
+    lw = max(1, int(0.55 * u))
+    # the sheet
+    d.rectangle([x0, y0, x1, y1], fill=PAPER + (255,), outline=OUTLINE + (255,), width=lw)
+    # rolled ends: a tube at the top and at the bottom, darker underneath
+    for (yy, flip) in ((y0, 1), (y1, -1)):
+        d.rounded_rectangle([x0 - 2.2 * u, yy - 2.0 * u, x1 + 2.2 * u, yy + 2.0 * u], radius=2.0 * u,
+                            fill=PAPER_DARK + (255,), outline=OUTLINE + (255,), width=lw)
+        d.rounded_rectangle([x0 - 1.6 * u, yy - 1.4 * u, x1 + 1.6 * u, yy + 0.2 * u * flip], radius=1.4 * u,
+                            fill=(244, 226, 182, 255))
+        for sx, ex in ((x0 - 2.2 * u, x0 - 0.8 * u), (x1 + 0.8 * u, x1 + 2.2 * u)):
+            d.ellipse([sx, yy - 2.0 * u, ex, yy + 2.0 * u], fill=GOLD_DARK + (255,), outline=OUTLINE + (255,),
+                      width=lw)
+    # the mask at the top of the sheet
+    mask_emblem(d, (x0 + x1) / 2, y0 + 5.2 * u, 3.4 * u, u)
+    # the checklist: boxes with checks and lines of writing
+    for i in range(3):
+        yy = y0 + (10.4 + i * 3.6) * u
+        bx = x0 + 2.0 * u
+        d.rectangle([bx, yy - 1.1 * u, bx + 2.2 * u, yy + 1.1 * u], fill=(250, 240, 214, 255),
+                    outline=INK + (255,), width=max(1, int(0.4 * u)))
+        if i < 2:
+            d.line([(bx + 0.4 * u, yy), (bx + 1.0 * u, yy + 0.8 * u), (bx + 2.6 * u, yy - 1.4 * u)],
+                   fill=RED + (255,), width=max(1, int(0.55 * u)))
+        d.line([(bx + 3.4 * u, yy), (x1 - 2.4 * u - (i == 2) * 3 * u, yy)], fill=INK + (220,),
+               width=max(1, int(0.45 * u)))
+    # the wax seal with ribbons, bottom right
+    sx, sy, sr = x1 - 1.2 * u, y1 - 3.0 * u, 2.6 * u
+    d.polygon([(sx - 1.6 * u, sy), (sx - 2.4 * u, sy + 4.4 * u), (sx - 1.0 * u, sy + 3.6 * u), (sx - 0.2 * u, sy + 4.6 * u),
+               (sx + 0.2 * u, sy)], fill=RED_DARK + (255,), outline=OUTLINE + (255,))
+    d.polygon([(sx + 0.2 * u, sy), (sx + 0.8 * u, sy + 4.6 * u), (sx + 1.8 * u, sy + 3.6 * u), (sx + 2.8 * u, sy + 4.2 * u),
+               (sx + 1.8 * u, sy)], fill=RED + (255,), outline=OUTLINE + (255,))
+    d.ellipse([sx - sr, sy - sr, sx + sr, sy + sr], fill=GOLD + (255,), outline=OUTLINE + (255,), width=lw)
+    d.ellipse([sx - sr * 0.72, sy - sr * 0.72, sx + sr * 0.72, sy + sr * 0.72], fill=RED + (255,))
+    d.polygon([(sx, sy - sr * 0.45), (sx + sr * 0.42, sy + sr * 0.3), (sx - sr * 0.42, sy + sr * 0.3)],
+              fill=GOLD_LIGHT + (255,))
+    img = grain(img, seed)
+    if dark:
+        r, g, bl, a = img.split()
+        f = lambda v: int(v * (1 - dark))
+        img = Image.merge("RGBA", (r.point(f), g.point(f), bl.point(f), a))
+    return down(img, w, h)
+
+
+def select_frame(w, h):
+    """Gold corner brackets with a warm glow, drawn around the scroll while it is selected."""
+    img, u = hd_canvas(w, h)
+    glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([7 * u, 6 * u, (w - 7) * u, (h - 6) * u], fill=(255, 206, 96, 120))
+    glow = glow.filter(ImageFilter.GaussianBlur(4.5 * u))
+    img = Image.alpha_composite(img, glow)
+    d = ImageDraw.Draw(img)
+    L, t = 6.0 * u, 1.3 * u
+    for (cx, cy, sx, sy) in ((2 * u, 2 * u, 1, 1), ((w - 2) * u, 2 * u, -1, 1), (2 * u, (h - 2) * u, 1, -1),
+                             ((w - 2) * u, (h - 2) * u, -1, -1)):
+        for col, grow in ((OUTLINE, 0.6 * u), (GOLD_DARK, 0.25 * u), (GOLD, 0)):
+            d.polygon([(cx - sx * grow, cy - sy * grow), (cx + sx * (L + grow), cy - sy * grow),
+                       (cx + sx * (L + grow), cy + sy * (t + grow)), (cx + sx * (t + grow), cy + sy * (t + grow)),
+                       (cx + sx * (t + grow), cy + sy * (L + grow)), (cx - sx * grow, cy + sy * (L + grow))],
+                      fill=col + (255,))
+        d.line([(cx + sx * 0.5 * u, cy + sy * 0.4 * u), (cx + sx * (L - 0.6 * u), cy + sy * 0.4 * u)],
+               fill=GOLD_LIGHT + (255,), width=max(1, int(0.35 * u)))
+    return down(img, w, h)
+
+
+def new_mark_art(w, h):
+    img, u = hd_canvas(w, h)
+    d = ImageDraw.Draw(img)
+    d.ellipse([0.4 * u, 0.4 * u, (w - 0.4) * u, (h - 0.4) * u], fill=OUTLINE + (255,))
+    d.ellipse([1.0 * u, 1.0 * u, (w - 1.0) * u, (h - 1.0) * u], fill=GOLD + (255,))
+    d.ellipse([1.7 * u, 1.7 * u, (w - 1.7) * u, (h - 1.7) * u], fill=(226, 26, 20, 255))
+    d.ellipse([2.6 * u, 2.2 * u, 4.4 * u, 3.8 * u], fill=(255, 180, 160, 255))
+    return down(img, w, h)
+
+
+def quest_card(w, h):
+    """The card beside the scroll: a parchment plaque with the mask, QUESTS and what it holds."""
+    img, u = hd_canvas(w, h)
+    d = ImageDraw.Draw(img)
+    pts = []
+    rng = random.Random(7)
+    for k in range(40):  # a torn-paper outline
+        t = k / 40
+        if t < 0.25:
+            x, y = 1.5 + (w - 3) * t / 0.25, 1.5
+        elif t < 0.5:
+            x, y = w - 1.5, 1.5 + (h - 3) * (t - 0.25) / 0.25
+        elif t < 0.75:
+            x, y = w - 1.5 - (w - 3) * (t - 0.5) / 0.25, h - 1.5
+        else:
+            x, y = 1.5, h - 1.5 - (h - 3) * (t - 0.75) / 0.25
+        pts.append(((x + rng.uniform(-0.5, 0.5)) * u, (y + rng.uniform(-0.5, 0.5)) * u))
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).polygon([(x + 0.8 * u, y + 1.0 * u) for x, y in pts], fill=(30, 16, 6, 150))
+    img = Image.alpha_composite(img, shadow.filter(ImageFilter.GaussianBlur(0.8 * u)))
+    d = ImageDraw.Draw(img)
+    d.polygon(pts, fill=PAPER + (255,), outline=PAPER_DARK + (255,))
+    d.line(pts + [pts[0]], fill=(150, 104, 56, 255), width=max(1, int(0.5 * u)))
+    img = grain(img, 9, 0.14)
+    d = ImageDraw.Draw(img)
+    mask_emblem(d, w * u / 2, 6.0 * u, 3.0 * u, u)
+    title = font("Alegreya-Bold.ttf", None, int(10.5 * u))
+    tw = d.textlength("QUESTS", font=title)
+    d.text((w * u / 2 - tw / 2, 9.0 * u), "QUESTS", font=title, fill=(70, 20, 60, 255))
+    d.line([(w * u * 0.2, 21.4 * u), (w * u * 0.8, 21.4 * u)], fill=(150, 104, 56, 255), width=max(1, int(0.35 * u)))
+    sub = font(None, "truetype/crosextra/Caladea-Italic.ttf", int(4.6 * u))
+    line = "Missões, objetivos e eventos"
+    sw = d.textlength(line, font=sub)
+    d.text((w * u / 2 - sw / 2, 22.2 * u), line, font=sub, fill=(60, 34, 30, 255))
+    return down(img, w, h)
+
+
+def panel_name(w, h, text):
+    """The pause menu's name line (bottom panel): white letters with a dark rim, like the item names. The panel's
+    combiner tints it (white stays the name color, black becomes the panel's dark)."""
+    img, u = hd_canvas(w, h)
+    d = ImageDraw.Draw(img)
+    f = font(None, "opentype/inter/InterDisplay-Bold.otf", int(11.5 * u))
+    tw = d.textlength(text, font=f)
+    while tw > (w - 6) * u:
+        f = font(None, "opentype/inter/InterDisplay-Bold.otf", int(f.size * 0.94))
+        tw = d.textlength(text, font=f)
+    box = f.getbbox(text)
+    x = w * u / 2 - tw / 2
+    y = h * u / 2 - (box[1] + box[3]) / 2
+    d.text((x, y), text, font=f, fill=(255, 255, 255, 255), stroke_width=int(1.1 * u), stroke_fill=(0, 0, 0, 255))
+    return down(img, w, h)
+
+
 def pause_icon():
-    # The quest page entry under the Bombers' Notebook: the side-quest scroll at 22x22, the size of its slot
-    # (sQuestVtxWidths / sQuestVtxHeights), whose texture coordinates read exactly that many texels. The ".rgba32.png"
-    # name makes the asset packer store it as a game Texture resource, so the pause menu draws it like its own items.
-    src = Image.open(os.path.join(OUT, "cat_side.png")).convert("RGBA").resize((22, 22), Image.LANCZOS)
-    src.save(os.path.join(OUT, "gQuestMenuPauseIconTex.rgba32.png"), optimize=True)
+    # The slot's quad reads 28x26 texels; the frame and the halo are larger quads around it.
+    write_texture("gQuestScrollTex", scroll_art(28, 26, 21), 28, 26)
+    write_texture("gQuestScrollPressedTex", scroll_art(28, 26, 21, dark=0.22), 28, 26)
+    write_texture("gQuestScrollFrameTex", select_frame(40, 38), 40, 38)
+    write_texture("gQuestScrollNewTex", new_mark_art(10, 10), 10, 10)
+    write_texture("gQuestCardTex", quest_card(64, 32), 64, 32)
+    write_texture("gQuestNameTex", panel_name(128, 16, "Diário de Missões"), 128, 16)
+    for old in ("gQuestMenuPauseIconTex.rgba32.png", "gQuestBookTex.rgba32.png", "gQuestBookPressedTex.rgba32.png",
+                "gQuestBookOpen1Tex.rgba32.png", "gQuestBookOpen2Tex.rgba32.png", "gQuestBookHaloTex.rgba32.png",
+                "gQuestBookNewTex.rgba32.png", "gQuestBookNameTex.ia8.png", "gQuestBookHintTex.ia8.png"):
+        if os.path.exists(os.path.join(OUT, old)):
+            os.remove(os.path.join(OUT, old))
 
 
 def book_assets():

@@ -12,7 +12,114 @@
 
 s32 KaleidoScope_UpdateQuestStatusPoint(PauseContext* pauseCtx, s16 point);
 
-#define dgQuestMenuPauseIconTex "__OTR__overlays/questmenu/gQuestMenuPauseIconTex"
+// 2S2H [Enhancement] The QUESTS entry: a scroll between the quiver and the bomb bag that opens the quest menu
+#define dgQuestScrollTex "__OTR__overlays/questmenu/gQuestScrollTex"
+#define dgQuestScrollPressedTex "__OTR__overlays/questmenu/gQuestScrollPressedTex"
+#define dgQuestScrollFrameTex "__OTR__overlays/questmenu/gQuestScrollFrameTex"
+#define dgQuestScrollNewTex "__OTR__overlays/questmenu/gQuestScrollNewTex"
+#define dgQuestCardTex "__OTR__overlays/questmenu/gQuestCardTex"
+
+#define QUEST_ENTRY_X 60.0f       // center, between the quiver (7..39) and the bomb bag (82..114)
+#define QUEST_ENTRY_Y -60.0f      // center, level with them
+#define QUEST_ENTRY_PRESS_FRAMES 10 // the scroll opening before the quest menu takes over
+
+s16 sQuestEntryPress = 0;     // frames since A on the entry, 0 when not pressed
+f32 sQuestEntrySelect = 0.0f; // 0..1, eases in while the cursor is on the entry
+
+// A quad of `w` x `h` page units centered on (cx, cy) that reads a texture of tw x th texels.
+static void QuestEntry_SetQuad(Vtx* v, f32 cx, f32 cy, f32 w, f32 h, s16 tw, s16 th, u8 alpha) {
+    s16 x0 = (s16)(cx - w / 2), x1 = (s16)(cx + w / 2), y0 = (s16)(cy + h / 2), y1 = (s16)(cy - h / 2);
+    s32 i;
+
+    v[0].v.ob[0] = v[2].v.ob[0] = x0;
+    v[1].v.ob[0] = v[3].v.ob[0] = x1;
+    v[0].v.ob[1] = v[1].v.ob[1] = y0;
+    v[2].v.ob[1] = v[3].v.ob[1] = y1;
+    v[0].v.tc[0] = v[0].v.tc[1] = v[1].v.tc[1] = v[2].v.tc[0] = 0;
+    v[1].v.tc[0] = v[3].v.tc[0] = tw << 5;
+    v[2].v.tc[1] = v[3].v.tc[1] = th << 5;
+    for (i = 0; i < 4; i++) {
+        v[i].v.ob[2] = 0;
+        v[i].v.flag = 0;
+        v[i].v.cn[0] = v[i].v.cn[1] = v[i].v.cn[2] = 255;
+        v[i].v.cn[3] = alpha;
+    }
+}
+
+static void QuestEntry_Draw(PlayState* play) {
+    PauseContext* pauseCtx = &play->pauseCtx;
+    Vtx* vtx = GRAPH_ALLOC(play->state.gfxCtx, 16 * sizeof(Vtx));
+    bool selected = (pauseCtx->pageIndex == PAUSE_QUEST) && (pauseCtx->cursorSpecialPos == 0) &&
+                    (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_SKULL_TOKEN);
+    f32 cy = QUEST_ENTRY_Y + pauseCtx->offsetY;
+    f32 pulse = 0.5f + 0.5f * Math_SinS((s16)(play->state.frames * 0x500));
+    f32 press = sQuestEntryPress / (f32)QUEST_ENTRY_PRESS_FRAMES; // 0..1
+    f32 scale;
+    u8 alpha = pauseCtx->alpha;
+
+    if (pauseCtx->state != PAUSE_STATE_MAIN) {
+        sQuestEntryPress = 0;
+    }
+    Math_StepToF(&sQuestEntrySelect, selected ? 1.0f : 0.0f, 0.15f);
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    gDPPipeSync(POLY_OPA_DISP++);
+    gDPSetCombineMode(POLY_OPA_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+
+    // Selected: the gold frame and its glow, breathing softly; a flash while the scroll opens.
+    if (sQuestEntrySelect > 0.0f) {
+        f32 glow = sQuestEntrySelect * (0.65f + 0.35f * pulse) + press * 0.6f;
+        QuestEntry_SetQuad(&vtx[0], QUEST_ENTRY_X, cy, 38.0f + press * 6.0f, 36.0f + press * 6.0f, 40, 38, 255);
+        gSPVertex(POLY_OPA_DISP++, &vtx[0], 4, 0);
+        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, (u8)(CLAMP_MAX(glow, 1.0f) * alpha));
+        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestScrollFrameTex, 40, 38, 0);
+    }
+
+    // The scroll: a little bigger when selected, squashed and darker for a moment when pressed, then it swells open.
+    scale = 1.0f + 0.06f * sQuestEntrySelect;
+    if (sQuestEntryPress != 0) {
+        scale = (press < 0.3f) ? (scale - press * 0.3f) : (scale - 0.09f + (press - 0.3f) * 0.45f);
+    }
+    QuestEntry_SetQuad(&vtx[4], QUEST_ENTRY_X, cy, 24.0f * scale, 22.0f * scale, 28, 26, 255);
+    gSPVertex(POLY_OPA_DISP++, &vtx[4], 4, 0);
+    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, alpha);
+    KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx,
+                                   (sQuestEntryPress != 0 && press < 0.3f) ? dgQuestScrollPressedTex
+                                                                           : dgQuestScrollTex,
+                                   28, 26, 0);
+
+    // New quests since the menu was last opened: a red mark on the scroll's corner.
+    if (QuestMenu_HasNews() && (sQuestEntryPress == 0)) {
+        QuestEntry_SetQuad(&vtx[8], QUEST_ENTRY_X + 11.0f, cy + 10.0f, 9.0f + pulse * 1.0f, 9.0f + pulse * 1.0f, 10,
+                           10, 255);
+        gSPVertex(POLY_OPA_DISP++, &vtx[8], 4, 0);
+        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, alpha);
+        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestScrollNewTex, 10, 10, 0);
+    }
+
+    // The QUESTS card above the scroll, fading in while it is selected.
+    if (sQuestEntrySelect > 0.0f) {
+        f32 rise = (1.0f - sQuestEntrySelect) * 4.0f;
+        QuestEntry_SetQuad(&vtx[12], QUEST_ENTRY_X, cy + 31.0f - rise, 50.0f, 25.0f, 64, 32, 255);
+        gSPVertex(POLY_OPA_DISP++, &vtx[12], 4, 0);
+        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, (u8)(sQuestEntrySelect * alpha));
+        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestCardTex, 64, 32, 0);
+    }
+
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+// Runs the press animation; the quest menu opens when it ends.
+static void QuestEntry_UpdatePress(void) {
+    if (sQuestEntryPress == 0) {
+        return;
+    }
+    if (++sQuestEntryPress >= QUEST_ENTRY_PRESS_FRAMES) {
+        sQuestEntryPress = 0;
+        QuestMenu_OpenFromPause();
+    }
+}
 
 s16 sQuestRemainsColorTimerInit[] = { 120, 60, 2, 80 };
 s16 sQuestHpColorTimerInits[] = { 20, 4, 20, 10 };
@@ -282,12 +389,11 @@ void KaleidoScope_DrawQuestStatus(PlayState* play) {
     }
 
     // Skip over &pauseCtx->questVtx[84], which should be `QUEST_SKULL_TOKEN`
-    // 2S2H [Enhancement] The unused slot under the Bombers' Notebook holds the entry that opens the quest menu
+    // 2S2H [Enhancement] The unused slot holds the QUESTS entry, between the quiver and the bomb bag
     if (QuestMenu_PauseEntryShown()) {
-        gSPVertex(POLY_OPA_DISP++, &pauseCtx->questVtx[j], 4, 0);
-        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
-        // 22x22 like the slot: a bigger texture showed only its top-left corner, squeezed
-        KaleidoScope_DrawTexQuadRGBA32(play->state.gfxCtx, dgQuestMenuPauseIconTex, 22, 22, 0);
+        QuestEntry_Draw(play);
+        gDPPipeSync(POLY_OPA_DISP++);
+        gDPSetCombineMode(POLY_OPA_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
     }
     j += 4;
 
@@ -616,16 +722,19 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
     s16 i;
     u16 cursor;
     u16 cursorItem;
-    // 2S2H [Enhancement] The quest menu entry sits between the Bombers' Notebook and the Song of Time row
+    // 2S2H [Enhancement] The quest menu entry sits between the quiver and the bomb bag
     bool questMenuEntry = QuestMenu_PauseEntryShown();
 
-    sCursorPointLinks[QUEST_BOMBERS_NOTEBOOK].down = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_SONG_TIME;
-    sCursorPointLinks[QUEST_SONG_TIME].up = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_BOMBERS_NOTEBOOK;
-    sCursorPointLinks[QUEST_SONG_HEALING].up = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_BOMBERS_NOTEBOOK;
-    sCursorPointLinks[QUEST_SKULL_TOKEN].up = questMenuEntry ? QUEST_BOMBERS_NOTEBOOK : QUEST_QUIVER;
+    sCursorPointLinks[QUEST_QUIVER].right = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_BOMB_BAG;
+    sCursorPointLinks[QUEST_BOMB_BAG].left = questMenuEntry ? QUEST_SKULL_TOKEN : QUEST_QUIVER;
+    sCursorPointLinks[QUEST_SKULL_TOKEN].up = QUEST_SWORD;
+    sCursorPointLinks[QUEST_SKULL_TOKEN].down = CURSOR_NONE;
+    sCursorPointLinks[QUEST_SKULL_TOKEN].left = QUEST_QUIVER;
+    sCursorPointLinks[QUEST_SKULL_TOKEN].right = QUEST_BOMB_BAG;
     if (!questMenuEntry && (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_SKULL_TOKEN)) {
-        pauseCtx->cursorPoint[PAUSE_QUEST] = QUEST_BOMBERS_NOTEBOOK;
+        pauseCtx->cursorPoint[PAUSE_QUEST] = QUEST_QUIVER;
     }
+    QuestEntry_UpdatePress();
 
     pauseCtx->nameColorSet = PAUSE_NAME_COLOR_SET_WHITE;
     pauseCtx->cursorColorSet = PAUSE_CURSOR_COLOR_SET_WHITE;
@@ -868,8 +977,11 @@ void KaleidoScope_UpdateQuestCursor(PlayState* play) {
                         gSaveContext.hudVisibility = HUD_VISIBILITY_IDLE;
                         Interface_SetHudVisibility(HUD_VISIBILITY_ALL);
                     }
-                    if (CHECK_BTN_ALL(CONTROLLER1(&play->state)->press.button, BTN_A) && (msgCtx->msgLength == 0)) {
-                        QuestMenu_OpenFromPause();
+                    if (CHECK_BTN_ALL(CONTROLLER1(&play->state)->press.button, BTN_A) && (msgCtx->msgLength == 0) &&
+                        (sQuestEntryPress == 0)) {
+                        // The scroll opens (QuestEntry_UpdatePress), then the quest menu
+                        sQuestEntryPress = 1;
+                        Audio_PlaySfx(NA_SE_SY_WIN_OPEN);
                     }
                 } else {
                         if ((cursor == QUEST_BOMBERS_NOTEBOOK) && (pauseCtx->cursorItem[PAUSE_QUEST] != PAUSE_ITEM_NONE)) {

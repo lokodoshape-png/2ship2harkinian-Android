@@ -10,7 +10,11 @@
 #include <SDL2/SDL.h>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <string>
 #include <libultraship/bridge/consolevariablebridge.h>
+#include <ship/Context.h>
+#include <ship/window/Window.h>
+#include <ship/window/gui/Gui.h>
 #include <ship/controller/controldeck/ControlDeck.h>
 #include <ship/controller/physicaldevice/ConnectedPhysicalDeviceManager.h>
 
@@ -27,11 +31,15 @@ extern "C" {
 #include "functions.h"
 #include "variables.h"
 extern PlayState* gPlayState;
+void KaleidoScope_RequestQuitToTitle(void);
+bool KaleidoScope_QuittingToTitle(void);
 }
 
 using namespace QuestUi;
 
 namespace QuestMenu {
+
+void MarkQuestsSeen();
 
 namespace {
 
@@ -66,6 +74,32 @@ float sDetailFade = 1.0f;
 int sRepeatDir = 0, sRepeatTimer = 0;
 int sRepeatDirX = 0, sRepeatTimerX = 0;
 bool sBackHeld = false;
+
+// ----- "Tela inicial" on the pause menu's bottom bar: back to the title menu, after a yes / no question.
+constexpr float kQuitHold = 1.0f;
+bool sQuitAsk = false;   // the question is on screen
+bool sQuitYes = false;   // the answer under the cursor
+float sQuitAnim = 0.0f;  // 0..1, the question fading in
+bool sQuitStick = false; // the stick was already pushed sideways
+
+void AskQuitToTitle() {
+    if (sQuitAsk || KaleidoScope_QuittingToTitle()) {
+        return;
+    }
+    sQuitAsk = true;
+    sQuitYes = false;
+    Audio_PlaySfx(NA_SE_SY_WIN_OPEN);
+}
+
+void AnswerQuit(bool yes) {
+    sQuitAsk = false;
+    if (yes) {
+        Audio_PlaySfx(NA_SE_SY_DECIDE);
+        KaleidoScope_RequestQuitToTitle();
+    } else {
+        Audio_PlaySfx(NA_SE_SY_CANCEL);
+    }
+}
 
 int QuestCount(int category) {
     return (int)Quests((Category)category).size();
@@ -125,6 +159,7 @@ bool PauseReady() {
 
 void Open() {
     sOpen = true;
+    MarkQuestsSeen();
     sPendingOpen = 0;
     sDetailFocus = false;
     sCursorY = -1.0f;
@@ -179,8 +214,12 @@ void HandlePad(Input* input) {
         ChangeCategory(1);
     }
 
-    int dirY = (stickY > 30 || CHECK_BTN_ANY(cur, BTN_DUP)) ? -1 : (stickY < -30 || CHECK_BTN_ANY(cur, BTN_DDOWN)) ? 1 : 0;
-    int dirX = (stickX < -30 || CHECK_BTN_ANY(cur, BTN_DLEFT)) ? -1 : (stickX > 30 || CHECK_BTN_ANY(cur, BTN_DRIGHT)) ? 1 : 0;
+    int dirY = (stickY > 30 || CHECK_BTN_ANY(cur, BTN_DUP))      ? -1
+               : (stickY < -30 || CHECK_BTN_ANY(cur, BTN_DDOWN)) ? 1
+                                                                 : 0;
+    int dirX = (stickX < -30 || CHECK_BTN_ANY(cur, BTN_DLEFT))   ? -1
+               : (stickX > 30 || CHECK_BTN_ANY(cur, BTN_DRIGHT)) ? 1
+                                                                 : 0;
     if (Repeat(dirY, sRepeatDir, sRepeatTimer) && !sDetailFocus) {
         Select(sSelected[sCategory] + dirY);
     }
@@ -208,6 +247,33 @@ void OnGameFrame() {
     }
     Input* input = CONTROLLER1(&gPlayState->state);
     PauseContext* pauseCtx = &gPlayState->pauseCtx;
+
+    // The quit question takes the controller while it is up; the pause menu waits under it.
+    if (sQuitAsk) {
+        if (!PauseReady()) {
+            sQuitAsk = false;
+        } else {
+            u16 press = input->press.button;
+            if (CHECK_BTN_ANY(press, BTN_A | BTN_START)) {
+                AnswerQuit(sQuitYes);
+            } else if (CHECK_BTN_ANY(press, BTN_B)) {
+                AnswerQuit(false);
+            } else {
+                bool stick = std::abs(input->rel.stick_x) > 30;
+                if (CHECK_BTN_ANY(press, BTN_DLEFT | BTN_DRIGHT) || (stick && !sQuitStick)) {
+                    sQuitYes = !sQuitYes;
+                    Audio_PlaySfx(NA_SE_SY_CURSOR);
+                }
+                sQuitStick = stick;
+            }
+            ClearInput(input);
+            return;
+        }
+    }
+    if (KaleidoScope_QuittingToTitle()) {
+        ClearInput(input);
+        return;
+    }
 
     if (sPendingOpen > 0) {
         sPendingOpen--;
@@ -240,14 +306,14 @@ void OnGameFrame() {
     ClearInput(input);
 }
 
-// N on the keyboard, or Back / View / Select / - on a controller.
+// N on the keyboard, or Back / View / Select / - on a controller: a tap opens or closes the quest menu; held for a
+// second on the pause screen it asks to go back to the title menu (the "Tela inicial" button on the bottom bar).
+float sShortcutHeld = -1.0f; // seconds the shortcut has been held, -1 when it is up
+bool sShortcutLong = false;  // this hold already asked to quit
+
 bool ShortcutPressed() {
-    bool pressed = false;
-    if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_N, false)) {
-        pressed = true;
-    }
+    bool held = !ImGui::GetIO().WantTextInput && ImGui::IsKeyDown(ImGuiKey_N);
     // With controller navigation of the menus on, Back opens the settings menu instead.
-    bool held = false;
     if (!CVarGetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0)) {
         auto gamepads = Ship::Context::GetInstance()
                             ->GetControlDeck()
@@ -257,7 +323,23 @@ bool ShortcutPressed() {
             held = held || SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
         }
     }
-    pressed = pressed || (held && !sBackHeld);
+    bool pressed = false;
+    if (held) {
+        sShortcutHeld = sShortcutHeld < 0.0f ? 0.0f : sShortcutHeld + ImGui::GetIO().DeltaTime;
+        if (!sShortcutLong && !sOpen && sShortcutHeld >= kQuitHold && PauseReady()) {
+            sShortcutLong = true;
+            AskQuitToTitle();
+        }
+    } else {
+        // Released: a short press is the quest menu shortcut. Off the pause screen it acts on the press, as before.
+        pressed = sShortcutHeld >= 0.0f && !sShortcutLong && PauseReady();
+        sShortcutHeld = -1.0f;
+        sShortcutLong = false;
+    }
+    if (held && !sBackHeld && !PauseReady() && !sOpen) {
+        pressed = true;
+        sShortcutLong = true; // already used
+    }
     sBackHeld = held;
     return pressed;
 }
@@ -291,14 +373,33 @@ void Prompt(const Page& pg, ButtonPrompt prompt, float cx, float cy, float s) {
     ImU32 face = Col(120, 120, 130);
     const char* label = "";
     switch (prompt) {
-        case BUTTON_PROMPT_A: face = Col(60, 90, 220); label = "A"; break;
-        case BUTTON_PROMPT_B: face = Col(40, 160, 60); label = "B"; break;
-        case BUTTON_PROMPT_L: label = "L"; break;
-        case BUTTON_PROMPT_R: label = "R"; break;
-        case BUTTON_PROMPT_Z: label = "Z"; break;
-        case BUTTON_PROMPT_START: face = Col(200, 40, 40); label = "S"; break;
-        case BUTTON_PROMPT_STICK: face = Col(150, 150, 160); label = "+"; break;
-        default: break;
+        case BUTTON_PROMPT_A:
+            face = Col(60, 90, 220);
+            label = "A";
+            break;
+        case BUTTON_PROMPT_B:
+            face = Col(40, 160, 60);
+            label = "B";
+            break;
+        case BUTTON_PROMPT_L:
+            label = "L";
+            break;
+        case BUTTON_PROMPT_R:
+            label = "R";
+            break;
+        case BUTTON_PROMPT_Z:
+            label = "Z";
+            break;
+        case BUTTON_PROMPT_START:
+            face = Col(200, 40, 40);
+            label = "S";
+            break;
+        case BUTTON_PROMPT_STICK:
+            face = Col(150, 150, 160);
+            label = "+";
+            break;
+        default:
+            break;
     }
     pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(s * 0.5f), Col(20, 10, 20, 200));
     pg.dl->AddCircleFilled(pg.P(cx, cy), pg.S(s * 0.44f), face);
@@ -342,10 +443,14 @@ void QuestIcon(const Page& pg, const Quest& quest, float cx, float cy, float s, 
 
 ImU32 StatusColor(Status status) {
     switch (status) {
-        case Status::Locked: return Col(130, 110, 120);
-        case Status::Available: return Col(196, 140, 40);
-        case Status::InProgress: return Col(70, 120, 200);
-        case Status::Done: return Col(60, 150, 50);
+        case Status::Locked:
+            return Col(130, 110, 120);
+        case Status::Available:
+            return Col(196, 140, 40);
+        case Status::InProgress:
+            return Col(70, 120, 200);
+        case Status::Done:
+            return Col(60, 150, 50);
     }
     return cGold;
 }
@@ -566,8 +671,8 @@ void DrawLeftPage(const Page& pg, float a, const std::vector<QuestProgress>& pro
         while (nameSize > 15 && TextWidth(pg, nameSize, q.name.c_str()) > maxW) {
             nameSize -= 1;
         }
-        Text(pg, rx0 + 54, cy - nameSize * 0.62f, nameSize, Alpha(i == selected ? Col(255, 240, 200) : cCream, rowAlpha),
-             q.name.c_str());
+        Text(pg, rx0 + 54, cy - nameSize * 0.62f, nameSize,
+             Alpha(i == selected ? Col(255, 240, 200) : cCream, rowAlpha), q.name.c_str());
 
         // Status on the right: lock, check box, or the steps done so far.
         float bx = rx1 - 34, by = cy - 12;
@@ -636,13 +741,13 @@ void DrawSteps(const Page& pg, const Quest& q, const QuestProgress& p, float y, 
         if (current) {
             for (int g = 3; g >= 1; g--) {
                 pg.dl->AddRect(pg.P(x - g * 2, y - g * 2), pg.P(x + kTile + g * 2, y + kTile + g * 2),
-                               Col(255, 210, 90, (int)((25 + 40 * pulse) * (4 - g) * a)), pg.S(12 + g * 2), 0,
-                               pg.S(3));
+                               Col(255, 210, 90, (int)((25 + 40 * pulse) * (4 - g) * a)), pg.S(12 + g * 2), 0, pg.S(3));
             }
         }
         if (!NineSlice(pg, current ? "tile_current" : "tile", ImVec2(x, y), ImVec2(x + kTile, y + kTile), 30, 18,
                        White(a))) {
-            Panel(pg, ImVec2(x, y), ImVec2(x + kTile, y + kTile), current ? cPurpleLight : cParchment, cParchmentDark, 8);
+            Panel(pg, ImVec2(x, y), ImVec2(x + kTile, y + kTile), current ? cPurpleLight : cParchment, cParchmentDark,
+                  8);
         }
         const Objective& o = q.objectives[i];
         ImTextureID id = o.icon != nullptr ? Texture(o.icon) : nullptr;
@@ -655,11 +760,12 @@ void DrawSteps(const Page& pg, const Quest& q, const QuestProgress& p, float y, 
         } else {
             char num[8];
             snprintf(num, sizeof(num), "%d", i + 1);
-            TextCentered(pg, x + kTile / 2, y + kTile / 2 - 19, 30,
-                         Alpha(current ? cCream : Col(110, 70, 40), alpha), num, false, TitleFont());
+            TextCentered(pg, x + kTile / 2, y + kTile / 2 - 19, 30, Alpha(current ? cCream : Col(110, 70, 40), alpha),
+                         num, false, TitleFont());
         }
         if (done) {
-            Png(pg, "mark_done", ImVec2(x + kTile - 22, y + kTile - 22), ImVec2(x + kTile + 4, y + kTile + 4), White(a));
+            Png(pg, "mark_done", ImVec2(x + kTile - 22, y + kTile - 22), ImVec2(x + kTile + 4, y + kTile + 4),
+                White(a));
         }
         ImGui::PushID(i);
         if (Hit(pg, "##qm_tile", x, y, kTile, kTile)) {
@@ -806,7 +912,8 @@ void DrawRightPage(const Page& pg, float a, const std::vector<QuestProgress>& pr
     Png(pg, StatusAsset(p.status), ImVec2(sx + 8, sy + 9), ImVec2(sx + 40, sy + 41), White(fa));
     Text(pg, sx + 46, sy + 4, 20, Alpha(StatusColor(p.status), fa), StatusName(p.status), 0, TitleFont());
     if (p.total > 0 && !locked) {
-        ProgressBar(pg, sx + 48, sy + 32, kRX1 - 52, sy + 40, (float)p.done / p.total, Alpha(StatusColor(p.status), fa));
+        ProgressBar(pg, sx + 48, sy + 32, kRX1 - 52, sy + 40, (float)p.done / p.total,
+                    Alpha(StatusColor(p.status), fa));
         char pct[16];
         snprintf(pct, sizeof(pct), "%d%%", p.done * 100 / p.total);
         Text(pg, kRX1 - 46, sy + 26, 15, Alpha(cInk, fa), pct);
@@ -912,6 +1019,103 @@ void DrawMenu() {
     ImGui::PopStyleVar(2);
 }
 
+// The "Tela inicial" plaque on the pause menu's bottom bar, right of the name panel, and its question. Laid out in
+// the game's 320x240 screen, so it keeps its place at any window size.
+bool Tapped(ImVec2 a, ImVec2 b) {
+    ImGuiIO& io = ImGui::GetIO();
+    return ImGui::IsMouseReleased(ImGuiMouseButton_Left) && io.MousePos.x >= a.x && io.MousePos.x <= b.x &&
+           io.MousePos.y >= a.y && io.MousePos.y <= b.y && ImGui::IsWindowHovered();
+}
+
+void DrawPauseBar() {
+    bool shown = !sOpen && sAnim <= 0.0f && PauseReady() && SaveLoaded() && !KaleidoScope_QuittingToTitle();
+    float dt = ImGui::GetIO().DeltaTime;
+    sQuitAnim = std::clamp(sQuitAnim + (sQuitAsk ? dt * 7.0f : -dt * 9.0f), 0.0f, 1.0f);
+    if (!shown && sQuitAnim <= 0.0f) {
+        return;
+    }
+    ImVec2 pos, size;
+    if (!GameRect(pos, size)) {
+        return;
+    }
+    float k = std::min(size.x / 320.0f, size.y / 240.0f);
+    ImVec2 origin(pos.x + (size.x - 320.0f * k) / 2, pos.y + (size.y - 240.0f * k) / 2);
+    Page pg{ nullptr, origin, k };
+
+    // The plaque: dark stone like the name panel, with a gold edge that lights up while the shortcut is held.
+    ImVec2 a(250, 207), b(314, 229);
+    ImGui::SetNextWindowPos(sQuitAsk ? pos : pg.P(a.x - 2, a.y - 2));
+    ImGui::SetNextWindowSize(sQuitAsk ? size : ImVec2(pg.S(b.x - a.x + 4), pg.S(b.y - a.y + 4)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    ImGui::Begin("##PauseBar", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse);
+    pg.dl = ImGui::GetForegroundDrawList();
+    if (shown) {
+        float hold = sShortcutHeld > 0.15f && !sShortcutLong ? std::min(1.0f, sShortcutHeld / kQuitHold) : 0.0f;
+        ImGuiIO& io = ImGui::GetIO();
+        bool hover = io.MousePos.x >= pg.P(a.x, a.y).x && io.MousePos.x <= pg.P(b.x, b.y).x &&
+                     io.MousePos.y >= pg.P(a.x, a.y).y && io.MousePos.y <= pg.P(b.x, b.y).y;
+        pg.dl->AddRectFilled(pg.P(a.x + 1, a.y + 1.5f), pg.P(b.x + 1, b.y + 1.5f), Col(0, 0, 0, 90), pg.S(3));
+        Panel(pg, a, b, Col(96, 92, 58, 235), Col(56, 53, 32, 235), 3);
+        pg.dl->AddRect(pg.P(a.x, a.y), pg.P(b.x, b.y), Col(28, 26, 14, 255), pg.S(3), 0, pg.S(1.2f));
+        pg.dl->AddRect(pg.P(a.x + 1, a.y + 1), pg.P(b.x - 1, b.y - 1),
+                       hover || hold > 0 ? Col(244, 204, 98, 255) : Col(150, 142, 96, 200), pg.S(2.5f), 0, pg.S(0.8f));
+        if (hold > 0) {
+            pg.dl->AddRectFilled(pg.P(a.x + 3, b.y - 3.2f), pg.P(a.x + 3 + (b.x - a.x - 6) * hold, b.y - 2.2f),
+                                 Col(255, 214, 110, 255), pg.S(0.5f));
+        }
+        ImFont* font = TitleFont();
+        const char* label = "Tela inicial";
+        float tw = TextWidth(pg, 9.5f, label, font);
+        float cx = (a.x + b.x) / 2;
+        for (int i = 0; i < 8; i++) { // a dark rim around white letters, like the item names
+            float ox = std::cos(i * 0.785f) * 0.7f, oy = std::sin(i * 0.785f) * 0.7f;
+            Text(pg, cx - tw / 2 + ox, a.y + 1.5f + oy, 9.5f, Col(14, 20, 30, 255), label, 0, font);
+        }
+        Text(pg, cx - tw / 2, a.y + 1.5f, 9.5f, Col(255, 255, 255, 255), label, 0, font);
+        TextCentered(pg, cx, a.y + 12.0f, 6.0f, Col(230, 222, 180, 255), "Segure Select / N", false, BodyFont());
+        if (!sQuitAsk && Tapped(pg.P(a.x, a.y), pg.P(b.x, b.y))) {
+            AskQuitToTitle();
+        }
+    }
+
+    // The question, in the middle of the screen.
+    if (sQuitAnim > 0.0f) {
+        float al = sQuitAnim;
+        auto A = [al](ImU32 c) { return (c & 0x00FFFFFF) | ((ImU32)(((c >> 24) & 0xFF) * al) << 24); };
+        pg.dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), A(Col(0, 0, 0, 120)));
+        float lift = (1.0f - al) * 6.0f;
+        ImVec2 qa(80, 82 + lift), qb(240, 150 + lift);
+        Panel(pg, qa, qb, A(cParchment), A(cParchmentDark), 5);
+        GoldFrame(pg, qa, qb, 5, 2.0f, false);
+        TextCentered(pg, 160, qa.y + 9, 12, A(cInk), "Voltar à tela inicial?", false, TitleFont());
+        TextCentered(pg, 160, qa.y + 26, 7.5f, A(Col(80, 52, 36)), "O que não foi salvo será perdido.", false,
+                     BodyFont());
+        const char* names[2] = { "Sim", "Não" };
+        for (int i = 0; i < 2; i++) {
+            bool yes = i == 0;
+            bool sel = sQuitYes == yes;
+            ImVec2 ba(yes ? 100 : 170, qa.y + 42), bb(yes ? 150 : 220, qa.y + 60);
+            Panel(pg, ba, bb, A(sel ? Col(120, 60, 150) : Col(70, 40, 90)), A(sel ? Col(70, 26, 96) : Col(40, 20, 54)),
+                  4);
+            if (sel) {
+                GoldFrame(pg, ba, bb, 4, 1.2f, true);
+            }
+            TextCentered(pg, (ba.x + bb.x) / 2, ba.y + 3.5f, 9.5f, A(sel ? Col(255, 244, 210) : Col(200, 186, 210)),
+                         names[i], true, TitleFont());
+            if (sQuitAsk && Tapped(pg.P(ba.x, ba.y), pg.P(bb.x, bb.y))) {
+                AnswerQuit(yes);
+            }
+        }
+        TextCentered(pg, 160, qb.y + 4, 6.5f, A(Col(240, 230, 200)), "A confirma   ·   B volta", true, BodyFont());
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
 } // namespace
 
 void RequestOpen() {
@@ -958,6 +1162,7 @@ void QuestMenuWindow::Draw() {
         }
     }
     QuestMenu::DrawMenu();
+    QuestMenu::DrawPauseBar();
 }
 
 void QuestMenuWindow::InitElement() {
@@ -980,7 +1185,7 @@ static void RegisterQuestMenu() {
 
 static RegisterShipInitFunc sQuestMenuInit(RegisterQuestMenu, {});
 
-// The MISSÕES entry on the pause menu's quest page, under the Bombers' Notebook (see z_kaleido_collect.c).
+// The QUESTS scroll on the pause menu's quest page, between the quiver and the bomb bag (see z_kaleido_collect.c).
 extern "C" bool QuestMenu_PauseEntryShown(void) {
     return CVarGetInteger("gEnhancements.QuestMenu.PauseEntry", 1) != 0;
 }
@@ -988,3 +1193,55 @@ extern "C" bool QuestMenu_PauseEntryShown(void) {
 extern "C" void QuestMenu_OpenFromPause(void) {
     QuestMenu::RequestOpen();
 }
+
+// "New" means more quests open (not locked) now than when the menu was last opened in this save slot. The count is
+// worked out at most twice a second, since every quest's checks read the save.
+namespace {
+
+int OpenQuestCount() {
+    int count = 0;
+    for (int c = 0; c < (int)QuestMenu::Category::Count; c++) {
+        for (const QuestMenu::Quest& q : QuestMenu::Quests((QuestMenu::Category)c)) {
+            count += QuestMenu::Evaluate(q).status != QuestMenu::Status::Locked ? 1 : 0;
+        }
+    }
+    return count;
+}
+
+std::string SeenCVar() {
+    return "gEnhancements.QuestMenu.Seen" + std::to_string((int)gSaveContext.fileNum);
+}
+
+int sNewsCount = -1;
+uint32_t sNewsFrame = 0;
+
+} // namespace
+
+extern "C" bool QuestMenu_HasNews(void) {
+    if (!QuestMenu::SaveLoaded()) {
+        return false;
+    }
+    uint32_t frame = gPlayState->state.frames;
+    if (sNewsCount < 0 || frame - sNewsFrame >= 10) {
+        sNewsCount = OpenQuestCount();
+        sNewsFrame = frame;
+    }
+    std::string cvar = SeenCVar();
+    int seen = CVarGetInteger(cvar.c_str(), -1);
+    if (seen < 0) {
+        // First look at this save: what is open now is not news.
+        CVarSetInteger(cvar.c_str(), sNewsCount);
+        return false;
+    }
+    return sNewsCount > seen;
+}
+
+namespace QuestMenu {
+void MarkQuestsSeen() {
+    if (SaveLoaded()) {
+        sNewsCount = OpenQuestCount();
+        CVarSetInteger(SeenCVar().c_str(), sNewsCount);
+        Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+    }
+}
+} // namespace QuestMenu

@@ -8,14 +8,23 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.12
+- **Pergaminho QUESTS no pause.** Na página Status da Jornada, entre os dois quadrados de baixo (aljava e bolsa de
+  bombas), fica o pergaminho do Diário de Missões, desenhado em alta resolução: papel envelhecido, a lista de tarefas,
+  a máscara e o selo vermelho. Selecionado, ele cresce um pouco, ganha a moldura dourada com brilho suave, mostra o
+  cartão **QUESTS — Missões, objetivos e eventos** acima dele e o nome **Diário de Missões** na faixa de baixo, como os
+  itens. Com A ele afunda, abre e o menu de missões entra. Um ponto vermelho aparece quando surgiram missões novas
+  desde a última vez que o menu foi aberto neste save. Funciona com o controle, o teclado, o mouse e o toque.
+- **Tela inicial pelo pause.** A barra de baixo do pause ganhou o botão **Tela inicial**: toque ou clique nele, ou
+  segure Select / Back (ou N no teclado) por um segundo. Uma pergunta confirma antes ("O que não foi salvo será
+  perdido"), e a tela escurece e volta ao menu inicial. Um toque rápido em Select / N continua abrindo as missões.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.11
 - **Todas as opções do 2Ship no menu novo.** Configurações ganhou a aba **2Ship**, com todas as opções do menu do port
   (Configurações, Melhorias e Ferramentas), seção por seção, no mesmo visual das outras abas. Ligar e desligar,
   escolher, ajustar números e botões funcionam ali mesmo, sem abrir o menu do port. As opções que o port esconde ou
   bloqueia em certas situações também aparecem escondidas ou bloqueadas, com o motivo. As janelas do port (editor de
   cosméticos e outras) abrem por um botão "Abrir"; feche a janela para voltar ao menu. B volta para a lista de seções.
-- **Pergaminho de MISSÕES no pause.** O ícone embaixo do Caderno dos Bombers aparecia cortado e espremido; agora é
-  desenhado inteiro, no tamanho do espaço dele.
 
 ### 2026-11-04 — versão 4.0.2-mm3d.10
 - **Mods em Configurações.** A tela Configurações do menu inicial ganhou a aba **Mods**, no mesmo visual das outras:

@@ -5,6 +5,8 @@
  */
 
 #include "z_kaleido_scope.h"
+#include "2s2h/Enhancements/QuestMenu/QuestMenuBridge.h"
+#define dgQuestNameTex "__OTR__overlays/questmenu/gQuestNameTex"
 #include "z64map.h"
 #include "z64skybox.h"
 #include "z64view.h"
@@ -1420,6 +1422,19 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
             gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
 
             POLY_OPA_DISP = Gfx_DrawTexQuad4b(POLY_OPA_DISP, gPauseToEquipENGTex, G_IM_FMT_IA, 64, 16, 4);
+        } else if ((pauseCtx->pageIndex == PAUSE_QUEST) && (pauseCtx->cursorPoint[PAUSE_QUEST] == QUEST_SKULL_TOKEN) &&
+                   QuestMenu_PauseEntryShown()) {
+            // 2S2H [Enhancement] The QUESTS entry's name, like the items' names
+            pauseCtx->infoPanelVtx[16].v.ob[0] = pauseCtx->infoPanelVtx[18].v.ob[0] = -63;
+            pauseCtx->infoPanelVtx[17].v.ob[0] = pauseCtx->infoPanelVtx[19].v.ob[0] =
+                pauseCtx->infoPanelVtx[16].v.ob[0] + 128;
+            pauseCtx->infoPanelVtx[17].v.tc[0] = pauseCtx->infoPanelVtx[19].v.tc[0] = 128 * (1 << 5);
+            gSPVertex(POLY_OPA_DISP++, &pauseCtx->infoPanelVtx[16], 4, 0);
+            gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
+            gDPLoadTextureBlock(POLY_OPA_DISP++, dgQuestNameTex, G_IM_FMT_RGBA, G_IM_SIZ_32b, 128, 16, 0,
+                                G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK,
+                                G_TX_NOLOD, G_TX_NOLOD);
+            gSP1Quadrangle(POLY_OPA_DISP++, 0, 2, 3, 1, 0);
         } else if ((pauseCtx->pageIndex == PAUSE_MAP) && sInDungeonScene) {
             // No code in this case
         } else if ((pauseCtx->pageIndex == PAUSE_QUEST) &&
@@ -2166,7 +2181,7 @@ s16 sQuestVtxRectLeft[] = {
     -103, // QUEST_BOMBERS_NOTEBOOK
     7,    // QUEST_QUIVER
     82,   // QUEST_BOMB_BAG
-    -98,  // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    46,   // QUEST_SKULL_TOKEN (2S2H: quest menu entry, between the quiver and the bomb bag)
     -54,  // QUEST_HEART_PIECE
     -98,  // ocarina song button index 0
     -86,  // ocarina song button index 1
@@ -2208,7 +2223,7 @@ s16 sQuestVtxRectTop[] = {
     54,  // QUEST_BOMBERS_NOTEBOOK
     -44, // QUEST_QUIVER
     -44, // QUEST_BOMB_BAG
-    22,  // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    -47, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     58,  // QUEST_HEART_PIECE
     -52, // ocarina song button index 0
     -52, // ocarina song button index 1
@@ -2250,7 +2265,7 @@ s16 sQuestVtxWidths[] = {
     32, // QUEST_BOMBERS_NOTEBOOK
     32, // QUEST_QUIVER
     32, // QUEST_BOMB_BAG
-    22, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    28, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     48, // QUEST_HEART_PIECE
     16, // ocarina song button index 0
     16, // ocarina song button index 1
@@ -2292,7 +2307,7 @@ s16 sQuestVtxHeights[] = {
     32, // QUEST_BOMBERS_NOTEBOOK
     32, // QUEST_QUIVER
     32, // QUEST_BOMB_BAG
-    22, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    26, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     48, // QUEST_HEART_PIECE
     16, // ocarina song button index 0
     16, // ocarina song button index 1
@@ -2906,7 +2921,7 @@ f32 sQuestStatusCursorsX[] = {
     -68.0f, // QUEST_BOMBERS_NOTEBOOK
     22.0f,  // QUEST_QUIVER
     83.0f,  // QUEST_BOMB_BAG
-    -68.0f, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    52.0f,  // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     -21.0f, // QUEST_HEART_PIECE
 };
 
@@ -2932,7 +2947,7 @@ f32 sQuestStatusCursorsY[] = {
     27.0f,  // QUEST_BOMBERS_NOTEBOOK
     -53.0f, // QUEST_QUIVER
     -53.0f, // QUEST_BOMB_BAG
-    8.0f,   // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
+    -53.0f, // QUEST_SKULL_TOKEN (2S2H: quest menu entry)
     26.0f,  // QUEST_HEART_PIECE
 };
 
@@ -3324,6 +3339,17 @@ u16 sCursorPointsToOcarinaModes[] = {
     OCARINA_MODE_WARP_TO_STONE_TOWER,
 };
 
+// 2S2H [Enhancement] Set by the pause menu's "Tela inicial" button (PauseBar.cpp) after its confirmation.
+static bool sPauseQuitToTitle = false;
+
+void KaleidoScope_RequestQuitToTitle(void) {
+    sPauseQuitToTitle = true;
+}
+
+bool KaleidoScope_QuittingToTitle(void) {
+    return sPauseQuitToTitle;
+}
+
 void KaleidoScope_Update(PlayState* play) {
     static s16 sUnpausedHudVisibility = HUD_VISIBILITY_IDLE;
     static s16 sNextMainState = PAUSE_MAIN_STATE_IDLE;
@@ -3350,6 +3376,30 @@ void KaleidoScope_Update(PlayState* play) {
     s16 stepB;
     s16 stepA;
     s16 stickAdjX = input->rel.stick_x;
+
+    // 2S2H [Enhancement] "Tela inicial" on the pause menu's bottom bar: the screen fades to black and the game goes
+    // back to the title menu, the way quitting after the save prompt does (PAUSE_SAVEPROMPT_STATE_6).
+    if (sPauseQuitToTitle) {
+        if (pauseCtx->state != PAUSE_STATE_MAIN) {
+            sPauseQuitToTitle = false;
+        } else {
+            interfaceCtx->screenFillAlpha = CLAMP_MAX(interfaceCtx->screenFillAlpha + 12, 255);
+            if (interfaceCtx->screenFillAlpha >= 255) {
+                sPauseQuitToTitle = false;
+                pauseCtx->state = PAUSE_STATE_OFF;
+                GameState_SetFramerateDivisor(&play->state, 3);
+                R_PAUSE_BG_PRERENDER_STATE = PAUSE_BG_PRERENDER_UNK4;
+                Object_LoadAll(&play->objectCtx);
+                BgCheck_InitCollisionHeaders(&play->colCtx, play);
+                STOP_GAMESTATE(&play->state);
+                SET_NEXT_GAMESTATE(&play->state, TitleSetup_Init, sizeof(TitleSetupState));
+                Audio_MuteAllSeqExceptSystemAndOcarina(20);
+                gSaveContext.seqId = NA_BGM_DISABLED;
+                gSaveContext.ambienceId = AMBIENCE_ID_DISABLED;
+            }
+            return;
+        }
+    }
 
     // 2S2H [Enhancement] A screen drawn over the pause menu (the quest menu) takes the input while it is open; the
     // pause menu stays on screen, frozen, and the game stays paused.
