@@ -18,7 +18,9 @@
 #include <fast/backends/gfx_rendering_api.h>
 #include <spdlog/spdlog.h>
 #ifdef __ANDROID__
-#include <ship/port/mobile/MobileImpl.h>
+#include <jni.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_system.h>
 #endif
 
 #include "2s2h/GameInteractor/GameInteractor.h"
@@ -1171,23 +1173,30 @@ void DrawModal(const Page& pg, float dt, float a) {
     }
 }
 
+// The Android touch controls stay up over the menu and drive it like a controller (stick, d-pad, A, B). The
+// activity is told the menu is shown so that a tap outside the buttons reaches the menu instead of the camera.
+// Hiding the controls with the eye button leaves the whole screen to taps.
 void SyncTouchControls(bool covering) {
 #ifdef __ANDROID__
-    // The touch buttons are hidden while the menu is up, so taps reach its buttons. The settings menu does the same
-    // while it is open, and turns them back on when it closes.
-    static bool sHidden = false;
-    static bool sMenuWasOpen = false;
-    bool menuOpen = Ship::Context::GetInstance()->GetWindow()->GetGui()->GetMenuOrMenubarVisible();
-    if (covering && !menuOpen && (!sHidden || sMenuWasOpen)) {
-        Ship::Mobile::DisableTouchArea();
-        sHidden = true;
-    } else if (!covering && sHidden) {
-        if (!menuOpen) {
-            Ship::Mobile::EnableTouchArea();
-        }
-        sHidden = false;
+    static bool sShown = false;
+    if (covering == sShown) {
+        return;
     }
-    sMenuWasOpen = menuOpen;
+    sShown = covering;
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (env == nullptr || activity == nullptr) {
+        return;
+    }
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(activityClass, "SetTitleMenuShown", "(Z)V");
+    if (method != nullptr) {
+        env->CallVoidMethod(activity, method, (jboolean)covering);
+    } else {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
 #else
     (void)covering;
 #endif

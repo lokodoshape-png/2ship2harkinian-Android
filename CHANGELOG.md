@@ -8,6 +8,13 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.3
+- **Tela inicial: os controles de toque ficam na tela.** O analógico, o direcional, o A e o B da tela agora mexem no
+  menu como um controle. Um toque fora deles vai direto para o item do menu, em vez de girar a câmera. Com o botão do
+  olho, os controles somem e a tela toda fica para o toque.
+- Arquivos: `mm/2s2h/Enhancements/TitleMenu/TitleMenu.cpp`, `Android/app/src/main/java/com/dishii/mm/MainActivity.java`,
+  `Android/app/build.gradle` (versionName), este CHANGELOG.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.2
 - **Tela inicial: o toque funciona.** Os toques e cliques agora são lidos direto da tela, e a tela inicial fica sempre
   na frente da janela do jogo, que antes podia ficar por cima e engolir os toques.

@@ -1075,6 +1075,17 @@ public class MainActivity extends SDLActivity{
         runOnUiThread(this::updateTouchControlsVisibility);
     }
 
+    // Called from the game thread while the new title menu is on screen. The touch controls stay up and drive it
+    // like a controller, and a tap outside them reaches the menu's own buttons instead of turning the camera.
+    volatile boolean TitleMenuShown = false;
+    void SetTitleMenuShown(boolean shown){
+        TitleMenuShown = shown;
+        if (shown) {
+            setCameraState(0, 0.0f);
+            setCameraState(1, 0.0f);
+        }
+    }
+
     private void setupLookAround(FrameLayout rightScreenArea) {
         rightScreenArea.setOnTouchListener(new View.OnTouchListener() {
             private float lastX = 0;
@@ -1083,6 +1094,10 @@ public class MainActivity extends SDLActivity{
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                if (TitleMenuShown) {
+                    isTouching = false;
+                    return false; // the tap goes on to the title menu
+                }
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         // Start tracking the finger's position
