@@ -2121,25 +2121,59 @@ void DrawFiles(const Page& pg, float a, Frame& f) {
     } else {
         Txt(pg, x, y, 48, Alpha(Col(255, 255, 255), a), info.name.empty() ? "?" : info.name, QuestUi::TitleFont());
         y += 76;
+        // Each fact with the game's own icon beside its value (the heart piece, the Deku mask, the ocarina, the
+        // rupee), or one drawn here (the sun for the day, the hourglass for the cycles).
+        enum class Icon { Day, Heart, Mask, Song, Rupee, Cycle };
         struct Fact {
             std::string name, value;
+            Icon icon;
         };
         snprintf(line, sizeof(line), "%s, %02d:%02d%s", DayText(info.day).c_str(), info.hour, info.minute,
                  info.owl ? " (save da coruja)" : "");
         std::vector<Fact> facts;
-        facts.push_back({ "Dia atual", line });
+        facts.push_back({ "Dia atual", line, Icon::Day });
         snprintf(line, sizeof(line), "%d%s", info.hearts,
                  info.heartPieces ? (" e " + std::to_string(info.heartPieces) + "/4 de peça").c_str() : "");
-        facts.push_back({ "Corações", line });
+        facts.push_back({ "Corações", line, Icon::Heart });
         snprintf(line, sizeof(line), "%d de 24", info.masks);
-        facts.push_back({ "Máscaras", line });
+        facts.push_back({ "Máscaras", line, Icon::Mask });
         snprintf(line, sizeof(line), "%d de 10", info.songs);
-        facts.push_back({ "Canções", line });
-        facts.push_back({ "Rupias", std::to_string(info.rupees) });
-        facts.push_back({ "Ciclos de três dias", std::to_string(info.cycles) });
+        facts.push_back({ "Canções", line, Icon::Song });
+        facts.push_back({ "Rupias", std::to_string(info.rupees), Icon::Rupee });
+        facts.push_back({ "Ciclos de três dias", std::to_string(info.cycles), Icon::Cycle });
+        auto tinted = [&](const char* path, float cx, float cy, float w, float h, ImU32 tint) {
+            ImTextureID id = QuestUi::Texture(path);
+            if (id != nullptr) {
+                pg.dl->AddImage(id, pg.P(cx - w / 2, cy - h / 2), pg.P(cx + w / 2, cy + h / 2), ImVec2(0, 0),
+                                ImVec2(1, 1), tint);
+            }
+        };
         for (const Fact& fact : facts) {
             Txt(pg, x, y, 26, Alpha(cDim, a), fact.name);
-            Txt(pg, x + 300, y, 26, Alpha(cText, a), fact.value);
+            float ix = x + 318, iy = y + 15;
+            switch (fact.icon) {
+                case Icon::Day:
+                    QuestUi::IconSun(pg, ix, iy, 30);
+                    break;
+                case Icon::Heart:
+                    tinted((const char*)gItemIcons[ITEM_HEART_PIECE], ix, iy, 36, 36, Alpha(IM_COL32_WHITE, a));
+                    break;
+                case Icon::Mask:
+                    tinted((const char*)gItemIcons[ITEM_MASK_DEKU], ix, iy, 36, 36, Alpha(IM_COL32_WHITE, a));
+                    break;
+                case Icon::Song:
+                    tinted((const char*)gItemIcons[ITEM_OCARINA_OF_TIME], ix, iy, 36, 36, Alpha(IM_COL32_WHITE, a));
+                    break;
+                case Icon::Rupee:
+                    tinted("__OTR__parameter_static/gRupeeCounterIconTex", ix, iy, 28, 28,
+                           Alpha(Col(120, 255, 110), a));
+                    break;
+                case Icon::Cycle:
+                    Image(pg, "icon_hourglass.png", ix - 16, iy, Alpha(IM_COL32_WHITE, a),
+                          32.0f / std::max(Size("icon_hourglass.png").y, 1.0f));
+                    break;
+            }
+            Txt(pg, x + 350, y, 26, Alpha(cText, a), fact.value);
             y += 42;
         }
         // The bosses' remains, lit when the file has them.

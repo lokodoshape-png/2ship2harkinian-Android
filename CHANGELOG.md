@@ -23,6 +23,8 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
   quando um save é carregado e o jogo começa. Para pular a abertura, segure a tela ou um botão de um controle.
 - **Correção (PC):** ao fim da abertura, nenhuma janela fica com o foco ou um item ativo do que foi clicado ou
   apertado para pular, e o log registra o motivo se o menu ficar sem receber controles.
+- **Ícones em Arquivos de Jogo.** Os detalhes do arquivo mostram o ícone de cada coisa ao lado da quantidade: o sol
+  no dia, a peça de coração, a Máscara Deku, a Ocarina do Tempo nas canções, a rupia verde e a ampulheta nos ciclos.
 - **Legendas.** A transcrição é refeita separando a voz da música antes, para pegar as falas que ficaram sem legenda.
 
 ### 2026-11-04 — versão 4.0.2-mm3d.7
