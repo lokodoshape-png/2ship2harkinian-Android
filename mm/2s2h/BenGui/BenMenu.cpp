@@ -1452,6 +1452,18 @@ void BenMenu::AddEnhancements() {
         .CVar("gEnhancements.TitleMenu.Effects")
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Lua em movimento, olhos e fada brilhando e partículas no ar. Desligue em aparelhos mais fracos."));
+    AddWidget(path, "Vídeo de abertura", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.TitleMenu.Intro")
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Android: toca o vídeo de abertura da Definitive Edition ao abrir o app, antes da tela inicial."));
+    AddWidget(path, "Abertura em toda inicialização", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.TitleMenu.IntroEveryLaunch")
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Ligada, o vídeo toca sempre que o app abre. Desligada, toca só uma vez."));
+    AddWidget(path, "Permitir pular a abertura", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.TitleMenu.IntroSkippable")
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "A, B, START, qualquer botão ou um toque na tela pulam o vídeo de abertura."));
     AddWidget(path, "Skip to File Select", WIDGET_CVAR_CHECKBOX)
         .CVar("gEnhancements.Cutscenes.SkipToFileSelect")
         .Options(CheckboxOptions().Tooltip(

@@ -8,6 +8,19 @@ O jogo não vem com a ROM nem com assets da Nintendo. Você extrai os seus da su
 
 ## Base 4.0.2 (branch `mm3d-4.0`)
 
+### 2026-11-04 — versão 4.0.2-mm3d.6
+- **Vídeo de abertura (Android).** Ao abrir o app, o vídeo de abertura da Definitive Edition (do canal do Rafael) toca
+  em tela cheia, na proporção original e com o áudio original, antes da tela inicial. O jogo carrega por baixo, sem
+  som, e quando o vídeo acaba ele se dissolve na tela inicial e o som do menu volta aos poucos.
+  - A, B, START, qualquer outro botão ou um toque na tela pulam o vídeo. "Pressione qualquer botão para pular"
+    aparece discreto no canto.
+  - Legendas em português na fonte dos títulos do menu (Alegreya), em tamanho médio.
+  - Opções no menu do jogo, em Enhancements > Time Savers: **Vídeo de abertura** (liga e desliga), **Abertura em toda
+    inicialização** (desligada, toca só uma vez) e **Permitir pular a abertura**.
+  - O vídeo vai no APK comprimido em H.264 1080p com áudio AAC, que todo Android toca. Um `abertura.mp4` (e um
+    `abertura.srt`) na pasta do jogo substituem os do APK. O vídeo não toca na primeira abertura do app, enquanto a
+    ROM ainda não foi escolhida, e para se o app for para o segundo plano.
+
 ### 2026-11-04 — versão 4.0.2-mm3d.5
 - **Artes conceituais**: 16 artes novas em Extras > Artes conceituais, cada uma numa página própria e com título
   (a lua sobre a cidade, a Máscara de Majora, o Skull Kid, o Carnaval do Tempo, as transformações, Anju e Kafei, o

@@ -2359,7 +2359,7 @@ void DrawZoom(const Page& pg, float a, Frame& f) {
 // ----- Informações da edição.
 
 // The edition's version, as in Android/app/build.gradle (versionName) and the CHANGELOG.
-#define EDITION_VERSION "4.0.2-mm3d.5"
+#define EDITION_VERSION "4.0.2-mm3d.6"
 
 std::string DrawEdition(const Page& pg, float a) {
     float x = kContentX0 + 80, y = 260;

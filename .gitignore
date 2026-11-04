@@ -71,3 +71,6 @@ _packages/
 /clang-format.exe
 
 build/
+
+# The opening video, downloaded by android.yml from the release intro-video
+Android/app/src/main/res/raw/abertura.mp4

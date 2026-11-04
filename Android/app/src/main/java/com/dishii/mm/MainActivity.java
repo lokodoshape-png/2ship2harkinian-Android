@@ -85,6 +85,25 @@ public class MainActivity extends SDLActivity{
         // The virtual triggers start centred, which reads as half pressed.
         setButton(ControllerButtons.AXIS_LT, false);
         setButton(ControllerButtons.AXIS_RT, false);
+
+        // The opening video goes over everything, including the touch controls, while the game boots under it.
+        intro = IntroPlayer.startIfWanted(this, preferences);
+    }
+
+    // The opening video while it is on screen (IntroPlayer.java), null otherwise.
+    private IntroPlayer intro;
+
+    // Mutes the game's sound while the opening video plays (BenPort.cpp); it fades back in after.
+    static native void nativeSetIntroPlaying(boolean playing);
+
+    @Override
+    protected void onPause() {
+        // Leaving the app ends the video: it is not resumed over a game that kept going under it.
+        if (intro != null && intro.isActive()) {
+            intro.finish(false);
+        }
+        intro = null;
+        super.onPause();
     }
 
     // <data folder>/inicio.log: each launch starts it, the native side (mm/2s2h/Android/StartupLog.cpp) adds to it.
@@ -995,6 +1014,9 @@ public class MainActivity extends SDLActivity{
     // A physical gamepad in use hides the touch controls; touching the screen in game brings them back.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (intro != null && intro.isActive() && intro.onKey(event)) {
+            return true;
+        }
         if (isGamepadEvent(event)) {
             setHiddenForGamepad(true);
         }
@@ -1003,6 +1025,9 @@ public class MainActivity extends SDLActivity{
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (intro != null && intro.isActive()) {
+            return true; // sticks do nothing under the opening video
+        }
         if (isGamepadEvent(event)) {
             setHiddenForGamepad(true);
         }

@@ -85,6 +85,14 @@ jobs:
           name: android-2ship-o2r
           path: Android/app/src/main/assets
 
+      # The opening video (intro-video.yml publishes it from Rafael's own video). Without it the app has no intro.
+      - name: Opening video
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download intro-video -p abertura.mp4 -D Android/app/src/main/res/raw --clobber \
+            && ls -la Android/app/src/main/res/raw || echo "Sem o release intro-video: o APK sai sem a abertura."
+
       - name: Build debug APK
         working-directory: Android
         run: |

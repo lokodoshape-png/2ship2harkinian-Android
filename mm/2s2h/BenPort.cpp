@@ -20,6 +20,7 @@
 #include <time.h>
 #endif
 #include <ship/audio/AudioPlayer.h>
+#include <atomic>
 #include "variables.h"
 #include "z64.h"
 #include "macros.h"
@@ -409,6 +410,34 @@ static struct {
     bool processing;
 } audio;
 
+// Android: the game is silent while the app's opening video plays over it (IntroPlayer.java), and its sound fades
+// back in when the video ends, so the video's own sound is the only one heard.
+static std::atomic<bool> sIntroPlaying{ false };
+static float sIntroGain = 1.0f;
+
+#ifdef __ANDROID__
+#include <jni.h>
+extern "C" JNIEXPORT void JNICALL Java_com_dishii_mm_MainActivity_nativeSetIntroPlaying(JNIEnv*, jclass,
+                                                                                      jboolean playing) {
+    sIntroPlaying = playing != JNI_FALSE;
+}
+#endif
+
+static void ApplyIntroGain(s16* samples, u32 count) {
+    float target = sIntroPlaying ? 0.0f : 1.0f;
+    if (sIntroGain == 1.0f && target == 1.0f) {
+        return;
+    }
+    // About a second from silence to full volume: a step for each buffer, spread over its samples.
+    float from = sIntroGain;
+    float to = target > from ? std::min(1.0f, from + 0.05f) : 0.0f;
+    for (u32 i = 0; i < count; i++) {
+        float g = from + (to - from) * (float)i / (float)count;
+        samples[i] = (s16)(samples[i] * g);
+    }
+    sIntroGain = to;
+}
+
 void OTRAudio_Thread() {
     while (audio.running) {
         {
@@ -441,6 +470,7 @@ void OTRAudio_Thread() {
                                            num_audio_samples);
         }
 
+        ApplyIntroGain(audio_buffer, num_audio_samples * NUM_AUDIO_CHANNELS * AUDIO_FRAMES_PER_UPDATE);
         AudioPlayer_Play((u8*)audio_buffer,
                          num_audio_samples * (sizeof(int16_t) * NUM_AUDIO_CHANNELS * AUDIO_FRAMES_PER_UPDATE));
 
